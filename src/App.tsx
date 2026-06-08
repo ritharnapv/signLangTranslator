@@ -73,14 +73,39 @@ export default function App() {
   const [autoScan, setAutoScan] = useState<boolean>(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isSandboxMode, setIsSandboxMode] = useState<boolean>(false);
+  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const autoScanInterval = useRef<any>(null);
 
-  // Check health on load
+  // Load list of cameras if navigator support is present
+  const updateAvailableDevices = async () => {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+        return;
+      }
+      const allDevices = await navigator.mediaDevices.enumerateDevices();
+      const videoInputs = allDevices.filter(device => device.kind === 'videoinput');
+      setVideoDevices(videoInputs);
+      if (videoInputs.length > 0 && !selectedDeviceId) {
+        setSelectedDeviceId(videoInputs[0].deviceId);
+      }
+    } catch (e) {
+      console.error("Error listing webcam video sources:", e);
+    }
+  };
+
+  // Check health and scan inputs on load
   useEffect(() => {
     checkBackendHealth();
+    updateAvailableDevices();
+    
+    // Listen for device changes
+    if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+      navigator.mediaDevices.addEventListener('devicechange', updateAvailableDevices);
+    }
     
     // Load local history if any
     const saved = localStorage.getItem('asl_sessions');
@@ -125,25 +150,51 @@ export default function App() {
       try {
         setCameraError(null);
         // Request frame and video permission scopes dynamically
-        const mediaStream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: { ideal: 640 },
-            height: { ideal: 480 },
-            facingMode: "user"
-          },
+        const constraints: MediaStreamConstraints = {
+          video: selectedDeviceId 
+            ? { deviceId: { exact: selectedDeviceId }, width: { ideal: 640 }, height: { ideal: 480 } }
+            : { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
           audio: false
-        });
+        };
+        const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
         setStream(mediaStream);
         setCameraActive(true);
         if (videoRef.current) {
           videoRef.current.srcObject = mediaStream;
           videoRef.current.play().catch(err => console.error("Error playing video:", err));
         }
+        // Enumeration succeeds once permission has been authorized by user
+        setTimeout(updateAvailableDevices, 500);
       } catch (err: any) {
         console.error("Camera access failed:", err);
         setCameraError(err.message || "Camera access denied. Please ensure your device has a functional camera module and the AI Studio platform permission popup isn't blocked.");
         setCameraActive(false);
         setIsSandboxMode(true); // fall back seamlessly to mock image scanner helper
+      }
+    }
+  };
+
+  const handleDeviceChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newDeviceId = e.target.value;
+    setSelectedDeviceId(newDeviceId);
+    if (cameraActive) {
+      // Re-init stream with new device ID
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+      try {
+        const mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: { deviceId: { exact: newDeviceId }, width: { ideal: 640 }, height: { ideal: 480 } },
+          audio: false
+        });
+        setStream(mediaStream);
+        if (videoRef.current) {
+          videoRef.current.srcObject = mediaStream;
+          videoRef.current.play().catch(err => console.error("Error playing video:", err));
+        }
+      } catch (err: any) {
+        console.error("Error switching cameras:", err);
+        setCameraError(err.message || "Failed to switch to target camera device.");
       }
     }
   };
@@ -444,7 +495,7 @@ export default function App() {
 
               {/* Hardware & Sandbox Frame Controls */}
               <div className="bg-white border border-[#ecece0] rounded-3xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4" id="scanner-controls-card">
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   <button
                     onClick={toggleCamera}
                     className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-bold uppercase tracking-wide transition-all ${
@@ -457,6 +508,22 @@ export default function App() {
                     {cameraActive ? <VideoOff className="w-4 h-4" /> : <Video className="w-4 h-4" />}
                     {cameraActive ? "Disconnect Camera" : "Enable Camera Feed"}
                   </button>
+
+                  {videoDevices.length > 0 && (
+                    <select
+                      value={selectedDeviceId}
+                      onChange={handleDeviceChange}
+                      className="bg-[#fdfcf9] border border-[#e0e4db] text-[#4a4a40] text-xs font-semibold py-2.5 px-3 rounded-2xl focus:outline-none focus:ring-1 focus:ring-[#7c8d7c] transition-all cursor-pointer shadow-sm hover:bg-[#f0f2ee]"
+                      id="camera-select"
+                      title="Select camera source"
+                    >
+                      {videoDevices.map((device, idx) => (
+                        <option key={device.deviceId || idx} value={device.deviceId}>
+                          {device.label || `Camera ${idx + 1}`}
+                        </option>
+                      ))}
+                    </select>
+                  )}
 
                   <button
                     onClick={captureAndTranslate}
