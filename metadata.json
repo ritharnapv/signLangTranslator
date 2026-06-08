@@ -1,0 +1,6 @@
+{
+  "name": "Sign Language Translator",
+  "description": "An AI-powered tracker and translator for American Sign Language (ASL) incorporating real-time webcam gestures and instant visual feedback.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
