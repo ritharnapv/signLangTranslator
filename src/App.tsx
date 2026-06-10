@@ -82,15 +82,30 @@ export default function App() {
   const [mediaPipeLoaded, setMediaPipeLoaded] = useState<boolean>(false);
   const [mediaPipeError, setMediaPipeError] = useState<string | null>(null);
 
+  // Visualizer settings & telemetry
+  const [liveFps, setLiveFps] = useState<number>(0);
+  const [vizStyle, setVizStyle] = useState<'emerald' | 'cyberpunk' | 'ghost' | 'rainbow'>('emerald');
+  const [showCoordinateIndices, setShowCoordinateIndices] = useState<boolean>(false);
+  const [glowEnabled, setGlowEnabled] = useState<boolean>(true);
+  const [lineThickness, setLineThickness] = useState<number>(3);
+  const [jointRadius, setJointRadius] = useState<number>(5);
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const landmarkCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const autoScanInterval = useRef<any>(null);
   const animationFrameRef = useRef<number | null>(null);
   const handsRef = useRef<any>(null);
+  const lastFrameTimesRef = useRef<number[]>([]);
 
   // MediaPipe hands results handler callback
   const onHandsResults = (results: any) => {
+    // 1. Compute rolling FPS
+    const now = performance.now();
+    lastFrameTimesRef.current.push(now);
+    lastFrameTimesRef.current = lastFrameTimesRef.current.filter(t => now - t < 1000);
+    setLiveFps(lastFrameTimesRef.current.length);
+
     const handsFound = results.multiHandLandmarks ? results.multiHandLandmarks.length : 0;
     setDetectedHandsCount(handsFound);
     
@@ -105,34 +120,121 @@ export default function App() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    // Clear previous drawing frames cleanly
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    if (results.multiHandLandmarks) {
-      const drawingUtils = window as any;
-      if (drawingUtils.drawConnectors && drawingUtils.drawLandmarks && drawingUtils.HAND_CONNECTIONS) {
-        for (const landmarks of results.multiHandLandmarks) {
-          drawingUtils.drawConnectors(ctx, landmarks, drawingUtils.HAND_CONNECTIONS, {
-            color: '#7c8d7c',
-            lineWidth: 4
-          });
-          drawingUtils.drawLandmarks(ctx, landmarks, {
-            color: '#a36b5e',
-            lineWidth: 2,
-            radius: 5
-          });
+    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+      // 2. Define standard 21 joints connected structure
+      const CUSTOM_CONNECTIONS = [
+        [0, 1], [1, 2], [2, 3], [3, 4], // Thumb
+        [0, 5], [5, 6], [6, 7], [7, 8], // Index
+        [5, 9], [9, 10], [10, 11], [11, 12], // Middle
+        [9, 13], [13, 14], [14, 15], [15, 16], // Ring
+        [0, 17], [13, 17], [17, 18], [18, 19], [19, 20], // Pinky & Palm closure
+        [5, 9], [9, 13] // Core knuckle arc
+      ];
+
+      // Define style configurations
+      const styles = {
+        emerald: {
+          lineColor: '#7c8d7c',
+          nodeColor: '#a36b5e',
+          glowColor: 'rgba(124, 141, 124, 0.4)',
+          nodeOuterColor: '#fdfcf9'
+        },
+        cyberpunk: {
+          lineColor: '#00f0ff',
+          nodeColor: '#ff007f',
+          glowColor: 'rgba(0, 240, 255, 0.8)',
+          nodeOuterColor: '#1a1a17'
+        },
+        ghost: {
+          lineColor: 'rgba(255, 255, 255, 0.4)',
+          nodeColor: 'rgba(255, 255, 255, 0.95)',
+          glowColor: 'rgba(255, 255, 255, 0.25)',
+          nodeOuterColor: 'rgba(0, 0, 0, 0.5)'
+        },
+        rainbow: {
+          // Dynamic colors fallback
+          lineColor: '#ecece0',
+          nodeColor: '#4a4a40',
+          glowColor: 'rgba(122, 122, 106, 0.3)',
+          nodeOuterColor: '#ffffff'
         }
-      } else {
-        // Resilient fallback manual drawing if global utilities are somehow missing
-        ctx.fillStyle = '#a36b5e';
-        for (const landmarks of results.multiHandLandmarks) {
-          for (const pt of landmarks) {
-            const px = pt.x * canvas.width;
-            const py = pt.y * canvas.height;
+      };
+
+      const selectedConfig = styles[vizStyle];
+
+      // Helper function to get joint/finger specific styling in Rainbow Mode
+      const getRainbowStyle = (index: number) => {
+        if (index >= 1 && index <= 4) return { line: '#ff5376', node: '#ee4266' }; // Thumb (Pink)
+        if (index >= 5 && index <= 8) return { line: '#ffb627', node: '#ff9f1c' }; // Index (Orange)
+        if (index >= 9 && index <= 12) return { line: '#2ec4b6', node: '#0f9f90' }; // Middle (Turquoise)
+        if (index >= 13 && index <= 16) return { line: '#3a86c8', node: '#1d71b8' }; // Ring (Blue)
+        if (index >= 17 && index <= 20) return { line: '#9b5de5', node: '#8338ec' }; // Pinky (Purple)
+        return { line: '#ecece0', node: '#a36b5e' }; // Wrist/Base
+      };
+
+      for (const landmarks of results.multiHandLandmarks) {
+        // A. Draw Connectors with optional high-performance canvas shadows / glows
+        ctx.save();
+        if (glowEnabled) {
+          ctx.shadowBlur = vizStyle === 'cyberpunk' ? 12 : 6;
+          ctx.shadowColor = selectedConfig.glowColor;
+        }
+
+        CUSTOM_CONNECTIONS.forEach(([startIdx, endIdx]) => {
+          const ptStart = landmarks[startIdx];
+          const ptEnd = landmarks[endIdx];
+          if (ptStart && ptEnd) {
             ctx.beginPath();
-            ctx.arc(px, py, 4, 0, 2 * Math.PI);
-            ctx.fill();
+            ctx.moveTo(ptStart.x * canvas.width, ptStart.y * canvas.height);
+            ctx.lineTo(ptEnd.x * canvas.width, ptEnd.y * canvas.height);
+            
+            // Set strokes options
+            ctx.lineWidth = lineThickness;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            if (vizStyle === 'rainbow') {
+              ctx.strokeStyle = getRainbowStyle(endIdx).line;
+            } else {
+              ctx.strokeStyle = selectedConfig.lineColor;
+            }
+            ctx.stroke();
           }
-        }
+        });
+        ctx.restore();
+
+        // B. Draw Joints/Nodes beautifully
+        landmarks.forEach((landmark: any, index: number) => {
+          const px = landmark.x * canvas.width;
+          const py = landmark.y * canvas.height;
+
+          // 1. Draw outer ring anchor
+          ctx.beginPath();
+          ctx.arc(px, py, jointRadius + 2, 0, 2 * Math.PI);
+          ctx.fillStyle = selectedConfig.nodeOuterColor;
+          ctx.fill();
+
+          // 2. Draw interior colored joint core
+          ctx.beginPath();
+          ctx.arc(px, py, jointRadius - 1, 0, 2 * Math.PI);
+          
+          if (vizStyle === 'rainbow') {
+            ctx.fillStyle = getRainbowStyle(index).node;
+          } else {
+            ctx.fillStyle = selectedConfig.nodeColor;
+          }
+          ctx.fill();
+
+          // 3. Render coordinate indices label overlay if toggled
+          if (showCoordinateIndices) {
+            ctx.fillStyle = vizStyle === 'cyberpunk' ? '#00f0ff' : '#2d2d28';
+            ctx.font = 'bold 9px monospace';
+            ctx.fillText(index.toString(), px + 8, py + 3);
+          }
+        });
       }
     }
   };
@@ -623,8 +725,8 @@ export default function App() {
                     Target: Key "{selectedGesture.char}"
                   </span>
                   {cameraActive && (
-                    <span className="px-2.5 py-1 bg-[#52a447] backdrop-blur-md rounded-lg text-[10px] font-mono tracking-widest text-white border border-white/10 uppercase font-bold animate-pulse">
-                      STREAM ACTIVE • 60 FPS
+                    <span className="px-2.5 py-1 bg-[#52a447] backdrop-blur-md rounded-lg text-[10px] font-mono tracking-widest text-white border border-white/10 uppercase font-bold">
+                      STREAM ACTIVE • {liveFps > 0 ? `${liveFps} FPS` : "WAITING FPS..."}
                     </span>
                   )}
                   {autoScan && (
@@ -886,6 +988,83 @@ export default function App() {
                         : "Turn on the system webcam to engage MediaPipe computing nodes"}
                     </div>
                   )}
+                </div>
+
+                {/* Hand Visualizer Controller Panel */}
+                <div className="pt-3 border-t border-[#ecece0] space-y-3" id="visualizer-tuner-panel">
+                  <span className="text-[10px] text-[#9a9a8a] uppercase font-bold tracking-widest font-mono block">
+                    Landmark Rendering Engine Preset
+                  </span>
+
+                  {/* Preset Buttons */}
+                  <div className="grid grid-cols-4 gap-1 bg-[#f0f2ee] p-1 rounded-xl border border-[#e0e4db]" id="preset-selector">
+                    {(['emerald', 'cyberpunk', 'ghost', 'rainbow'] as const).map((style) => (
+                      <button
+                        key={style}
+                        onClick={() => setVizStyle(style)}
+                        type="button"
+                        className={`py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all truncate ${
+                          vizStyle === style
+                            ? "bg-[#7c8d7c] text-white shadow-sm"
+                            : "text-[#5a6b5a] hover:text-[#2d2d28]"
+                        }`}
+                      >
+                        {style}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Tuner Sliders */}
+                  <div className="space-y-2 bg-[#fdfcf9] border border-[#ecece0] rounded-xl p-3 text-[10px] text-[#5a5a4a]" id="rendering-sliders">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold">Line Thickness:</span>
+                      <span className="font-mono bg-[#f0f2ee] px-1.5 py-0.5 rounded text-[9px]">{lineThickness}px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="1"
+                      max="8"
+                      value={lineThickness}
+                      onChange={(e) => setLineThickness(Number(e.target.value))}
+                      className="w-full h-1 bg-[#e0e4db] rounded-lg appearance-none cursor-pointer accent-[#7c8d7c]"
+                    />
+
+                    <div className="flex items-center justify-between mt-2">
+                      <span className="font-semibold">Joint Nodes:</span>
+                      <span className="font-mono bg-[#f0f2ee] px-1.5 py-0.5 rounded text-[9px]">{jointRadius}px radius</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="2"
+                      max="10"
+                      value={jointRadius}
+                      onChange={(e) => setJointRadius(Number(e.target.value))}
+                      className="w-full h-1 bg-[#e0e4db] rounded-lg appearance-none cursor-pointer accent-[#7c8d7c]"
+                    />
+                  </div>
+
+                  {/* Dynamic Switches */}
+                  <div className="grid grid-cols-2 gap-3" id="rendering-switches">
+                    <label className="flex items-center gap-2 cursor-pointer text-[10px] font-semibold text-[#5a5a4a] select-none bg-[#fdfcf9] border border-[#ecece0] p-2 rounded-xl hover:bg-[#f0f2ee]/45 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={showCoordinateIndices}
+                        onChange={(e) => setShowCoordinateIndices(e.target.checked)}
+                        className="rounded border-[#e0e4db] text-[#7c8d7c] focus:ring-[#7c8d7c] w-3.5 h-3.5"
+                      />
+                      <span>Show Joint IDs</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer text-[10px] font-semibold text-[#5a5a4a] select-none bg-[#fdfcf9] border border-[#ecece0] p-2 rounded-xl hover:bg-[#f0f2ee]/45 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={glowEnabled}
+                        onChange={(e) => setGlowEnabled(e.target.checked)}
+                        className="rounded border-[#e0e4db] text-[#7c8d7c] focus:ring-[#7c8d7c] w-3.5 h-3.5"
+                      />
+                      <span>Glow Connectors</span>
+                    </label>
+                  </div>
                 </div>
 
                 <div className="text-[10px] text-[#9a9a8a] leading-relaxed bg-[#f0f2ee]/40 rounded-xl p-2.5 border border-[#e0e4db]/60">
