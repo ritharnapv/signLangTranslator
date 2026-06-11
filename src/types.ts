@@ -31,3 +31,11 @@ export interface SessionHistoryItem {
   confidence: number;
   canvasImage?: string; // fallback base64
 }
+
+export interface CollectedSample {
+  id: string;
+  label: string;
+  timestamp: string;
+  landmarks: Array<{x: number, y: number, z: number}>;
+  handType?: string;
+}

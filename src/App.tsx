@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ASLGesture, TranslationResult, SessionHistoryItem } from './types';
+import { ASLGesture, TranslationResult, SessionHistoryItem, CollectedSample } from './types';
 import TimelineRoadmap from './components/TimelineRoadmap';
 import SignDictionary from './components/SignDictionary';
 import { 
@@ -24,7 +24,11 @@ import {
   Flame,
   CheckCircle2,
   Trash2,
-  BookOpen
+  BookOpen,
+  Database,
+  Download,
+  Upload,
+  Plus
 } from 'lucide-react';
 
 const INITIAL_SESSIONS: SessionHistoryItem[] = [
@@ -43,7 +47,7 @@ const INITIAL_SESSIONS: SessionHistoryItem[] = [
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'dictionary' | 'roadmap' | 'files'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'dictionary' | 'roadmap' | 'collector' | 'files'>('dashboard');
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [cameraActive, setCameraActive] = useState<boolean>(false);
   const [selectedGesture, setSelectedGesture] = useState<ASLGesture>({
@@ -97,6 +101,165 @@ export default function App() {
   const animationFrameRef = useRef<number | null>(null);
   const handsRef = useRef<any>(null);
   const lastFrameTimesRef = useRef<number[]>([]);
+
+  // Gesture collector state managers & refs
+  const [collectedSamples, setCollectedSamples] = useState<CollectedSample[]>(() => {
+    try {
+      const stored = localStorage.getItem('asl_collected_samples');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [sampleLabel, setSampleLabel] = useState<string>('A');
+  const [continuousCountDown, setContinuousCountDown] = useState<number>(0);
+  const [continuousActive, setContinuousActive] = useState<boolean>(false);
+  const [continuousTimerMs, setContinuousTimerMs] = useState<number>(1500);
+  const [collectorError, setCollectorError] = useState<string | null>(null);
+  const [flashCollectorEffect, setFlashCollectorEffect] = useState<boolean>(false);
+
+  const handLandmarksSampleRef = useRef<any[]>([]);
+  const sampleLabelRef = useRef<string>('A');
+  const detectedHandsCountRef = useRef<number>(0);
+  const collectedSamplesRef = useRef<CollectedSample[]>([]);
+
+  useEffect(() => {
+    handLandmarksSampleRef.current = handLandmarksSample;
+  }, [handLandmarksSample]);
+
+  useEffect(() => {
+    sampleLabelRef.current = sampleLabel;
+  }, [sampleLabel]);
+
+  useEffect(() => {
+    detectedHandsCountRef.current = detectedHandsCount;
+  }, [detectedHandsCount]);
+
+  useEffect(() => {
+    collectedSamplesRef.current = collectedSamples;
+  }, [collectedSamples]);
+
+  const handleCollectSample = () => {
+    if (!cameraActive) {
+      setCollectorError("Webcam must be enabled to capture hand skeletal landmarks.");
+      return;
+    }
+    if (detectedHandsCountRef.current === 0 || handLandmarksSampleRef.current.length === 0) {
+      setCollectorError("No hand detected. Position your hand securely in the camera frame.");
+      return;
+    }
+    if (handLandmarksSampleRef.current.length !== 21) {
+      setCollectorError(`Incomplete landmark count (${handLandmarksSampleRef.current.length}/21). Keep hand stable.`);
+      return;
+    }
+
+    setCollectorError(null);
+    setFlashCollectorEffect(true);
+    setTimeout(() => setFlashCollectorEffect(false), 150);
+
+    const newSample: CollectedSample = {
+      id: "sample_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
+      label: sampleLabelRef.current.trim().toUpperCase() || "UNLABELED",
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      landmarks: handLandmarksSampleRef.current.map(pt => ({
+        x: parseFloat(pt.x.toFixed(4)),
+        y: parseFloat(pt.y.toFixed(4)),
+        z: parseFloat((pt.z || 0).toFixed(4))
+      })),
+      handType: detectedHandsCountRef.current > 1 ? "Multiple" : "Single"
+    };
+
+    const updated = [newSample, ...collectedSamplesRef.current];
+    setCollectedSamples(updated);
+    localStorage.setItem('asl_collected_samples', JSON.stringify(updated));
+  };
+
+  const handleDeleteSample = (id: string) => {
+    const updated = collectedSamplesRef.current.filter(s => s.id !== id);
+    setCollectedSamples(updated);
+    localStorage.setItem('asl_collected_samples', JSON.stringify(updated));
+  };
+
+  const handleClearAllSamples = () => {
+    if (window.confirm("Are you sure you want to delete all collected gesture landmark coordinates from local buffer?")) {
+      setCollectedSamples([]);
+      localStorage.removeItem('asl_collected_samples');
+    }
+  };
+
+  const handleExportDataset = () => {
+    if (collectedSamples.length === 0) {
+      alert("No landmark samples collected yet. Record some gestures before exporting.");
+      return;
+    }
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(collectedSamples, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `asl_landmark_dataset_${collectedSamples.length}_samples.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  };
+
+  const handleImportDataset = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fileReader = new FileReader();
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    fileReader.onload = (event) => {
+      try {
+        const parsed = JSON.parse(event.target?.result as string);
+        if (Array.isArray(parsed)) {
+          const isValid = parsed.every(item => item.label && Array.isArray(item.landmarks));
+          if (!isValid) {
+            alert("Format mismatch. Make sure JSON contains an array of label/landmarks schema elements.");
+            return;
+          }
+          const merged = [...parsed, ...collectedSamplesRef.current];
+          setCollectedSamples(merged);
+          localStorage.setItem('asl_collected_samples', JSON.stringify(merged));
+          alert(`Success! Imported and merged ${parsed.length} hand telemetry samples into live workspace.`);
+        } else {
+          alert("Selected file must be a JSON array document structure.");
+        }
+      } catch (err) {
+        alert("Failure to parse target file. Check JSON validity.");
+      }
+    };
+    fileReader.readAsText(file);
+  };
+
+  // Continuous sampling clock effect
+  useEffect(() => {
+    let timer: any = null;
+    let countdownTimer: any = null;
+
+    if (continuousActive && cameraActive) {
+      // Direct count-down calculation
+      setContinuousCountDown(Math.ceil(continuousTimerMs / 1000));
+      countdownTimer = setInterval(() => {
+        setContinuousCountDown((prev) => {
+          if (prev <= 1) {
+            return Math.ceil(continuousTimerMs / 1000);
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      timer = setInterval(() => {
+        if (detectedHandsCountRef.current > 0) {
+          handleCollectSample();
+        }
+      }, continuousTimerMs);
+    } else {
+      setContinuousCountDown(0);
+    }
+
+    return () => {
+      if (timer) clearInterval(timer);
+      if (countdownTimer) clearInterval(countdownTimer);
+    };
+  }, [continuousActive, cameraActive, continuousTimerMs]);
 
   // MediaPipe hands results handler callback
   const onHandsResults = (results: any) => {
@@ -618,6 +781,16 @@ export default function App() {
             }`}
           >
             30-Day Roadmap Plan
+          </button>
+          <button
+            onClick={() => setActiveTab('collector')}
+            className={`px-4 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
+              activeTab === 'collector'
+                ? "bg-[#7c8d7c] text-white shadow-sm"
+                : "text-[#5a6b5a] hover:text-[#2d2d28]"
+            }`}
+          >
+            Dataset Creator
           </button>
           <button
             onClick={() => setActiveTab('files')}
@@ -1205,6 +1378,407 @@ export default function App() {
         {activeTab === 'roadmap' && (
           <div className="space-y-6" id="roadmap-tab-view">
             <TimelineRoadmap />
+          </div>
+        )}
+
+        {/* Gesture Data Collector Workspace tab view */}
+        {activeTab === 'collector' && (
+          <div className="space-y-6 animate-fade-in" id="collector-tab-view">
+            <div className="bg-white border border-[#ecece0] rounded-3xl p-6 shadow-sm space-y-3" id="collector-header">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-bold text-[#2d2d28] flex items-center gap-2">
+                    <Database className="w-5.5 h-5.5 text-[#7c8d7c]" />
+                    Interactive Gesture Landmarks Dataset Creator
+                  </h2>
+                  <p className="text-xs text-[#5a5a4a] leading-relaxed max-w-3xl mt-1">
+                    Capture physical hand coordinates (21 joints mapped in standard 3D space) directly from the webcam to construct a custom sign language dataset. Export or merge saved coordinates seamlessly in JSON format.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 self-stretch sm:self-auto shrink-0 font-sans">
+                  <label className="flex items-center gap-2 px-3 py-1.5 bg-[#f0f2ee] hover:bg-[#e0e4db]/40 border border-[#e0e4db] rounded-xl text-xs font-bold text-[#4a4a40] cursor-pointer transition-colors shadow-sm">
+                    <Upload className="w-3.5 h-3.5 text-[#7c8d7c]" />
+                    <span>Merge JSON</span>
+                    <input 
+                      type="file" 
+                      accept=".json" 
+                      onChange={handleImportDataset} 
+                      className="hidden" 
+                    />
+                  </label>
+                  <button
+                    onClick={handleExportDataset}
+                    disabled={collectedSamples.length === 0}
+                    type="button"
+                    className={`flex items-center gap-2 px-4 py-1.5 bg-[#7c8d7c] hover:bg-[#6c7d6c] ${collectedSamples.length === 0 ? 'opacity-50 cursor-not-allowed' : ''} text-white font-bold text-xs uppercase tracking-wide rounded-xl transition-colors shadow-sm`}
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Export Dataset ({collectedSamples.length})
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" id="collector-workspace-grid">
+              
+              {/* Left Column: Recording Controller Wizard */}
+              <div className="lg:col-span-5 space-y-6">
+                
+                {/* Step-by-Step Dataset Creator Wizard Panel */}
+                <div className="bg-white border border-[#ecece0] rounded-3xl p-6 shadow-sm space-y-4" id="collector-wizard-card">
+                  <h3 className="font-extrabold text-sm text-[#2d2d28] flex items-center gap-2 uppercase tracking-wide font-mono border-b border-[#f0f2ee] pb-2.5">
+                    <Sparkles className="w-4.5 h-4.5 text-[#7c8d7c]" />
+                    Dataset Creator Wizard
+                  </h3>
+
+                  {/* Wizard Step 1: Camera Setup */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-[#2d2d28]">Step 1: Calibration & Hardware Feed</span>
+                      <span className={`font-mono font-bold text-[10px] px-2 py-0.5 rounded ${cameraActive ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100 animate-pulse'}`}>
+                        {cameraActive ? 'HARDWARE ONLINE' : 'AWAITING FEEDS'}
+                      </span>
+                    </div>
+                    {!cameraActive ? (
+                      <div className="bg-[#fdfcf9] border border-dashed border-[#ecece0] rounded-2xl p-4 text-center">
+                        <p className="text-[11px] text-[#7a7a6a] mb-3 leading-relaxed">
+                          Your hardware system camera feed is currently offline. Enable the camera module to stream coordinates.
+                        </p>
+                        <button
+                          onClick={toggleCamera}
+                          type="button"
+                          className="px-4 py-2 bg-[#7c8d7c] text-white font-bold text-xs uppercase tracking-wider rounded-xl hover:bg-[#6c7d6c] transition-colors shadow-sm"
+                        >
+                          Enable Webcam Stream
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="bg-[#f0f2ee]/40 border border-[#e0e4db] rounded-2xl p-3 flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          <Activity className="w-4 h-4 text-emerald-600 animate-pulse" />
+                          <span className="text-[#5a6b5a] font-medium font-sans">
+                            MediaPipe Core Trackers: <strong className="font-bold">{liveFps || '60'} FPS</strong>
+                          </span>
+                        </div>
+                        <span className="font-mono bg-emerald-100 text-emerald-800 font-black px-1.5 py-0.5 rounded text-[9px]">
+                          {detectedHandsCount === 1 ? '1 HAND CALIBRATED' : detectedHandsCount > 1 ? `${detectedHandsCount} HAND DETECTION` : 'ALIGNING HANDS...'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Wizard Step 2: Target Customization label */}
+                  <div className="space-y-2 pt-2 border-t border-[#f0f2ee]">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-[#2d2d28]">Step 2: Key In Posture Target Label</span>
+                      <span className="text-[10px] font-mono font-bold text-[#9a9a8a]">CURRENT_TAG</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={sampleLabel}
+                        onChange={(e) => setSampleLabel(e.target.value.toUpperCase().slice(0, 15))}
+                        placeholder="e.g. A, HELLO, PEACE"
+                        className="flex-1 bg-[#fdfcf9] border border-[#e0e4db] text-xs font-bold text-[#2d2d28] py-2 px-3 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#7c8d7c] transition-shadow uppercase font-mono shadow-sm"
+                        maxLength={15}
+                      />
+                      <div className="flex gap-1">
+                        {['A', 'B', 'C', 'HI', 'LOVE'].map((preset) => (
+                          <button
+                            key={preset}
+                            onClick={() => setSampleLabel(preset)}
+                            type="button"
+                            className={`px-2 py-1 text-[10px] font-mono font-extrabold border rounded-lg transition-colors ${
+                              sampleLabel === preset 
+                                ? 'bg-[#7c8d7c] text-white border-[#7c8d7c]' 
+                                : 'bg-white hover:bg-neutral-50 border-neutral-200 text-neutral-500'
+                            }`}
+                          >
+                            {preset}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Wizard Step 3: Trigger Landmarks Capture Nodes */}
+                  <div className="space-y-3 pt-2 border-t border-[#f0f2ee]">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-[#2d2d28]">Step 3: Collect Telemetry Coordinates</span>
+                      <span className="text-[10px] text-[#9a9a8a] font-mono font-bold">MODE_SELECTOR</span>
+                    </div>
+
+                    {collectorError && (
+                      <div className="bg-rose-50 border border-rose-100 text-[#a36b5e] rounded-xl p-2.5 text-[10px] leading-relaxed flex items-start gap-2">
+                        <ShieldAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                        <span>{collectorError}</span>
+                      </div>
+                    )}
+
+                    {/* Snap Buttons */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      
+                      {/* Manual Capture */}
+                      <button
+                        onClick={handleCollectSample}
+                        type="button"
+                        className={`py-3 px-4 rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-sm ${
+                          cameraActive && detectedHandsCount > 0
+                            ? 'bg-[#7c8d7c] text-white hover:bg-[#6c7d6c]'
+                            : 'bg-neutral-100 text-neutral-400 border border-neutral-200 cursor-not-allowed'
+                        }`}
+                      >
+                        <Plus className="w-4 h-4" />
+                        Snap landmarks
+                      </button>
+
+                      {/* Continuous Rec Interval Loop */}
+                      <button
+                        onClick={() => setContinuousActive(!continuousActive)}
+                        disabled={!cameraActive}
+                        type="button"
+                        className={`py-3 px-4 rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 border shadow-sm ${
+                          continuousActive
+                            ? 'bg-[#a36b5e] text-white border-[#a36b5e] hover:bg-[#935b4e]'
+                            : cameraActive
+                            ? 'bg-[#fdfcf9] text-[#7c8d7c] border-[#e0e4db] hover:bg-[#f0f2ee]'
+                            : 'bg-neutral-50 text-neutral-400 border-neutral-100 cursor-not-allowed'
+                        }`}
+                      >
+                        {continuousActive ? (
+                          <>
+                            <Square className="w-3.5 h-3.5 text-white animate-spin" />
+                            Loop Active ({continuousCountDown}s)
+                          </>
+                        ) : (
+                          <>
+                            <Play className="w-3.5 h-3.5 text-[#7c8d7c]" />
+                            Continuous Capture
+                          </>
+                        )}
+                      </button>
+
+                    </div>
+
+                    {/* Capture Feedback Frame flash effect emulator */}
+                    <div className="relative aspect-video bg-neutral-900 rounded-2xl overflow-hidden border border-neutral-805" id="collector-preview-placeholder">
+                      {cameraActive ? (
+                        <div className="relative w-full h-full">
+                          <video 
+                            ref={(el) => {
+                              if (el && videoRef.current && el !== videoRef.current) {
+                                // Handled safely by original ref, this element triggers webcam context
+                              }
+                            }}
+                            playsInline 
+                            muted 
+                            className="w-full h-full object-cover scale-x-[-1] opacity-45"
+                          />
+                          {/* Live landmarks drawing mirrored */}
+                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            {detectedHandsCount === 0 ? (
+                              <div className="bg-black/80 text-white text-[10px] font-mono px-3 py-1.5 rounded-full border border-white/10 flex items-center gap-1.5">
+                                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
+                                Awaiting Hand Alignment
+                              </div>
+                            ) : (
+                              <span className="bg-emerald-500/25 text-emerald-300 text-[9px] font-mono px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                                Calibration Connected ({detectedHandsCount} Hand)
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Flash feedback animation */}
+                          {flashCollectorEffect && (
+                            <div className="absolute inset-0 bg-white/85 animate-pulse pointer-events-none z-10 flex items-center justify-center">
+                              <span className="bg-[#7c8d7c] text-white font-mono text-xs font-black uppercase tracking-wider px-3 py-1.5 rounded-xl shadow-lg border border-white/15">
+                                TELEMETRY CAPTURED ✓
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center text-[#9a9a8a] text-[11px]">
+                          <Camera className="w-8 h-8 text-neutral-800 mb-2" />
+                          <p>Webcam feedback module currently unmounted.</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Continuous speed customization */}
+                    <div className="bg-[#fdfcf9] border border-[#ecece0] rounded-xl p-3 flex items-center justify-between gap-4 text-[10px]">
+                      <div>
+                        <span className="font-bold text-[#4a4a40] block">Continuous Recording Rate</span>
+                        <span className="text-[#9a9a8a] text-[9px]">Interval rate for automated loop records.</span>
+                      </div>
+                      <select
+                        value={continuousTimerMs}
+                        onChange={(e) => setContinuousTimerMs(Number(e.target.value))}
+                        className="bg-[#f0f2ee] border border-[#e0e4db] text-xs font-bold text-[#2d2d28] p-1.5 rounded-lg focus:outline-none"
+                      >
+                        <option value={1000}>Fast (1.0s)</option>
+                        <option value={1500}>Medium (1.5s)</option>
+                        <option value={2000}>Relaxed (2.0s)</option>
+                        <option value={3000}>Slow (3.0s)</option>
+                      </select>
+                    </div>
+
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Right Column: Recorded Samples Hub & Balance Metrics charts */}
+              <div className="lg:col-span-7 space-y-6">
+                
+                {/* Real-time Dataset Ballance KPI metrics */}
+                <div className="bg-white border border-[#ecece0] rounded-3xl p-6 shadow-sm space-y-4" id="dataset-analytics-panel">
+                  <h3 className="font-extrabold text-sm text-[#2d2d28] uppercase tracking-wide font-mono border-b border-[#f0f2ee] pb-2.5">
+                    Dataset Distribution Analytics
+                  </h3>
+                  
+                  {collectedSamples.length > 0 ? (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div className="bg-[#fdfcf9] border border-[#ecece0] rounded-2xl p-3 text-center">
+                          <span className="text-[9px] text-[#9a9a8a] font-mono uppercase block">Total Samples</span>
+                          <span className="text-xl font-black text-[#2d2d28] font-mono mt-1 block">
+                            {collectedSamples.length}
+                          </span>
+                        </div>
+                        <div className="bg-[#fdfcf9] border border-[#ecece0] rounded-2xl p-3 text-center">
+                          <span className="text-[9px] text-[#9a9a8a] font-mono uppercase block">Unique Classes</span>
+                          <span className="text-xl font-black text-[#7c8d7c] font-mono mt-1 block">
+                            {Array.from(new Set(collectedSamples.map(s => s.label))).length}
+                          </span>
+                        </div>
+                        <div className="bg-[#fdfcf9] border border-[#ecece0] rounded-2xl p-3 text-center col-span-2">
+                          <span className="text-[9px] text-[#9a9a8a] font-mono uppercase block">Most Screened Class</span>
+                          <span className="text-xs font-bold text-[#2d2d28] font-mono mt-2 block truncate">
+                            {(() => {
+                              const counts: Record<string, number> = {};
+                              collectedSamples.forEach(s => counts[s.label] = (counts[s.label] || 0) + 1);
+                              const top = Object.entries(counts).sort((a,b) => b[1] - a[1])[0];
+                              return top ? `${top[0]} (${top[1]} pcs)` : "N/A";
+                            })()}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Distribution horizontal progress bars */}
+                      <div className="space-y-2">
+                        <span className="text-[9px] text-[#9a9a8a] uppercase tracking-wider font-mono font-bold block animate-pulse">
+                          Recorded Sample Density by label class
+                        </span>
+                        <div className="max-h-[140px] overflow-y-auto space-y-2.5 pr-1 font-sans">
+                          {(() => {
+                            const counts: Record<string, number> = {};
+                            collectedSamples.forEach(s => counts[s.label] = (counts[s.label] || 0) + 1);
+                            const total = collectedSamples.length;
+                            return Object.entries(counts).map(([label, count]) => {
+                              const pct = Math.round((count / total) * 100);
+                              return (
+                                <div key={label} className="text-[10px] space-y-1">
+                                  <div className="flex justify-between font-mono font-semibold">
+                                    <span className="text-[#2d2d28]">Class Label: "{label}"</span>
+                                    <span className="text-[#9a9a8a]">{count} samples ({pct}%)</span>
+                                  </div>
+                                  <div className="w-full h-1.5 bg-[#f0f2ee] rounded-full overflow-hidden">
+                                    <div className="h-full bg-[#7c8d7c] rounded-full transition-all duration-300" style={{ width: `${pct}%` }} />
+                                  </div>
+                                </div>
+                              );
+                            });
+                          })()}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="py-6 text-center text-xs text-[#9a9a8a] italic leading-relaxed">
+                      Collect coordinates to view interactive balance distribution analytics. Use preset letters or type labels above.
+                    </div>
+                  )}
+                </div>
+
+                {/* Recorded Samples Table Database */}
+                <div className="bg-white border border-[#ecece0] rounded-3xl p-6 shadow-sm space-y-4" id="samples-database-card">
+                  <div className="flex items-center justify-between border-b border-[#f0f2ee] pb-2.5">
+                    <h3 className="font-extrabold text-sm text-[#2d2d28] uppercase tracking-wide font-mono flex items-center gap-2">
+                      Live Coordinate Buffer
+                      <span className="bg-[#f0f2ee] text-[#7c8d7c] text-[10px] px-2.5 py-0.5 rounded-full border border-[#e0e4db] font-black">
+                        {collectedSamples.length} ITEMS
+                      </span>
+                    </h3>
+                    {collectedSamples.length > 0 && (
+                      <button
+                        onClick={handleClearAllSamples}
+                        type="button"
+                        className="text-[10px] font-mono font-black tracking-wider text-[#a36b5e] uppercase hover:underline"
+                      >
+                        Clear Buffer
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
+                    {collectedSamples.map((sample) => {
+                      const idShort = sample.id.split('_').slice(1).join('_');
+                      return (
+                        <div 
+                          key={sample.id} 
+                          className="p-3.5 rounded-2xl bg-[#fdfcf9] border border-[#f0f2ee] space-y-2.5 hover:border-[#7c8d7c]/30 transition-colors"
+                          id={sample.id}
+                        >
+                          <div className="flex items-center justify-between gap-4 text-xs">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <span className="font-mono bg-[#7c8d7c] text-white px-2 py-0.5 rounded font-black text-[10px]">
+                                {sample.label}
+                              </span>
+                              <div className="min-w-0">
+                                <p className="font-mono text-[9px] text-[#9a9a8a] truncate">Hash: {idShort}</p>
+                                <p className="text-[10px] text-neutral-500 font-sans mt-0.5">{sample.timestamp} ({sample.landmarks.length} joints)</p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => handleDeleteSample(sample.id)}
+                              type="button"
+                              className="text-neutral-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-neutral-100 transition-colors"
+                              title="Delete coordinate landmark sample"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          {/* Raw Coordinate expansion nodes */}
+                          <details className="group bg-[#f0f2ee]/40 rounded-xl overflow-hidden border border-[#e0e4db]/50 text-[9px] font-mono">
+                            <summary className="px-3 py-1.5 cursor-pointer font-bold text-[#5a5a4a] select-none hover:bg-[#f0f2ee]/80 transition-colors list-none flex items-center justify-between">
+                              <span>Show Hand Vectors JSON</span>
+                              <span className="text-[8px] opacity-60 group-open:hidden">▼ Expand</span>
+                              <span className="text-[8px] opacity-60 hidden group-open:inline">▲ Collapse</span>
+                            </summary>
+                            <div className="p-3 bg-[#e8eae4]/30 border-t border-[#e0e4db] max-h-[120px] overflow-y-auto text-[8px] text-zinc-600 leading-normal scrollbar-thin">
+                              <pre className="whitespace-pre-wrap">
+                                {JSON.stringify(sample.landmarks.slice(0, 6), null, 2)}
+                                <span className="opacity-40 italic block mt-1">... [{sample.landmarks.length - 6} more joint coordinates]</span>
+                              </pre>
+                            </div>
+                          </details>
+                        </div>
+                      );
+                    })}
+
+                    {collectedSamples.length === 0 && (
+                      <div className="py-12 text-center text-xs text-[#9a9a8a] italic leading-relaxed">
+                        No telemetry coordinates compiled yet.<br/>
+                        Align your hand posture and click <strong className="font-bold">Snap landmarks</strong>.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
           </div>
         )}
 
