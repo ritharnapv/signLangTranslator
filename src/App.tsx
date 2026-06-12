@@ -492,7 +492,17 @@ export default function App() {
         cancelAnimationFrame(localFrameId);
       }
     };
-  }, [cameraActive]);
+  }, [cameraActive, activeTab]);
+
+  // Dynamic automatic re-binding of active video streams on tab changes
+  useEffect(() => {
+    if (cameraActive && stream && videoRef.current) {
+      if (videoRef.current.srcObject !== stream) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(err => console.error("Error restoration stream:", err));
+      }
+    }
+  }, [activeTab, cameraActive, stream]);
 
   // Load list of cameras if navigator support is present
   const updateAvailableDevices = async () => {
@@ -790,7 +800,7 @@ export default function App() {
                 : "text-[#5a6b5a] hover:text-[#2d2d28]"
             }`}
           >
-            Dataset Creator
+            Recording Dashboard
           </button>
           <button
             onClick={() => setActiveTab('files')}
@@ -1389,10 +1399,10 @@ export default function App() {
                 <div>
                   <h2 className="text-xl font-bold text-[#2d2d28] flex items-center gap-2">
                     <Database className="w-5.5 h-5.5 text-[#7c8d7c]" />
-                    Interactive Gesture Landmarks Dataset Creator
+                    Interactive Gesture Recording & Dataset Dashboard
                   </h2>
                   <p className="text-xs text-[#5a5a4a] leading-relaxed max-w-3xl mt-1">
-                    Capture physical hand coordinates (21 joints mapped in standard 3D space) directly from the webcam to construct a custom sign language dataset. Export or merge saved coordinates seamlessly in JSON format.
+                    Record, tag, and organize custom sign language postures. Capture hand coordinates (21 joints mapped in standard 3D space) directly from your webcam. Export datasets as standard JSON schema.
                   </p>
                 </div>
                 <div className="flex items-center gap-2 self-stretch sm:self-auto shrink-0 font-sans">
@@ -1561,46 +1571,53 @@ export default function App() {
                     </div>
 
                     {/* Capture Feedback Frame flash effect emulator */}
-                    <div className="relative aspect-video bg-neutral-900 rounded-2xl overflow-hidden border border-neutral-805" id="collector-preview-placeholder">
+                    <div className="relative aspect-video bg-neutral-900 rounded-2xl overflow-hidden border border-[#e0e4db]" id="collector-preview-placeholder">
                       {cameraActive ? (
                         <div className="relative w-full h-full">
                           <video 
-                            ref={(el) => {
-                              if (el && videoRef.current && el !== videoRef.current) {
-                                // Handled safely by original ref, this element triggers webcam context
-                              }
-                            }}
+                            ref={videoRef}
                             playsInline 
                             muted 
-                            className="w-full h-full object-cover scale-x-[-1] opacity-45"
+                            className="w-full h-full object-cover scale-x-[-1]"
+                          />
+                          <canvas 
+                            ref={landmarkCanvasRef}
+                            className="absolute inset-0 w-full h-full object-cover scale-x-[-1] pointer-events-none"
                           />
                           {/* Live landmarks drawing mirrored */}
-                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                          <div className="absolute bottom-3 left-3 pointer-events-none z-10">
                             {detectedHandsCount === 0 ? (
-                              <div className="bg-black/80 text-white text-[10px] font-mono px-3 py-1.5 rounded-full border border-white/10 flex items-center gap-1.5">
-                                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
+                              <div className="bg-black/80 backdrop-blur-md text-white text-[9px] font-mono px-2.5 py-1 rounded-full border border-white/10 flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
                                 Awaiting Hand Alignment
                               </div>
                             ) : (
-                              <span className="bg-emerald-500/25 text-emerald-300 text-[9px] font-mono px-2.5 py-0.5 rounded-full border border-emerald-500/30">
-                                Calibration Connected ({detectedHandsCount} Hand)
+                              <span className="bg-emerald-500/85 backdrop-blur-md text-white text-[9px] font-mono px-2.5 py-1 rounded-full border border-emerald-400/30 font-bold">
+                                Skeletal Calibrated ({detectedHandsCount} {detectedHandsCount === 1 ? 'Hand' : 'Hands'})
                               </span>
                             )}
                           </div>
 
                           {/* Flash feedback animation */}
                           {flashCollectorEffect && (
-                            <div className="absolute inset-0 bg-white/85 animate-pulse pointer-events-none z-10 flex items-center justify-center">
+                            <div className="absolute inset-0 bg-white/90 animate-pulse pointer-events-none z-10 flex items-center justify-center">
                               <span className="bg-[#7c8d7c] text-white font-mono text-xs font-black uppercase tracking-wider px-3 py-1.5 rounded-xl shadow-lg border border-white/15">
-                                TELEMETRY CAPTURED ✓
+                                SAMPLE RECORDED ✓
                               </span>
                             </div>
                           )}
                         </div>
                       ) : (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center text-[#9a9a8a] text-[11px]">
-                          <Camera className="w-8 h-8 text-neutral-800 mb-2" />
-                          <p>Webcam feedback module currently unmounted.</p>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center text-[#9a9a8a] text-[11px]" id="collector-cam-inactive">
+                          <Camera className="w-8 h-8 text-neutral-400 mb-2" />
+                          <p>Webcam feedback module currently offline.</p>
+                          <button
+                            onClick={toggleCamera}
+                            type="button"
+                            className="mt-2.5 px-3 py-1 bg-[#7c8d7c]/15 text-[#7c8d7c] text-[10px] uppercase tracking-wider font-bold rounded-lg hover:bg-[#7c8d7c]/25 transition-all"
+                          >
+                            Toggle Scanner
+                          </button>
                         </div>
                       )}
                     </div>
