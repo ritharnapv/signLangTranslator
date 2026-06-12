@@ -351,8 +351,8 @@ export default function App() {
           const ptEnd = landmarks[endIdx];
           if (ptStart && ptEnd) {
             ctx.beginPath();
-            ctx.moveTo(ptStart.x * canvas.width, ptStart.y * canvas.height);
-            ctx.lineTo(ptEnd.x * canvas.width, ptEnd.y * canvas.height);
+            ctx.moveTo((1 - ptStart.x) * canvas.width, ptStart.y * canvas.height);
+            ctx.lineTo((1 - ptEnd.x) * canvas.width, ptEnd.y * canvas.height);
             
             // Set strokes options
             ctx.lineWidth = lineThickness;
@@ -371,7 +371,7 @@ export default function App() {
 
         // B. Draw Joints/Nodes beautifully
         landmarks.forEach((landmark: any, index: number) => {
-          const px = landmark.x * canvas.width;
+          const px = (1 - landmark.x) * canvas.width;
           const py = landmark.y * canvas.height;
 
           // 1. Draw outer ring anchor
@@ -576,8 +576,8 @@ export default function App() {
         // Request frame and video permission scopes dynamically
         const constraints: MediaStreamConstraints = {
           video: selectedDeviceId 
-            ? { deviceId: { exact: selectedDeviceId }, width: { ideal: 640 }, height: { ideal: 480 } }
-            : { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
+            ? { deviceId: { exact: selectedDeviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }
+            : { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
           audio: false
         };
         const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -608,7 +608,7 @@ export default function App() {
       }
       try {
         const mediaStream = await navigator.mediaDevices.getUserMedia({
-          video: { deviceId: { exact: newDeviceId }, width: { ideal: 640 }, height: { ideal: 480 } },
+          video: { deviceId: { exact: newDeviceId }, width: { ideal: 1280 }, height: { ideal: 720 } },
           audio: false
         });
         setStream(mediaStream);
@@ -880,7 +880,7 @@ export default function App() {
                     />
                     <canvas 
                       ref={landmarkCanvasRef}
-                      className="absolute inset-0 w-full h-full object-cover scale-x-[-1] pointer-events-none"
+                      className="absolute inset-0 w-full h-full object-cover pointer-events-none"
                       id="landmark-canvas"
                     />
                   </div>
@@ -1582,7 +1582,7 @@ export default function App() {
                           />
                           <canvas 
                             ref={landmarkCanvasRef}
-                            className="absolute inset-0 w-full h-full object-cover scale-x-[-1] pointer-events-none"
+                            className="absolute inset-0 w-full h-full object-cover pointer-events-none"
                           />
                           {/* Live landmarks drawing mirrored */}
                           <div className="absolute bottom-3 left-3 pointer-events-none z-10">
