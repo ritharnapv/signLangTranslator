@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ASLGesture, TranslationResult, SessionHistoryItem, CollectedSample } from './types';
 import TimelineRoadmap from './components/TimelineRoadmap';
 import SignDictionary from './components/SignDictionary';
+import DatasetManagement from './components/DatasetManagement';
 import { 
   Camera, 
   Video, 
@@ -47,7 +48,7 @@ const INITIAL_SESSIONS: SessionHistoryItem[] = [
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'dictionary' | 'roadmap' | 'collector' | 'files'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'dictionary' | 'roadmap' | 'collector' | 'datasets' | 'files'>('dashboard');
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [cameraActive, setCameraActive] = useState<boolean>(false);
   const [selectedGesture, setSelectedGesture] = useState<ASLGesture>({
@@ -801,6 +802,16 @@ export default function App() {
             }`}
           >
             Recording Dashboard
+          </button>
+          <button
+            onClick={() => setActiveTab('datasets')}
+            className={`px-4 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
+              activeTab === 'datasets'
+                ? "bg-[#7c8d7c] text-white shadow-sm"
+                : "text-[#5a6b5a] hover:text-[#2d2d28]"
+            }`}
+          >
+            Datasets Hub
           </button>
           <button
             onClick={() => setActiveTab('files')}
@@ -1797,6 +1808,21 @@ export default function App() {
 
             </div>
           </div>
+        )}
+
+        {/* Dataset Management Tab */}
+        {activeTab === 'datasets' && (
+          <DatasetManagement 
+            collectedSamples={collectedSamples}
+            onImportSamples={(samples) => {
+              setCollectedSamples(samples);
+              localStorage.setItem('asl_collected_samples', JSON.stringify(samples));
+            }}
+            onClearLocalSamples={() => {
+              setCollectedSamples([]);
+              localStorage.removeItem('asl_collected_samples');
+            }}
+          />
         )}
 
         {/* Sandbox Architecture & Files Explained Tab view separately */}
