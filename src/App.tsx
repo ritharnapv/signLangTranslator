@@ -3,6 +3,8 @@ import { ASLGesture, TranslationResult, SessionHistoryItem, CollectedSample } fr
 import TimelineRoadmap from './components/TimelineRoadmap';
 import SignDictionary from './components/SignDictionary';
 import DatasetManagement from './components/DatasetManagement';
+import ModelTrainer from './components/ModelTrainer';
+import * as tf from '@tensorflow/tfjs';
 import { 
   Camera, 
   Video, 
@@ -48,7 +50,10 @@ const INITIAL_SESSIONS: SessionHistoryItem[] = [
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'dictionary' | 'roadmap' | 'collector' | 'datasets' | 'files'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'dictionary' | 'roadmap' | 'collector' | 'datasets' | 'trainer' | 'files'>('dashboard');
+  const [trainedClientModel, setTrainedClientModel] = useState<tf.LayersModel | null>(null);
+  const [trainedClasses, setTrainedClasses] = useState<string[]>([]);
+  const [predictionSource, setPredictionSource] = useState<'simulated' | 'tensorflow'>('simulated');
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [cameraActive, setCameraActive] = useState<boolean>(false);
   const [selectedGesture, setSelectedGesture] = useState<ASLGesture>({
@@ -639,6 +644,65 @@ export default function App() {
     setIsTranslating(true);
 
     try {
+      // TENSORFLOW DIRECT BROWSER CLASSIFICATION BRANCH
+      if (predictionSource === 'tensorflow' && trainedClientModel) {
+        const landmarks = handLandmarksSampleRef.current;
+        if (!landmarks || landmarks.length !== 21) {
+          throw new Error("Local Classifier Error: No skeletal joints detected on virtual frame camera view. Please hold your hand up clearly!");
+        }
+
+        const wrist = landmarks[0];
+        const features: number[] = [];
+        landmarks.forEach((joint: any) => {
+          features.push(joint.x - wrist.x);
+          features.push(joint.y - wrist.y);
+          features.push(joint.z - wrist.z);
+        });
+
+        // Run client inference
+        const result = tf.tidy(() => {
+          const inputTensor = tf.tensor2d([features], [1, 63]);
+          const prediction = trainedClientModel.predict(inputTensor) as tf.Tensor;
+          const probs = Array.from(prediction.dataSync());
+          const maxProb = Math.max(...probs);
+          const maxIndex = probs.indexOf(maxProb);
+          
+          // Get the units dynamically from first dense layer
+          const layer1Units = (trainedClientModel.layers[0] as any).units || 64;
+          const layer2Units = (trainedClientModel.layers[2] as any).units || 32;
+
+          return { maxIndex, confidence: maxProb * 100, layer1Units, layer2Units };
+        });
+
+        const charResult = trainedClasses[result.maxIndex] || "?";
+
+        setLatestResult({
+          predictedChar: charResult,
+          confidence: Number(result.confidence.toFixed(1)),
+          explanation: `Inferred locally using your browser-compiled Multi-Layer Perceptron (MLP) Artificial Neural Network. Your 3D landmarks coordinates offset relative to wrist joint 0 and fed forward inside TF.js.`,
+          tips: [
+            `Model classes catalogued: ${trainedClasses.join(', ')}`,
+            `Categorical cross-entropy probability: ${(result.confidence).toFixed(1)}%`,
+            `Model topology: [63] -> Dense (${result.layer1Units}) -> Dense (${result.layer2Units}) -> Softmax (${trainedClasses.length})`
+          ],
+          grammarMatches: [`TF.js live local prediction`]
+        });
+
+        // Add to history sessions
+        const newItem: SessionHistoryItem = {
+          id: `session-${Date.now()}`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " Today",
+          caption: `Inferred '${charResult}' via TF.js`,
+          confidence: Number(result.confidence.toFixed(1))
+        };
+        const updated = [newItem, ...sessions].slice(0, 8);
+        setSessions(updated);
+        localStorage.setItem('asl_sessions', JSON.stringify(updated));
+
+        setIsTranslating(false);
+        return;
+      }
+
       let base64Image = "";
 
       // Check if we can capture from video
@@ -814,6 +878,16 @@ export default function App() {
             Datasets Hub
           </button>
           <button
+            onClick={() => setActiveTab('trainer')}
+            className={`px-4 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
+              activeTab === 'trainer'
+                ? "bg-[#7c8d7c] text-white shadow-sm"
+                : "text-[#5a6b5a] hover:text-[#2d2d28]"
+            }`}
+          >
+            Gesture AI Trainer
+          </button>
+          <button
             onClick={() => setActiveTab('files')}
             className={`px-4 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
               activeTab === 'files'
@@ -943,6 +1017,52 @@ export default function App() {
 
                 {/* Hidden canvas buffer for snapshot base64 grabs */}
                 <canvas ref={canvasRef} className="hidden" id="draw-buffer" />
+              </div>
+
+              {/* Active Model Classifier Engine Selector */}
+              <div className="bg-[#fcfdfa] border border-[#ecece0] rounded-[24px] p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4" id="model-mode-controls-card">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-[#f0f2ee] flex items-center justify-center text-[#7c8d7c] font-bold shrink-0">
+                    <Cpu className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-[#2d2d28] uppercase tracking-wide">Recognizer Classifier Pipeline</h4>
+                    <p className="text-[10px] text-[#7a7a6a] mt-0.5">Choose standard translation or run live predictions with your locally trained TensorFlow.js neural network</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 bg-[#f0f2ee]/85 p-1 rounded-xl border border-[#e0e4db] self-stretch md:self-auto justify-center md:justify-start">
+                  <button
+                    onClick={() => setPredictionSource('simulated')}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] uppercase font-bold tracking-wider transition-all whitespace-nowrap ${
+                      predictionSource === 'simulated'
+                        ? "bg-[#ebdcd1] text-[#a36b5e] shadow-sm"
+                        : "text-[#5a6b5a] hover:text-[#2d2d28]"
+                    }`}
+                  >
+                    Simulated Sandbox API
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!trainedClientModel) {
+                        alert("To run your own TensorFlow custom classifier, generate/train a model inside the 'Gesture AI Trainer' tab first!");
+                        return;
+                      }
+                      setPredictionSource('tensorflow');
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] uppercase font-bold tracking-wider transition-all flex items-center gap-1.5 whitespace-nowrap relative ${
+                      predictionSource === 'tensorflow'
+                        ? "bg-[#7c8d7c] text-white shadow-sm"
+                        : "text-[#5a6b5a] hover:text-[#2d2d28]"
+                    }`}
+                  >
+                    <span>My TF.js Neural Model</span>
+                    {trainedClientModel ? (
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    ) : (
+                      <span className="text-[8px] bg-black/10 px-1 py-0.2 rounded text-[#a3a39e]">Locked</span>
+                    )}
+                  </button>
+                </div>
               </div>
 
               {/* Hardware & Sandbox Frame Controls */}
@@ -1821,6 +1941,18 @@ export default function App() {
             onClearLocalSamples={() => {
               setCollectedSamples([]);
               localStorage.removeItem('asl_collected_samples');
+            }}
+          />
+        )}
+
+        {/* Model Trainer Tab */}
+        {activeTab === 'trainer' && (
+          <ModelTrainer 
+            collectedSamples={collectedSamples}
+            onRegisterTrainedModel={(model, classes) => {
+              setTrainedClientModel(model);
+              setTrainedClasses(classes);
+              setPredictionSource('tensorflow');
             }}
           />
         )}
