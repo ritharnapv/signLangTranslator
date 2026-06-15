@@ -129,6 +129,45 @@ export default function App() {
   const detectedHandsCountRef = useRef<number>(0);
   const collectedSamplesRef = useRef<CollectedSample[]>([]);
 
+  // Keep TF.js model state and helper vars synchronized inside non-stale refs for the MediaPipe thread
+  const trainedClientModelRef = useRef<tf.LayersModel | null>(null);
+  const trainedClassesRef = useRef<string[]>([]);
+  const predictionSourceRef = useRef<'simulated' | 'tensorflow'>('simulated');
+
+  useEffect(() => {
+    trainedClientModelRef.current = trainedClientModel;
+  }, [trainedClientModel]);
+
+  useEffect(() => {
+    trainedClassesRef.current = trainedClasses;
+  }, [trainedClasses]);
+
+  useEffect(() => {
+    predictionSourceRef.current = predictionSource;
+  }, [predictionSource]);
+
+  // Attempt to auto-restores saved TF.js model from browser local IndexedDB on startup
+  useEffect(() => {
+    const autoLoadSavedModel = async () => {
+      try {
+        const classesStored = localStorage.getItem('asl_trained_classes');
+        if (classesStored) {
+          const classes = JSON.parse(classesStored);
+          const loaded = await tf.loadLayersModel('indexeddb://asl_trained_mlp_model');
+          setTrainedClientModel(loaded);
+          setTrainedClasses(classes);
+          setPredictionSource('tensorflow');
+          console.log("Successfully restored your custom TF.js model from local IndexedDB.");
+        }
+      } catch (e) {
+        console.log("No custom TF.js model found or configured in IndexedDB yet.");
+      }
+    };
+    
+    // Tiny delay to make sure TF.js has cleanly initialized
+    setTimeout(autoLoadSavedModel, 800);
+  }, []);
+
   useEffect(() => {
     handLandmarksSampleRef.current = handLandmarksSample;
   }, [handLandmarksSample]);
@@ -279,7 +318,53 @@ export default function App() {
     setDetectedHandsCount(handsFound);
     
     if (handsFound > 0) {
-      setHandLandmarksSample(results.multiHandLandmarks[0]);
+      const landmarks = results.multiHandLandmarks[0];
+      setHandLandmarksSample(landmarks);
+
+      // REAL-TIME LOCAL TENSORFLOW INFERENCE
+      if (predictionSourceRef.current === 'tensorflow' && trainedClientModelRef.current && landmarks && landmarks.length === 21) {
+        try {
+          const wrist = landmarks[0];
+          const features: number[] = [];
+          landmarks.forEach((joint: any) => {
+            features.push(joint.x - wrist.x);
+            features.push(joint.y - wrist.y);
+            features.push(joint.z - (wrist.z || 0));
+          });
+
+          const model = trainedClientModelRef.current;
+          const classes = trainedClassesRef.current;
+
+          const result = tf.tidy(() => {
+            const inputTensor = tf.tensor2d([features], [1, 63]);
+            const prediction = model.predict(inputTensor) as tf.Tensor;
+            const probs = Array.from(prediction.dataSync());
+            const maxProb = Math.max(...probs);
+            const maxIndex = probs.indexOf(maxProb);
+            
+            const layer1Units = (model.layers[0] as any).units || 64;
+            const layer2Units = (model.layers[2] as any).units || 32;
+
+            return { maxIndex, confidence: maxProb * 100, layer1Units, layer2Units };
+          });
+
+          const charResult = classes[result.maxIndex] || "?";
+
+          setLatestResult({
+            predictedChar: charResult,
+            confidence: Number(result.confidence.toFixed(1)),
+            explanation: `Inferred live in real time using your browser-compiled Multi-Layer Perceptron (MLP) Artificial Neural Network. Your 3D landmarks coordinates offset relative to wrist joint 0 and fed forward inside TF.js.`,
+            tips: [
+              `Model classes catalogued: ${classes.join(', ')}`,
+              `Categorical cross-entropy probability: ${(result.confidence).toFixed(1)}%`,
+              `Model topology: [63] -> Dense (${result.layer1Units}) -> Dense (${result.layer2Units}) -> Softmax (${classes.length})`
+            ],
+            grammarMatches: [`TF.js live local prediction`]
+          });
+        } catch (predErr) {
+          console.error("Real-time live prediction error:", predErr);
+        }
+      }
     } else {
       setHandLandmarksSample([]);
     }

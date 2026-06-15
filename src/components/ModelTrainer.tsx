@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Cpu, BrainCircuit, Play, Square, Save, Download, Sliders, Database, 
-  AlertTriangle, BookOpen, Award, Check, RefreshCw, BarChart2, Info
+  AlertTriangle, BookOpen, Award, Check, RefreshCw, BarChart2, Info,
+  Upload, FileJson, FileCode
 } from 'lucide-react';
 import * as tf from '@tensorflow/tfjs';
 import { CollectedSample } from '../types';
@@ -72,6 +73,55 @@ export default function ModelTrainer({
 
   // Stop token for training
   const stopTrainingRef = React.useRef<boolean>(false);
+
+  // Model Importer State Managers
+  const [imJsonFile, setImJsonFile] = useState<File | null>(null);
+  const [imBinFile, setImBinFile] = useState<File | null>(null);
+  const [importedClassesText, setImportedClassesText] = useState<string>("A, B, C");
+
+  const handleImportModelFromFiles = async () => {
+    if (!imJsonFile || !imBinFile) {
+      setErrorMsg("Please select both 'model.json' structural file and binary weights file first.");
+      return;
+    }
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    try {
+      // 1. Process target classes list
+      const labels = importedClassesText
+        .split(',')
+        .map(l => l.trim().toUpperCase())
+        .filter(l => l.length > 0);
+        
+      if (labels.length < 2) {
+        setErrorMsg("Model classes parsing failed. Must describe at least 2 distinct classification categories.");
+        return;
+      }
+      
+      // 2. Feed files into TF.js browserFiles deserializer
+      const loaded = await tf.loadLayersModel(tf.io.browserFiles([imJsonFile, imBinFile]));
+      
+      setActiveModel(loaded);
+      setTrainedClasses(labels);
+      
+      // 3. Persist imported model into IndexedDB so it survives page reloads
+      try {
+        await loaded.save('indexeddb://asl_trained_mlp_model');
+        localStorage.setItem('asl_trained_classes', JSON.stringify(labels));
+      } catch (dbErr) {
+        console.warn("Could not save imported model to IndexedDB:", dbErr);
+      }
+
+      // 4. Notify parent state
+      if (onRegisterTrainedModel) {
+        onRegisterTrainedModel(loaded, labels);
+      }
+      
+      setSuccessMsg(`Successfully deserialized and registered custom TensorFlow model from disk files. ${labels.length} classes active!`);
+    } catch (err: any) {
+      setErrorMsg(`Model Import failure: ${err.message || err}`);
+    }
+  };
 
   useEffect(() => {
     fetchDatasetsList();
@@ -269,12 +319,21 @@ export default function ModelTrainer({
         setActiveModel(model);
         setTrainedClasses(sortedLabels);
         
+        // Save to IndexedDB persistently so it survives page reloads
+        try {
+          await model.save('indexeddb://asl_trained_mlp_model');
+          localStorage.setItem('asl_trained_classes', JSON.stringify(sortedLabels));
+          console.log("Successfully stored the trained TF.js model persistently into IndexedDB.");
+        } catch (dbErr) {
+          console.warn("Could not save to IndexedDB, falling back to session-only memory:", dbErr);
+        }
+
         // Notify Parent App is ready to receive dynamic prediction logic
         if (onRegisterTrainedModel) {
           onRegisterTrainedModel(model, sortedLabels);
         }
 
-        setSuccessMsg(`Model trained to completion successfully over ${epochs} epochs. Classification model is now active on client viewport!`);
+        setSuccessMsg(`Model trained to completion successfully over ${epochs} epochs. Saved to local IndexedDB and now active on client viewport!`);
       }
     } catch (err: any) {
       console.error(err);
@@ -551,6 +610,69 @@ export default function ModelTrainer({
                   })}
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Section: Import/Load Saved Model */}
+          <div className="bg-white border border-[#ecece0] rounded-3xl p-6 shadow-sm space-y-5 animate-fade-in" id="model-importer-panel">
+            <div className="flex items-center gap-2 text-xs font-bold text-[#7c8d7c] uppercase tracking-widest font-mono">
+              <Upload className="w-4 h-4" />
+              Import Saved Model
+            </div>
+            <p className="text-[11px] text-[#7a7a6a] leading-relaxed">
+              Upload your previously downloaded model JSON structure and binary weights file to restore your classifier directly.
+            </p>
+            <div className="space-y-3" id="import-controls">
+              <div className="space-y-1.5">
+                <span className="text-[9px] uppercase tracking-widest text-[#7a7a6a] font-bold block font-mono">Model Classes (comma-separated labels)</span>
+                <input
+                  type="text"
+                  placeholder="e.g. A, B, C, HI, LOVE, SOS"
+                  value={importedClassesText}
+                  onChange={(e) => setImportedClassesText(e.target.value)}
+                  className="w-full text-xs font-mono px-3 py-2 rounded-lg border border-[#ecece0] focus:border-[#7c8d7c] focus:ring-1 focus:ring-[#7c8d7c] outline-none bg-[#fcfcf9]"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1 relative">
+                  <span className="text-[9px] uppercase tracking-widest text-[#7a7a6a] font-bold block font-mono">Structure (.json)</span>
+                  <label className="flex flex-col items-center justify-center border border-dashed border-[#ecece0] rounded-xl py-2 px-1 text-center cursor-pointer hover:bg-[#fafaf9] transition-all bg-[#fcfcf9] min-h-[56px] justify-center">
+                    <FileJson className="w-4 h-4 text-[#7c8d7c]" />
+                    <span className="text-[8px] truncate font-sans font-semibold max-w-full block px-1 text-[#7a7a6a] mt-1">
+                      {imJsonFile ? imJsonFile.name : "Select JSON"}
+                    </span>
+                    <input
+                      type="file"
+                      accept=".json"
+                      onChange={(e) => setImJsonFile(e.target.files?.[0] || null)}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+                <div className="space-y-1 relative">
+                  <span className="text-[9px] uppercase tracking-widest text-[#7a7a6a] font-bold block font-mono">Weights (.bin)</span>
+                  <label className="flex flex-col items-center justify-center border border-dashed border-[#ecece0] rounded-xl py-2 px-1 text-center cursor-pointer hover:bg-[#fafaf9] transition-all bg-[#fcfcf9] min-h-[56px] justify-center">
+                    <FileCode className="w-4 h-4 text-[#a36b5e]" />
+                    <span className="text-[8px] truncate font-sans font-semibold max-w-full block px-1 text-[#7a7a6a] mt-1">
+                      {imBinFile ? imBinFile.name : "Select Bin"}
+                    </span>
+                    <input
+                      type="file"
+                      accept=".bin"
+                      onChange={(e) => setImBinFile(e.target.files?.[0] || null)}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={!imJsonFile || !imBinFile || !importedClassesText.trim()}
+                onClick={handleImportModelFromFiles}
+                className="w-full py-2 bg-[#7c8d7c] hover:bg-[#6c7d6c] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs uppercase tracking-wider rounded-xl transition duration-150 shadow-xs"
+              >
+                Restore Uploaded Model
+              </button>
             </div>
           </div>
 
