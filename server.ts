@@ -95,6 +95,41 @@ app.post("/api/translate-frame", async (req, res): Promise<any> => {
           tips: ["Keep your palm open to reveal the side curve.", "Ensure the spacing between the fingertips and thumb tip remains clearly aligned."],
           grammarMatches: ["Symbol for letter 'C'"]
         },
+        "Hello": {
+          predictedChar: "Hello",
+          confidence: 95.8,
+          explanation: "Flat hand posture aligned vertically at forehead height, swept outwards in an elegant salute motion. High contrast fingers detected against the background.",
+          tips: ["Hold your hand flat and tilt your wrist outward.", "Make sure your thumb is tucked close to the side of your index finger."],
+          grammarMatches: ["Greeting", "ASL Universal Hello"]
+        },
+        "Thank You": {
+          predictedChar: "Thank You",
+          confidence: 92.4,
+          explanation: "Flat open palm meeting the lip region and moving gracefully downward and outward facing the reader.",
+          tips: ["Ensure your hand starts close to your lips before moving outward.", "Keep your palm facing upward at the end of the sign."],
+          grammarMatches: ["Greeting", "Politeness Formula 'Thank You'"]
+        },
+        "Yes": {
+          predictedChar: "Yes",
+          confidence: 94.1,
+          explanation: "S-hand shape (closed fist) facing outward, rocking vertically forward and back in a rhythmic nodding pattern.",
+          tips: ["Keep your fingers tightly closed into a fist mimicking a head shape.", "Tilt your wrist cleanly from top to bottom, not side to side."],
+          grammarMatches: ["Agreement", "Affirmation 'Yes'"]
+        },
+        "No": {
+          predictedChar: "No",
+          confidence: 93.0,
+          explanation: "Index and middle fingers extended together and rapidly striking the extended thumb pad below.",
+          tips: ["Keep your ring and pinky fingers fully curled into your palm.", "Perform a crisp double-tap motion for maximum recognition accuracy."],
+          grammarMatches: ["Negation", "Refusal 'No'"]
+        },
+        "Help": {
+          predictedChar: "Help",
+          confidence: 91.5,
+          explanation: "Dominant hand closed in a thumbs-up shape resting squarely on top of the flat, open non-dominant hand, moving upward in a lifting motion.",
+          tips: ["Ensure the non-dominant palm acts as a clear flat supporting platform.", "Extend your thumb pointing straight up in a clean thumbs-up posture."],
+          grammarMatches: ["Request", "Assistance 'Help'", "SOS Emergency Sign"]
+        },
         "DEFAULT": {
           predictedChar: chosenLetter,
           confidence: 85.0 + Math.random() * 12.0,

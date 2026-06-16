@@ -21,6 +21,7 @@ import {
   Info, 
   Layers, 
   Settings, 
+  Sliders, 
   HelpCircle, 
   Activity, 
   FileCode,
@@ -91,6 +92,7 @@ export default function App() {
   const [handLandmarksSample, setHandLandmarksSample] = useState<any[]>([]);
   const [mediaPipeLoaded, setMediaPipeLoaded] = useState<boolean>(false);
   const [mediaPipeError, setMediaPipeError] = useState<string | null>(null);
+  const [confidenceThreshold, setConfidenceThreshold] = useState<number>(70);
 
   // Visualizer settings & telemetry
   const [liveFps, setLiveFps] = useState<number>(0);
@@ -133,6 +135,7 @@ export default function App() {
   const trainedClientModelRef = useRef<tf.LayersModel | null>(null);
   const trainedClassesRef = useRef<string[]>([]);
   const predictionSourceRef = useRef<'simulated' | 'tensorflow'>('simulated');
+  const confidenceThresholdRef = useRef<number>(70);
 
   useEffect(() => {
     trainedClientModelRef.current = trainedClientModel;
@@ -145,6 +148,10 @@ export default function App() {
   useEffect(() => {
     predictionSourceRef.current = predictionSource;
   }, [predictionSource]);
+
+  useEffect(() => {
+    confidenceThresholdRef.current = confidenceThreshold;
+  }, [confidenceThreshold]);
 
   // Attempt to auto-restores saved TF.js model from browser local IndexedDB on startup
   useEffect(() => {
@@ -361,6 +368,11 @@ export default function App() {
             ],
             grammarMatches: [`TF.js live local prediction`]
           });
+
+          // Live log to prediction history if above minimum confidence threshold guardrail
+          if (Number(result.confidence.toFixed(1)) >= confidenceThresholdRef.current) {
+            addPredictionToHistory(charResult, Number(result.confidence.toFixed(1)));
+          }
         } catch (predErr) {
           console.error("Real-time live prediction error:", predErr);
         }
@@ -773,16 +785,10 @@ export default function App() {
           grammarMatches: [`TF.js live local prediction`]
         });
 
-        // Add to history sessions
-        const newItem: SessionHistoryItem = {
-          id: `session-${Date.now()}`,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " Today",
-          caption: `Inferred '${charResult}' via TF.js`,
-          confidence: Number(result.confidence.toFixed(1))
-        };
-        const updated = [newItem, ...sessions].slice(0, 8);
-        setSessions(updated);
-        localStorage.setItem('asl_sessions', JSON.stringify(updated));
+        // Add to history sessions if above threshold
+        if (Number(result.confidence.toFixed(1)) >= confidenceThreshold) {
+          addPredictionToHistory(charResult, Number(result.confidence.toFixed(1)));
+        }
 
         setIsTranslating(false);
         return;
@@ -829,17 +835,10 @@ export default function App() {
       const report: TranslationResult & { simulated?: boolean } = await res.json();
       setLatestResult(report);
 
-      // Save to sessions history list
-      const newItem: SessionHistoryItem = {
-        id: `session-${Date.now()}`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " Today",
-        caption: `Practiced ${selectedGesture.category === 'alphabet' ? 'Letter' : 'Sign'} '${report.predictedChar}'`,
-        confidence: Number(report.confidence.toFixed(1))
-      };
-
-      const updated = [newItem, ...sessions].slice(0, 8);
-      setSessions(updated);
-      localStorage.setItem('asl_sessions', JSON.stringify(updated));
+      // Save to sessions history list if above threshold
+      if (Number(report.confidence.toFixed(1)) >= confidenceThreshold) {
+        addPredictionToHistory(report.predictedChar, Number(report.confidence.toFixed(1)));
+      }
 
     } catch (e: any) {
       console.error(e);
@@ -851,6 +850,11 @@ export default function App() {
         tips: ["Straighten the thumb vertically so the scan outlines it distinctly.", "Increase back lamp lighting, minimize skin shadows."],
         grammarMatches: [`Interactive test for custom ${selectedGesture.char}`]
       });
+
+      // Save fallback simulation to history if above threshold
+      if (88.0 >= confidenceThreshold) {
+        addPredictionToHistory(selectedGesture.char, 88.0);
+      }
     } finally {
       setIsTranslating(false);
     }
@@ -877,6 +881,43 @@ export default function App() {
   const clearSessions = () => {
     setSessions([]);
     localStorage.removeItem('asl_sessions');
+  };
+
+  const lastHistoryLogTimeRef = useRef<number>(0);
+
+  const addPredictionToHistory = (predictedChar: string, confidence: number) => {
+    const now = Date.now();
+    // Throttle history logging to at most once per 1.5 seconds in real-time camera processing to keep the frame loop super fast and smooth.
+    if (now - lastHistoryLogTimeRef.current < 1500) {
+      return;
+    }
+    lastHistoryLogTimeRef.current = now;
+
+    setSessions(prev => {
+      // Check if the most recent history item already matches this prediction to avoid flooding duplicates
+      if (prev.length > 0 && prev[0].caption.includes(`'${predictedChar}'`)) {
+        const updated = [...prev];
+        updated[0] = {
+          ...updated[0],
+          confidence: Number(confidence.toFixed(1)),
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " Today"
+        };
+        localStorage.setItem('asl_sessions', JSON.stringify(updated));
+        return updated;
+      }
+
+      const isWord = ["Hello", "Thank You", "Yes", "No", "Help"].includes(predictedChar);
+      const label = isWord ? 'Sign' : 'Letter';
+      const newItem: SessionHistoryItem = {
+        id: `session-${Date.now()}`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " Today",
+        caption: `Practiced ${label} '${predictedChar}'`,
+        confidence: Number(confidence.toFixed(1))
+      };
+      const updated = [newItem, ...prev].slice(0, 8);
+      localStorage.setItem('asl_sessions', JSON.stringify(updated));
+      return updated;
+    });
   };
 
   const getSandboxImagePlaceholder = (char: string) => {
@@ -1207,6 +1248,48 @@ export default function App() {
                   
                   <span className="text-[10px] uppercase font-bold tracking-wider text-[#9a9a8a] bg-[#fdfcf9] px-2.5 py-1 rounded-md border border-[#ecece0]">
                     Confidence: {latestResult ? `${latestResult.confidence.toFixed(1)}%` : "N/A"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Confidence Guardrails & Threshold Settings */}
+              <div className="bg-[#fcfdfa] border border-[#ecece0] rounded-3xl p-5 flex flex-col md:flex-row items-center justify-between gap-5 shadow-sm" id="confidence-guardrails-card">
+                <div className="flex items-center gap-3 w-full md:w-auto">
+                  <div className="w-10 h-10 rounded-2xl bg-[#ebdcd1] flex items-center justify-center text-[#a36b5e] shrink-0">
+                    <Sliders className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-[#2d2d28] uppercase tracking-wide">Confidence Threshold Support</h4>
+                    <p className="text-[10px] text-[#7a7a6a] mt-0.5">Filter sign matches under selected accuracy: <strong className="text-[#a36b5e]">{confidenceThreshold}%</strong></p>
+                  </div>
+                </div>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full md:w-auto">
+                  <div className="flex items-center gap-2 flex-1 sm:flex-initial">
+                    <span className="text-[10px] font-mono text-[#9a9a8a]">10%</span>
+                    <input 
+                      type="range" 
+                      min="10" 
+                      max="95" 
+                      step="5"
+                      value={confidenceThreshold}
+                      onChange={(e) => setConfidenceThreshold(Number(e.target.value))}
+                      className="w-full sm:w-40 h-2 bg-[#f0f2ee] rounded-lg appearance-none cursor-pointer accent-[#7c8d7c] border border-[#e0e4db]"
+                    />
+                    <span className="text-[10px] font-mono text-[#9a9a8a]">95%</span>
+                  </div>
+                  <span className={`text-[10px] uppercase font-bold tracking-wider px-3 py-1.5 rounded-xl border text-center whitespace-nowrap min-w-[150px] ${
+                    latestResult 
+                      ? latestResult.confidence >= confidenceThreshold 
+                        ? 'bg-[#e2f0d9] text-[#3d652b] border-[#c0dfad]' 
+                        : 'bg-rose-50 text-rose-700 border-rose-100 animate-pulse'
+                      : 'bg-[#fdfcf9] text-[#9a9a8a] border-[#ecece0]'
+                  }`}>
+                    {latestResult 
+                      ? latestResult.confidence >= confidenceThreshold
+                        ? `✅ Passed Threshold: ${latestResult.confidence.toFixed(1)}%`
+                        : `⚠️ Below Threshold: ${latestResult.confidence.toFixed(1)}%`
+                      : 'No Frame Match Detected'
+                    }
                   </span>
                 </div>
               </div>

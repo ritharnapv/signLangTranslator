@@ -65,6 +65,27 @@ const DICTIONARY_GESTURES: ASLGesture[] = [
     description: "Touch the fingers of your flat, open hand to your lips, then move your hand downward and forward toward the person.",
     category: "greeting",
     visualTip: "Start flat at mouth height, motioning fluidly outwards with palm face facing upward."
+  },
+  {
+    id: "sign_yes",
+    char: "Yes",
+    description: "Make a closed fist (with palm facing toward the observer), then rock or tilt your wrist forward and back repeatedly to mimic a nodding head.",
+    category: "greeting",
+    visualTip: "Nodding closed fist representing head motion up and down."
+  },
+  {
+    id: "sign_no",
+    char: "No",
+    description: "Extend your index and middle fingers together, then tap them down quickly against your extended thumb tip while keeping other fingers tucked into your palm.",
+    category: "greeting",
+    visualTip: "Index and middle finger together snapping down onto thumb twice."
+  },
+  {
+    id: "sign_help",
+    char: "Help",
+    description: "Place your closed fist hand (with thumb pointing straight up, like a 'thumbs-up') on top of your flat open non-dominant palm, then lift them up together.",
+    category: "greeting",
+    visualTip: "Thumbs-up resting on a flat open palm, lifted upward as a unit."
   }
 ];
 
