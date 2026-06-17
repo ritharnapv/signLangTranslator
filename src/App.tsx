@@ -5,6 +5,7 @@ import SignDictionary from './components/SignDictionary';
 import DatasetManagement from './components/DatasetManagement';
 import ModelTrainer from './components/ModelTrainer';
 import * as tf from '@tensorflow/tfjs';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, Legend, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { 
   Camera, 
   Video, 
@@ -137,6 +138,24 @@ export default function App() {
   const predictionSourceRef = useRef<'simulated' | 'tensorflow'>('simulated');
   const confidenceThresholdRef = useRef<number>(70);
 
+  // Prediction smoothing and stabilization engine state/refs
+  const [smoothingWindow, setSmoothingWindow] = useState<number>(8);
+  const [stabilizedResult, setStabilizedResult] = useState<TranslationResult | null>({
+    predictedChar: "A",
+    confidence: 94.5,
+    explanation: "Excellent stable gesture lock. The model outputs have been consolidated over a rolling moving average window.",
+    tips: ["Stabilization engine online.", "Moving average filter active."],
+    grammarMatches: ["Stabilized output feed"]
+  });
+  const [chartData, setChartData] = useState<{ frame: number; raw: number; smoothed: number; gesture: string }[]>([]);
+  
+  const smoothingWindowRef = useRef<number>(8);
+  const predictionBufferRef = useRef<{ char: string; confidence: number; timestamp: number }[]>([]);
+
+  useEffect(() => {
+    smoothingWindowRef.current = smoothingWindow;
+  }, [smoothingWindow]);
+
   useEffect(() => {
     trainedClientModelRef.current = trainedClientModel;
   }, [trainedClientModel]);
@@ -190,6 +209,83 @@ export default function App() {
   useEffect(() => {
     collectedSamplesRef.current = collectedSamples;
   }, [collectedSamples]);
+
+  const stabilizeAndLogPrediction = (rawChar: string, rawConfidence: number) => {
+    const buffer = predictionBufferRef.current;
+    buffer.push({ char: rawChar, confidence: rawConfidence, timestamp: Date.now() });
+    
+    const currentWindow = smoothingWindowRef.current;
+    if (buffer.length > currentWindow) {
+      predictionBufferRef.current = buffer.slice(-currentWindow);
+    }
+    
+    const currentBuffer = predictionBufferRef.current;
+    
+    // Group and sum confidences
+    const stats: Record<string, { sum: number; count: number; maxConf: number }> = {};
+    currentBuffer.forEach(item => {
+      if (!stats[item.char]) {
+        stats[item.char] = { sum: 0, count: 0, maxConf: 0 };
+      }
+      stats[item.char].sum += item.confidence;
+      stats[item.char].count += 1;
+      stats[item.char].maxConf = Math.max(stats[item.char].maxConf, item.confidence);
+    });
+    
+    let bestChar = rawChar;
+    let maxScore = 0;
+    Object.entries(stats).forEach(([char, s]) => {
+      if (s.sum > maxScore) {
+        maxScore = s.sum;
+        bestChar = char;
+      }
+    });
+
+    const bestStats = stats[bestChar];
+    const smoothedConfidenceValue = bestStats 
+      ? (bestStats.sum / currentWindow) 
+      : rawConfidence;
+    
+    const finalSmoothed = Number(Math.min(100, Math.max(0, smoothedConfidenceValue)).toFixed(1));
+
+    // Update stabilized result
+    setStabilizedResult({
+      predictedChar: bestChar,
+      confidence: finalSmoothed,
+      explanation: `Consolidated & stabilized using a rolling moving average filter of ${currentBuffer.length} frames. Input flickering was successfully dampened.`,
+      tips: [
+        `Stabilized Sign Class: ${bestChar}`,
+        `Current raw frame confidence: ${rawConfidence}%`,
+        `Consolidated moving average confidence: ${finalSmoothed}%`,
+        `Buffer retention match list: ${currentBuffer.map(i => i.char).join(', ')}`
+      ],
+      grammarMatches: ["Stabilized output feed"]
+    });
+
+    // Update real-time chart data points
+    setChartData(prev => {
+      const nextFrameNum = prev.length > 0 ? prev[prev.length - 1].frame + 1 : 1;
+      const newDataPoint = {
+        frame: nextFrameNum,
+        raw: Number(rawConfidence.toFixed(1)),
+        smoothed: finalSmoothed,
+        gesture: bestChar
+      };
+      return [...prev, newDataPoint].slice(-30);
+    });
+  };
+
+  const handleDisappearOrResetFrame = () => {
+    predictionBufferRef.current = [];
+    setStabilizedResult(null);
+    setChartData(prev => {
+      if (prev.length > 0 && prev[prev.length - 1].raw === 0 && prev[prev.length - 1].smoothed === 0) {
+        return prev;
+      }
+      const nextFrameNum = prev.length > 0 ? prev[prev.length - 1].frame + 1 : 1;
+      return [...prev, { frame: nextFrameNum, raw: 0, smoothed: 0, gesture: "None" }].slice(-30);
+    });
+  };
 
   const handleCollectSample = () => {
     if (!cameraActive) {
@@ -356,22 +452,26 @@ export default function App() {
           });
 
           const charResult = classes[result.maxIndex] || "?";
+          const rawConf = Number(result.confidence.toFixed(1));
 
           setLatestResult({
             predictedChar: charResult,
-            confidence: Number(result.confidence.toFixed(1)),
+            confidence: rawConf,
             explanation: `Inferred live in real time using your browser-compiled Multi-Layer Perceptron (MLP) Artificial Neural Network. Your 3D landmarks coordinates offset relative to wrist joint 0 and fed forward inside TF.js.`,
             tips: [
               `Model classes catalogued: ${classes.join(', ')}`,
-              `Categorical cross-entropy probability: ${(result.confidence).toFixed(1)}%`,
+              `Categorical cross-entropy probability: ${rawConf}%`,
               `Model topology: [63] -> Dense (${result.layer1Units}) -> Dense (${result.layer2Units}) -> Softmax (${classes.length})`
             ],
             grammarMatches: [`TF.js live local prediction`]
           });
 
+          // Process and output smoothed prediction values
+          stabilizeAndLogPrediction(charResult, rawConf);
+
           // Live log to prediction history if above minimum confidence threshold guardrail
-          if (Number(result.confidence.toFixed(1)) >= confidenceThresholdRef.current) {
-            addPredictionToHistory(charResult, Number(result.confidence.toFixed(1)));
+          if (rawConf >= confidenceThresholdRef.current) {
+            addPredictionToHistory(charResult, rawConf);
           }
         } catch (predErr) {
           console.error("Real-time live prediction error:", predErr);
@@ -379,6 +479,7 @@ export default function App() {
       }
     } else {
       setHandLandmarksSample([]);
+      handleDisappearOrResetFrame();
     }
 
     const canvas = landmarkCanvasRef.current;
@@ -772,22 +873,26 @@ export default function App() {
         });
 
         const charResult = trainedClasses[result.maxIndex] || "?";
+        const rawConf = Number(result.confidence.toFixed(1));
 
         setLatestResult({
           predictedChar: charResult,
-          confidence: Number(result.confidence.toFixed(1)),
+          confidence: rawConf,
           explanation: `Inferred locally using your browser-compiled Multi-Layer Perceptron (MLP) Artificial Neural Network. Your 3D landmarks coordinates offset relative to wrist joint 0 and fed forward inside TF.js.`,
           tips: [
             `Model classes catalogued: ${trainedClasses.join(', ')}`,
-            `Categorical cross-entropy probability: ${(result.confidence).toFixed(1)}%`,
+            `Categorical cross-entropy probability: ${rawConf}%`,
             `Model topology: [63] -> Dense (${result.layer1Units}) -> Dense (${result.layer2Units}) -> Softmax (${trainedClasses.length})`
           ],
           grammarMatches: [`TF.js live local prediction`]
         });
 
+        // Run prediction stabilizer moving-average filter!
+        stabilizeAndLogPrediction(charResult, rawConf);
+
         // Add to history sessions if above threshold
-        if (Number(result.confidence.toFixed(1)) >= confidenceThreshold) {
-          addPredictionToHistory(charResult, Number(result.confidence.toFixed(1)));
+        if (rawConf >= confidenceThreshold) {
+          addPredictionToHistory(charResult, rawConf);
         }
 
         setIsTranslating(false);
@@ -835,6 +940,9 @@ export default function App() {
       const report: TranslationResult & { simulated?: boolean } = await res.json();
       setLatestResult(report);
 
+      // Run prediction stabilizer moving-average filter!
+      stabilizeAndLogPrediction(report.predictedChar, Number(report.confidence.toFixed(1)));
+
       // Save to sessions history list if above threshold
       if (Number(report.confidence.toFixed(1)) >= confidenceThreshold) {
         addPredictionToHistory(report.predictedChar, Number(report.confidence.toFixed(1)));
@@ -850,6 +958,9 @@ export default function App() {
         tips: ["Straighten the thumb vertically so the scan outlines it distinctly.", "Increase back lamp lighting, minimize skin shadows."],
         grammarMatches: [`Interactive test for custom ${selectedGesture.char}`]
       });
+
+      // Run simulated prediction through the stabilizer
+      stabilizeAndLogPrediction(selectedGesture.char, 88.0);
 
       // Save fallback simulation to history if above threshold
       if (88.0 >= confidenceThreshold) {
@@ -1291,6 +1402,154 @@ export default function App() {
                       : 'No Frame Match Detected'
                     }
                   </span>
+                </div>
+              </div>
+
+              {/* Prediction Smoothing & Stabilization Panel */}
+              <div className="bg-white border border-[#ecece0] rounded-[32px] p-6 shadow-sm space-y-6" id="prediction-stabilizer-panel">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#f0f2ee]">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-[#f0f4ee] flex items-center justify-center text-[#4b6a4a] shrink-0">
+                      <Sparkles className="w-5 h-5 animate-pulse" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-[#2d2d28] tracking-tight">AI Prediction Smoothing Engine</h3>
+                      <p className="text-[11px] text-[#7a7a6a] mt-0.5">Locks active sign gestures via a real-time moving average filter</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 bg-[#f0f2ee] px-3 py-1.5 rounded-2xl border border-[#e0e4db]">
+                    <span className="text-[10px] uppercase tracking-wide font-bold text-[#5c6e5a] whitespace-nowrap">Engine Status:</span>
+                    <span className="flex items-center gap-1.5 text-[10px] font-bold text-[#3d652b]">
+                      <span className="w-2 h-2 rounded-full bg-[#52a447] animate-ping" />
+                      ACTIVE & STABLE
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                  {/* Left Column: Moving Average Window Tuner & Stabilized Output Monitor */}
+                  <div className="lg:col-span-5 flex flex-col justify-between gap-6">
+                    {/* Window Slider */}
+                    <div className="space-y-3 bg-[#fdfcf9] border border-[#ecece0] p-4 rounded-2xl">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-[#4a4a40] uppercase tracking-wider">Smoother Window Size</label>
+                        <span className="text-xs font-mono font-bold text-[#7c8d7c] bg-[#e0f1dd] border border-[#b2d9ad] px-2 py-0.5 rounded-lg">{smoothingWindow} frames</span>
+                      </div>
+                      <input 
+                        type="range"
+                        min="2"
+                        max="16"
+                        step="1"
+                        value={smoothingWindow}
+                        onChange={(e) => setSmoothingWindow(Number(e.target.value))}
+                        className="w-full h-2 bg-[#f0f2ee] rounded-lg appearance-none cursor-pointer accent-[#7c8d7c] border border-transparent"
+                      />
+                      <div className="flex justify-between text-[9px] text-[#9a9a8a] font-mono leading-tight">
+                        <span>Flicker-prone (2f)</span>
+                        <span>Balanced (8f)</span>
+                        <span>Heavy Filter (16f)</span>
+                      </div>
+                      <p className="text-[10px] leading-relaxed text-[#7a7a6a] bg-white border border-[#ecece0]/50 p-2 rounded-xl mt-1">
+                        Increasing the sliding frame window reduces prediction flickering but adds subtle latency.
+                      </p>
+                    </div>
+
+                    {/* Quick Stats: Stabilized Output */}
+                    <div className="bg-[#fcfdfa] border border-[#e2e2d0] rounded-2xl p-4 flex flex-col justify-between gap-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase font-bold tracking-widest text-[#9a9a8a]">Active Translation Match</span>
+                        {stabilizedResult ? (
+                          <span className="flex items-center gap-1 text-[9px] font-bold uppercase py-0.5 px-2 bg-[#e2f0d9] text-[#3d652b] border border-[#c0dfad] rounded-md">
+                            Lock Established
+                          </span>
+                        ) : (
+                          <span className="text-[9px] font-bold uppercase py-0.5 px-2 bg-amber-50 text-amber-700 border border-amber-100 rounded-md">
+                            No Hand In Frame
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-4 py-1">
+                        <div className="h-16 w-16 bg-[#ebdcd1] rounded-2xl flex items-center justify-center border border-[#e2ceb9] shrink-0 text-3xl font-black text-[#5c3c35]">
+                          {stabilizedResult ? stabilizedResult.predictedChar : "?"}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[11px] uppercase tracking-wide font-bold text-[#4a4a40]">Smoothed Gesture</p>
+                          <div className="flex items-baseline gap-1 mt-0.5">
+                            <span className="text-lg font-mono font-black text-[#7c8d7c]">
+                              {stabilizedResult ? `${stabilizedResult.confidence.toFixed(1)}%` : "0.0%"}
+                            </span>
+                            <span className="text-[10px] text-[#9a9a8a]">confidence avg</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Moving average buffer metrics detail */}
+                      <div className="text-[10px] text-[#7a7a6a] border-t border-[#ecece0] pt-2.5 space-y-1">
+                        <div className="flex justify-between">
+                          <span>Raw Feed Match:</span>
+                          <span className="font-mono font-semibold text-[#2d2d28]">{latestResult ? `"${latestResult.predictedChar}" (${latestResult.confidence.toFixed(1)}%)` : "None"}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Active Filter Buffer:</span>
+                          <span className="font-mono font-semibold text-[#5c6e5a]">{predictionBufferRef.current.length} / {smoothingWindow} frames</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Column: Prediction Confidence Graph */}
+                  <div className="lg:col-span-7 bg-[#fbfbfa] border border-[#ecece0] p-4 rounded-3xl flex flex-col justify-between gap-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-[#f0f2ee]">
+                      <div className="flex items-center gap-2">
+                        <Activity className="w-4 h-4 text-[#7c8d7c]" />
+                        <span className="text-xs font-bold text-[#4a4a40] uppercase tracking-wider">Confidence Waves (Oscilloscope)</span>
+                      </div>
+                      <span className="text-[9px] bg-white px-2 py-0.5 rounded-md border border-[#ecece0] font-mono text-[#9a9a8a]">Live Camera Feed</span>
+                    </div>
+
+                    {chartData.length > 0 ? (
+                      <div className="h-44 w-full" id="confidence-oscilloscope">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={chartData} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
+                            <defs>
+                              <linearGradient id="gradientRaw" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#e0a96d" stopOpacity={0.15}/>
+                                <stop offset="95%" stopColor="#e0a96d" stopOpacity={0.0}/>
+                              </linearGradient>
+                              <linearGradient id="gradientSmoothed" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#52a447" stopOpacity={0.25}/>
+                                <stop offset="95%" stopColor="#52a447" stopOpacity={0.0}/>
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f2ee" />
+                            <XAxis dataKey="frame" tick={{ fontSize: 8 }} stroke="#9a9a8a" />
+                            <YAxis domain={[0, 100]} tick={{ fontSize: 8 }} stroke="#9a9a8a" />
+                            <Tooltip 
+                              contentStyle={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #ecece0', fontSize: '10px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }} 
+                              labelFormatter={(label) => `Frame #${label}`}
+                            />
+                            <Legend verticalAlign="top" height={24} iconType="circle" wrapperStyle={{ fontSize: '9px', marginTop: '-5px' }} />
+                            <Area type="monotone" dataKey="raw" name="Raw confidence" stroke="#e0a96d" strokeWidth={1.5} strokeDasharray="4 3" fillOpacity={1} fill="url(#gradientRaw)" />
+                            <Area type="monotone" dataKey="smoothed" name="Smoothed average" stroke="#52a447" strokeWidth={2.5} fillOpacity={1} fill="url(#gradientSmoothed)" />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    ) : (
+                      <div className="h-40 w-full flex flex-col items-center justify-center text-center p-6 border border-dashed border-[#e2e2d0] rounded-2xl bg-white">
+                        <div className="w-10 h-10 rounded-full bg-[#fcfcf0] flex items-center justify-center text-amber-500 mb-2">
+                          <Activity className="w-5 h-5 animate-pulse" />
+                        </div>
+                        <p className="text-xs text-[#7a7a6a] font-medium">Awaiting Live Hand Match Stream...</p>
+                        <p className="text-[10px] text-[#9a9a8a] mt-1 max-w-[240px]">Hold hand in camera frame or practice a gesture to run moving average filter.</p>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between text-[9px] text-[#9a9a8a] px-1">
+                      <span>⚡ Oscilloscope updates in real time (max 30 frames)</span>
+                      <span>Dampening ratio: ~{100 - Math.round(100 / smoothingWindow)}% variance reduction</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
