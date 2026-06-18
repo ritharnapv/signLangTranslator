@@ -33,7 +33,10 @@ import {
   Database,
   Download,
   Upload,
-  Plus
+  Plus,
+  Copy,
+  FileText,
+  Eraser
 } from 'lucide-react';
 
 const INITIAL_SESSIONS: SessionHistoryItem[] = [
@@ -172,6 +175,18 @@ export default function App() {
     confidenceThresholdRef.current = confidenceThreshold;
   }, [confidenceThreshold]);
 
+  // Sentence formation/conversion states and refs
+  const [formedSentence, setFormedSentence] = useState<string>("");
+  const [copied, setCopied] = useState<boolean>(false);
+  const [autoAppend, setAutoAppend] = useState<boolean>(false);
+  
+  const autoAppendRef = useRef<boolean>(false);
+  const lastAutoAppendedCharRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    autoAppendRef.current = autoAppend;
+  }, [autoAppend]);
+
   // Attempt to auto-restores saved TF.js model from browser local IndexedDB on startup
   useEffect(() => {
     const autoLoadSavedModel = async () => {
@@ -273,11 +288,30 @@ export default function App() {
       };
       return [...prev, newDataPoint].slice(-30);
     });
+
+    // Handle auto-append to formed sentence
+    if (autoAppendRef.current && finalSmoothed >= confidenceThresholdRef.current) {
+      if (bestChar !== lastAutoAppendedCharRef.current) {
+        setFormedSentence(prev => {
+          const isWord = bestChar.length > 1;
+          const needsLeadingSpace = prev.length > 0 && !prev.endsWith(" ");
+          let addition = bestChar;
+          if (isWord) {
+            addition = (needsLeadingSpace ? " " : "") + bestChar + " ";
+          } else {
+            addition = bestChar;
+          }
+          return prev + addition;
+        });
+        lastAutoAppendedCharRef.current = bestChar;
+      }
+    }
   };
 
   const handleDisappearOrResetFrame = () => {
     predictionBufferRef.current = [];
     setStabilizedResult(null);
+    lastAutoAppendedCharRef.current = null; // Reset last appended to allow repeating after hand exits frame
     setChartData(prev => {
       if (prev.length > 0 && prev[prev.length - 1].raw === 0 && prev[prev.length - 1].smoothed === 0) {
         return prev;
@@ -285,6 +319,45 @@ export default function App() {
       const nextFrameNum = prev.length > 0 ? prev[prev.length - 1].frame + 1 : 1;
       return [...prev, { frame: nextFrameNum, raw: 0, smoothed: 0, gesture: "None" }].slice(-30);
     });
+  };
+
+  const handleCopySentence = () => {
+    if (!formedSentence) return;
+    navigator.clipboard.writeText(formedSentence);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleManualAppend = () => {
+    if (!stabilizedResult) return;
+    const char = stabilizedResult.predictedChar;
+    setFormedSentence(prev => {
+      const isWord = char.length > 1;
+      const needsLeadingSpace = prev.length > 0 && !prev.endsWith(" ");
+      let addition = char;
+      if (isWord) {
+        addition = (needsLeadingSpace ? " " : "") + char + " ";
+      } else {
+        addition = char;
+      }
+      return prev + addition;
+    });
+  };
+
+  const handleAddSpace = () => {
+    setFormedSentence(prev => prev + " ");
+  };
+
+  const handleBackspace = () => {
+    setFormedSentence(prev => {
+      if (prev.length === 0) return prev;
+      return prev.slice(0, -1);
+    });
+  };
+
+  const handleClearSentence = () => {
+    setFormedSentence("");
+    lastAutoAppendedCharRef.current = null;
   };
 
   const handleCollectSample = () => {
@@ -1604,6 +1677,138 @@ export default function App() {
                     <span>MAPPED UNDER PORT 3000</span>
                     <span className="text-[#7c8d7c] uppercase">Stable Model</span>
                   </div>
+                </div>
+              </div>
+
+              {/* Gesture-to-Text Sentence Formation Area */}
+              <div className="bg-white border border-[#ecece0] rounded-[32px] p-6 shadow-sm space-y-5" id="gesture-to-text-card">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-[#f0f2ee]">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-[#ebdcd1] flex items-center justify-center text-[#5c3c35] shrink-0">
+                      <FileText className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-[#2d2d28] tracking-tight">Gesture-to-Text Converter</h3>
+                      <p className="text-[11px] text-[#7a7a6a] mt-0.5">Translate individual signs in sequence to construct raw phrases and copy them</p>
+                    </div>
+                  </div>
+                  
+                  {/* Auto-Translate/Append Stream Lock Switch */}
+                  <div className="flex items-center gap-3 bg-[#fdfcf9] px-3.5 py-1.5 rounded-2xl border border-[#ecece0]">
+                    <label htmlFor="auto-append-switch" className="text-[10px] uppercase font-bold tracking-wider text-[#5c6e5a] cursor-pointer">
+                      Auto-Append Locks
+                    </label>
+                    <input 
+                      id="auto-append-switch"
+                      type="checkbox"
+                      checked={autoAppend}
+                      onChange={(e) => setAutoAppend(e.target.checked)}
+                      className="w-8 h-4 bg-gray-200 rounded-full appearance-none cursor-pointer relative checked:bg-[#7c8d7c] transition-colors duration-200
+                      before:content-[''] before:absolute before:w-3 before:h-3 before:rounded-full before:bg-white before:top-0.5 before:left-0.5 checked:before:translate-x-4 before:transition-transform before:duration-200 border border-gray-300"
+                    />
+                  </div>
+                </div>
+
+                {/* Display Area for Formed Sentence */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase font-bold tracking-widest text-[#9a9a8a]">Formed Text / Practice Notepad</span>
+                    <span className="text-[10px] font-mono font-semibold text-[#7c8d7c] bg-[#f0f4ee] border border-[#d8edd4] px-2 py-0.5 rounded-lg">
+                      {formedSentence.length} characters
+                    </span>
+                  </div>
+
+                  <div className="relative">
+                    <textarea
+                      value={formedSentence}
+                      onChange={(e) => setFormedSentence(e.target.value)}
+                      placeholder="Awaiting hand gestures... Enable stream locks, hold stable poses above your confidence threshold, or manually tap 'Append Current Match' below."
+                      className="w-full h-32 p-4 text-sm font-sans bg-[#fbfbfa] text-[#2d2d28] border border-[#e2e2d0] rounded-2xl resize-none focus:outline-none focus:border-[#7c8d7c] focus:ring-1 focus:ring-[#7c8d7c] placeholder:text-[#9a9a8a] pl-4 pr-4 leading-relaxed"
+                      id="formed-sentence-textarea"
+                    />
+                    {formedSentence && (
+                      <button
+                        onClick={handleClearSentence}
+                        className="absolute bottom-3 right-3 text-[10px] font-bold text-rose-600 hover:text-rose-700 bg-white/90 border border-rose-100 hover:border-rose-200 px-2.5 py-1.5 rounded-xl flex items-center gap-1.5 shadow-sm transition-all duration-200"
+                        id="clear-notepad-btn"
+                        title="Clear Notepad"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Button controls & matching actions */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Manual Append Current Result */}
+                    <button
+                      onClick={handleManualAppend}
+                      disabled={!stabilizedResult}
+                      className={`text-xs font-bold px-4 py-2.5 rounded-2xl flex items-center gap-2 transition-all duration-200 shadow-sm border ${
+                        stabilizedResult 
+                          ? 'bg-[#7c8d7c] text-white border-[#687c68] hover:bg-[#687c68]' 
+                          : 'bg-gray-50 text-[#9a9a8a] border-gray-200 cursor-not-allowed'
+                      }`}
+                      id="append-match-btn"
+                    >
+                      <Plus className="w-4 h-4 shrink-0" />
+                      Append Match ({stabilizedResult ? `'${stabilizedResult.predictedChar}'` : "?"})
+                    </button>
+
+                    {/* Add Space button */}
+                    <button
+                      onClick={handleAddSpace}
+                      className="text-xs font-bold bg-white text-[#4a4a40] border border-[#e2e2d0] hover:bg-[#fcfdfa] hover:border-[#7c8d7c] px-4 py-2.5 rounded-2xl flex items-center gap-2 transition-all duration-200 shadow-sm"
+                      id="add-space-btn"
+                    >
+                      <FileCode className="w-4 h-4 text-[#7a7a6a]" />
+                      Space
+                    </button>
+
+                    {/* Backspace button */}
+                    <button
+                      onClick={handleBackspace}
+                      disabled={formedSentence.length === 0}
+                      className={`text-xs font-bold px-4 py-2.5 rounded-2xl flex items-center gap-2 transition-all duration-200 shadow-sm border ${
+                        formedSentence.length > 0 
+                          ? 'bg-white text-rose-600 border-rose-100 hover:bg-rose-50 hover:border-rose-200' 
+                          : 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
+                      }`}
+                      id="backspace-btn"
+                    >
+                      <Eraser className="w-4 h-4 shrink-0" />
+                      Backspace
+                    </button>
+                  </div>
+
+                  {/* Copy Text Button */}
+                  <button
+                    onClick={handleCopySentence}
+                    disabled={formedSentence.length === 0}
+                    className={`text-xs font-bold px-5 py-2.5 rounded-2xl flex items-center gap-2 transition-all duration-200 shadow-sm border ${
+                      formedSentence.length > 0
+                        ? copied
+                          ? 'bg-[#e2f0d9] text-[#3d652b] border-[#c0dfad]'
+                          : 'bg-[#ebdcd1] text-[#5c3c35] border-[#ebdcd1] hover:bg-[#dfcdbf]'
+                        : 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
+                    }`}
+                    id="copy-sentence-btn"
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="w-4 h-4 text-[#3d652b]" />
+                        Copied Text!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-4 h-4" />
+                        Copy Sentence
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
 
