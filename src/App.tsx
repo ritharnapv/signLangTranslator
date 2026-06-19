@@ -187,6 +187,74 @@ export default function App() {
     autoAppendRef.current = autoAppend;
   }, [autoAppend]);
 
+  // Browser-based Text-to-Speech (TTS) states
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [selectedVoiceName, setSelectedVoiceName] = useState<string>("");
+  const [speechRate, setSpeechRate] = useState<number>(1.0);
+  const [speechPitch, setSpeechPitch] = useState<number>(1.0);
+  const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+
+    const loadVoices = () => {
+      const allVoices = window.speechSynthesis.getVoices();
+      setAvailableVoices(allVoices);
+      
+      // Attempt to auto-select a default voice (e.g. English speaking or system default)
+      if (allVoices.length > 0) {
+        const defaultVoice = allVoices.find(v => v.default) || allVoices.find(v => v.lang.startsWith('en')) || allVoices[0];
+        setSelectedVoiceName(prev => prev || defaultVoice.name);
+      }
+    };
+
+    loadVoices();
+    if (window.speechSynthesis.onvoiceschanged !== undefined) {
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
+
+    // Keep state fully synchronized with SpeechSynthesis active speech state
+    const syncInterval = setInterval(() => {
+      setIsSpeaking(window.speechSynthesis.speaking);
+    }, 200);
+
+    return () => {
+      clearInterval(syncInterval);
+    };
+  }, []);
+
+  const handleSpeak = (textToSpeak: string) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    
+    // Stop any ongoing speech first
+    window.speechSynthesis.cancel();
+    
+    if (!textToSpeak.trim()) return;
+
+    const utterance = new SpeechSynthesisUtterance(textToSpeak);
+    if (selectedVoiceName) {
+      const voiceObj = availableVoices.find(v => v.name === selectedVoiceName);
+      if (voiceObj) {
+        utterance.voice = voiceObj;
+      }
+    }
+    utterance.rate = speechRate;
+    utterance.pitch = speechPitch;
+    
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+
+    window.speechSynthesis.speak(utterance);
+    setIsSpeaking(true);
+  };
+
+  const handleStopSpeech = () => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    setIsSpeaking(false);
+  };
+
   // Attempt to auto-restores saved TF.js model from browser local IndexedDB on startup
   useEffect(() => {
     const autoLoadSavedModel = async () => {
@@ -1737,6 +1805,118 @@ export default function App() {
                         Clear
                       </button>
                     )}
+                  </div>
+                </div>
+
+                {/* Text-to-Speech Interface Panel */}
+                <div className="bg-[#fcfbf7] border border-[#ebebe2] rounded-2xl p-4 space-y-3" id="tts-controls-panel">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-2 border-b border-[#f2f2e6]">
+                    <div className="flex items-center gap-2">
+                      <Volume2 className={`w-4 h-4 text-[#ebdcd1] ${isSpeaking ? 'animate-bounce text-[#7c8d7c]' : 'text-[#8a8a7a]'}`} />
+                      <span className="text-xs font-bold text-[#4a4a40] uppercase tracking-wider">Audio Reader & TTS Engine</span>
+                    </div>
+                    {isSpeaking && (
+                      <div className="flex items-center gap-1 bg-[#f0f4ee] px-2 py-0.5 rounded-lg border border-[#d2e8cc]">
+                        <span className="text-[9px] font-bold text-[#3d652b] uppercase">Speaking:</span>
+                        <span className="inline-flex gap-0.5 items-end h-2.5 w-8">
+                          <span className="w-0.5 bg-[#4b6a4a] h-1 animate-pulse rounded-full" />
+                          <span className="w-0.5 bg-[#4b6a4a] h-2.5 animate-pulse rounded-full" />
+                          <span className="w-0.5 bg-[#4b6a4a] h-1.5 animate-pulse rounded-full" />
+                          <span className="w-0.5 bg-[#4b6a4a] h-2 animate-pulse rounded-full" />
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Voice selector option */}
+                    <div className="space-y-1.5">
+                      <label htmlFor="tts-voice-select" className="text-[10px] uppercase font-bold tracking-wider text-[#7a7a6a]">Select Voice Option</label>
+                      <select
+                        id="tts-voice-select"
+                        value={selectedVoiceName}
+                        onChange={(e) => setSelectedVoiceName(e.target.value)}
+                        className="w-full text-xs font-sans text-[#2d2d28] bg-white border border-[#e2e2d0] rounded-xl px-3 py-2 focus:outline-none focus:border-[#7c8d7c] cursor-pointer"
+                      >
+                        {availableVoices.length > 0 ? (
+                          availableVoices.map((voice) => (
+                            <option key={voice.name} value={voice.name}>
+                              {voice.name} ({voice.lang})
+                            </option>
+                          ))
+                        ) : (
+                          <option value="">Default Native Voice</option>
+                        )}
+                      </select>
+                    </div>
+
+                    {/* Speed/Rate & Pitch Controls */}
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider text-[#7a7a6a]">
+                          <label htmlFor="tts-rate-slider">Speed</label>
+                          <span className="font-mono text-[9px] bg-white border border-[#ecece0] px-1.5 py-0.2 rounded">{speechRate.toFixed(1)}x</span>
+                        </div>
+                        <input
+                          id="tts-rate-slider"
+                          type="range"
+                          min="0.5"
+                          max="2.0"
+                          step="0.1"
+                          value={speechRate}
+                          onChange={(e) => setSpeechRate(parseFloat(e.target.value))}
+                          className="w-full h-1.5 bg-[#edece6] rounded appearance-none cursor-pointer accent-[#7c8d7c]"
+                        />
+                      </div>
+
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider text-[#7a7a6a]">
+                          <label htmlFor="tts-pitch-slider">Pitch</label>
+                          <span className="font-mono text-[9px] bg-white border border-[#ecece0] px-1.5 py-0.2 rounded">{speechPitch.toFixed(1)}</span>
+                        </div>
+                        <input
+                          id="tts-pitch-slider"
+                          type="range"
+                          min="0.5"
+                          max="1.5"
+                          step="0.1"
+                          value={speechPitch}
+                          onChange={(e) => setSpeechPitch(parseFloat(e.target.value))}
+                          className="w-full h-1.5 bg-[#edece6] rounded appearance-none cursor-pointer accent-[#7c8d7c]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Play & Stop Actions */}
+                  <div className="flex items-center gap-2.5 pt-2">
+                    <button
+                      onClick={() => handleSpeak(formedSentence)}
+                      disabled={!formedSentence.trim()}
+                      className={`flex-1 text-xs font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-all duration-200 border shadow-sm ${
+                        formedSentence.trim()
+                          ? 'bg-[#5c3c35] hover:bg-[#4d322c] text-white border-[#5c3c35]'
+                          : 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
+                      }`}
+                      id="tts-play-btn"
+                    >
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                      Read Aloud
+                    </button>
+
+                    <button
+                      onClick={handleStopSpeech}
+                      disabled={!isSpeaking}
+                      className={`text-xs font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-all duration-200 border shadow-sm ${
+                        isSpeaking
+                          ? 'bg-rose-50 hover:bg-rose-100 text-rose-600 border-rose-100'
+                          : 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
+                      }`}
+                      id="tts-stop-btn"
+                    >
+                      <Square className="w-3.5 h-3.5 fill-current" />
+                      Stop Reading
+                    </button>
                   </div>
                 </div>
 
