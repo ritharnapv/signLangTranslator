@@ -36,7 +36,9 @@ import {
   Plus,
   Copy,
   FileText,
-  Eraser
+  Eraser,
+  Sun,
+  Moon
 } from 'lucide-react';
 
 const INITIAL_SESSIONS: SessionHistoryItem[] = [
@@ -55,6 +57,28 @@ const INITIAL_SESSIONS: SessionHistoryItem[] = [
 ];
 
 export default function App() {
+  const [darkMode, setDarkMode] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('dark_mode_preference');
+      if (saved !== null) {
+        return saved === 'true';
+      }
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const root = window.document.documentElement;
+    if (darkMode) {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+    localStorage.setItem('dark_mode_preference', String(darkMode));
+  }, [darkMode]);
+
   const [activeTab, setActiveTab] = useState<'dashboard' | 'dictionary' | 'roadmap' | 'collector' | 'datasets' | 'trainer' | 'files'>('dashboard');
   const [trainedClientModel, setTrainedClientModel] = useState<tf.LayersModel | null>(null);
   const [trainedClasses, setTrainedClasses] = useState<string[]>([]);
@@ -1178,10 +1202,10 @@ export default function App() {
   };
 
   return (
-    <div className="bg-[#fdfcf9] text-[#4a4a40] min-h-screen flex flex-col font-sans selection:bg-[#7c8d7c]/20" id="main-container">
+    <div className="bg-[#fdfcf9] dark:bg-[#121214] text-[#4a4a40] dark:text-[#d4d4d8] min-h-screen flex flex-col font-sans selection:bg-[#7c8d7c]/20" id="main-container">
       
       {/* Dynamic Dev Notice Header Banner */}
-      <div className="bg-[#7c8d7c] text-white text-xs px-6 py-2.5 flex items-center justify-between gap-4 font-sans" id="header-notice">
+      <div className="bg-[#7c8d7c] dark:bg-[#2e3b2e] text-white text-xs px-6 py-2.5 flex items-center justify-between gap-4 font-sans" id="header-notice">
         <div className="flex items-center gap-2">
           <span className="bg-white/20 px-2 py-0.5 rounded-md font-bold font-mono text-[10px]">ROADMAP GATEWAY</span>
           <p className="truncate"><strong>Day 1 Project Foundation setup complete!</strong> Connected to high-performance local server with custom webcam snap capturing.</p>
@@ -1192,106 +1216,116 @@ export default function App() {
       </div>
 
       {/* Main Navigation Bar */}
-      <nav className="h-20 border-b border-[#ecece0] px-6 sm:px-8 flex items-center justify-between bg-white/60 backdrop-blur-md sticky top-0 z-30" id="top-nav">
+      <nav className="min-h-20 border-b border-[#ecece0] dark:border-[#2a2a2f] px-6 sm:px-8 py-4 sm:py-0 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white/60 dark:bg-[#18181b]/60 backdrop-blur-md sticky top-0 z-30" id="top-nav">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-[#7c8d7c] rounded-xl flex items-center justify-center text-white" id="nav-brand-logo">
+          <div className="w-10 h-10 bg-[#7c8d7c] dark:bg-[#4a5c4e] rounded-xl flex items-center justify-center text-white" id="nav-brand-logo">
             <Cpu className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-lg font-bold tracking-tight text-[#2d2d28] font-sans">SignSense AI</h1>
-            <p className="text-[10px] text-[#7a7a6a] uppercase font-bold tracking-widest font-mono">30-Day ASL Framework</p>
+            <h1 className="text-lg font-bold tracking-tight text-[#2d2d28] dark:text-[#f4f4f5] font-sans">SignSense AI</h1>
+            <p className="text-[10px] text-[#7a7a6a] dark:text-[#a1a1aa] uppercase font-bold tracking-widest font-mono">30-Day ASL Framework</p>
           </div>
         </div>
 
         {/* Desktop Tabs */}
-        <div className="hidden md:flex items-center gap-1.5 bg-[#f0f2ee] p-1 rounded-xl border border-[#e0e4db]" id="nav-tabs">
+        <div className="hidden lg:flex items-center gap-1.5 bg-[#f0f2ee] dark:bg-[#1f1f22] p-1 rounded-xl border border-[#e0e4db] dark:border-[#2d2d32]" id="nav-tabs">
           <button
             onClick={() => setActiveTab('dashboard')}
-            className={`px-4 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
               activeTab === 'dashboard'
-                ? "bg-[#7c8d7c] text-white shadow-sm"
-                : "text-[#5a6b5a] hover:text-[#2d2d28]"
+                ? "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white shadow-sm"
+                : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
             }`}
           >
             Practice Dashboard
           </button>
           <button
             onClick={() => setActiveTab('dictionary')}
-            className={`px-4 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
               activeTab === 'dictionary'
-                ? "bg-[#7c8d7c] text-white shadow-sm"
-                : "text-[#5a6b5a] hover:text-[#2d2d28]"
+                ? "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white shadow-sm"
+                : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
             }`}
           >
             ASL Dictionary
           </button>
           <button
             onClick={() => setActiveTab('roadmap')}
-            className={`px-4 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
               activeTab === 'roadmap'
-                ? "bg-[#7c8d7c] text-white shadow-sm"
-                : "text-[#5a6b5a] hover:text-[#2d2d28]"
+                ? "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white shadow-sm"
+                : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
             }`}
           >
             30-Day Roadmap Plan
           </button>
           <button
             onClick={() => setActiveTab('collector')}
-            className={`px-4 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
               activeTab === 'collector'
-                ? "bg-[#7c8d7c] text-white shadow-sm"
-                : "text-[#5a6b5a] hover:text-[#2d2d28]"
+                ? "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white shadow-sm"
+                : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
             }`}
           >
             Recording Dashboard
           </button>
           <button
             onClick={() => setActiveTab('datasets')}
-            className={`px-4 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
               activeTab === 'datasets'
-                ? "bg-[#7c8d7c] text-white shadow-sm"
-                : "text-[#5a6b5a] hover:text-[#2d2d28]"
+                ? "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white shadow-sm"
+                : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
             }`}
           >
             Datasets Hub
           </button>
           <button
             onClick={() => setActiveTab('trainer')}
-            className={`px-4 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
               activeTab === 'trainer'
-                ? "bg-[#7c8d7c] text-white shadow-sm"
-                : "text-[#5a6b5a] hover:text-[#2d2d28]"
+                ? "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white shadow-sm"
+                : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
             }`}
           >
             Gesture AI Trainer
           </button>
           <button
             onClick={() => setActiveTab('files')}
-            className={`px-4 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
               activeTab === 'files'
-                ? "bg-[#7c8d7c] text-white shadow-sm"
-                : "text-[#5a6b5a] hover:text-[#2d2d28]"
+                ? "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white shadow-sm"
+                : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
             }`}
           >
             Sandbox File System
           </button>
         </div>
 
-        {/* Dynamic Health Tag */}
+        {/* Right Nav-bar: Dark mode switcher & health tags */}
         <div className="flex items-center gap-3">
+          {/* Light/Dark Toggle Button */}
+          <button
+            onClick={() => setDarkMode(!darkMode)}
+            className="w-10 h-10 rounded-xl bg-[#f0f2ee] dark:bg-[#1f1f22] border border-[#e0e4db] dark:border-[#2d2d32] flex items-center justify-center text-[#7c8d7c] dark:text-[#a1a1aa] hover:text-[#5c3c35] dark:hover:text-[#ffffff] hover:scale-105 active:scale-95 transition-all shadow-sm"
+            title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+            id="dark-mode-toggle"
+          >
+            {darkMode ? <Sun className="w-5 h-5 text-amber-500" /> : <Moon className="w-5 h-5 text-[#ebdcd1]" />}
+          </button>
+
           <div className={`flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-bold leading-none ${
             health.status === "connected"
-              ? "bg-[#f0f2ee] text-[#52a447] border-[#e0e4db]"
+              ? "bg-[#f0f2ee] dark:bg-[#1f1f22] text-[#52a447] border-[#e0e4db] dark:border-[#2d2d32]"
               : health.status === "connecting"
-              ? "bg-amber-50 text-amber-600 border-amber-200 animate-pulse"
-              : "bg-rose-50 text-[#a36b5e] border-rose-200"
+              ? "bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-900/55 animate-pulse"
+              : "bg-rose-50 dark:bg-rose-950/20 text-[#a36b5e] dark:text-rose-400 border-rose-200 dark:border-rose-900/55"
           }`} id="status-indicator">
             <span className={`w-2 h-2 rounded-full ${
               health.status === "connected" ? "bg-[#52a447]" : health.status === "connecting" ? "bg-amber-400" : "bg-[#a36b5e]"
             } animate-pulse`}></span>
             <span className="hidden sm:inline">{health.status === "connected" ? "API CONNECTED" : "SANDBOX LOCAL"}</span>
           </div>
-          <div className="w-9 h-9 rounded-full bg-[#f0f2ee] border border-[#e0e4db] flex items-center justify-center text-xs font-bold text-[#7c8d7c]" title="Self Practice Account">
+          <div className="w-9 h-9 rounded-full bg-[#f0f2ee] dark:bg-[#1f1f22] border border-[#e0e4db] dark:border-[#2d2d32] flex items-center justify-center text-xs font-bold text-[#7c8d7c] dark:text-[#a1a1aa]" title="Self Practice Account">
             RP
           </div>
         </div>
@@ -1302,13 +1336,13 @@ export default function App() {
         
         {/* Dynamic Sandbox Status Banner if Secrets/AI represents simulated mode */}
         {isSandboxMode && (
-          <div className="bg-[#ebdcd1]/75 border border-[#ebdcd1] rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4" id="sandbox-banner">
+          <div className="bg-[#ebdcd1]/75 dark:bg-[#2b1f1a]/75 border border-[#ebdcd1] dark:border-[#523d32] rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4" id="sandbox-banner">
             <div className="flex items-start gap-3">
-              <Info className="w-5 h-5 text-[#a36b5e] mt-0.5 shrink-0" />
+              <Info className="w-5 h-5 text-[#a36b5e] dark:text-amber-500 mt-0.5 shrink-0" />
               <div>
-                <h4 className="text-sm font-bold text-[#2d2d28]">Running In Interactive Developer Simulation</h4>
-                <p className="text-xs text-[#5a5a4a] mt-0.5">
-                  Your <code className="bg-white/60 px-1 py-0.5 rounded font-mono font-bold">GEMINI_API_KEY</code> placeholder is not configured in Secrets menu. No worries! Our custom Day-1 backend intercepts camera frames and renders gorgeous simulated sign translations immediately.
+                <h4 className="text-sm font-bold text-[#2d2d28] dark:text-[#f4f4f5]">Running In Interactive Developer Simulation</h4>
+                <p className="text-xs text-[#5a5a4a] dark:text-[#d4d4d8] mt-0.5">
+                  Your <code className="bg-white/60 dark:bg-black/30 px-1 py-0.5 rounded font-mono font-bold text-gray-800 dark:text-gray-200">GEMINI_API_KEY</code> placeholder is not configured in Secrets menu. No worries! Our custom Day-1 backend intercepts camera frames and renders gorgeous simulated sign translations immediately.
                 </p>
               </div>
             </div>
@@ -1316,7 +1350,7 @@ export default function App() {
               onClick={() => {
                 alert("To connect live AI: Go to Settings -> Secrets inside your client developer frame, configure 'GEMINI_API_KEY' with a real key! The express server will automatically switch gears.");
               }}
-              className="text-xs font-semibold py-1.5 px-3 bg-[#a36b5e] text-white rounded-lg whitespace-nowrap hover:bg-[#a36b5e]/90 transition-all self-start sm:self-center uppercase tracking-wide shadow-sm"
+              className="text-xs font-semibold py-1.5 px-3 bg-[#a36b5e] dark:bg-[#7d5045] text-white rounded-lg whitespace-nowrap hover:bg-[#a36b5e]/90 transition-all self-start sm:self-center uppercase tracking-wide shadow-sm"
             >
               How to Bind Key
             </button>
@@ -1331,7 +1365,7 @@ export default function App() {
             <div className="xl:col-span-8 flex flex-col gap-6" id="dashboard-left">
               
               {/* Webcam Practice Terminal Frame mockup */}
-              <div className="relative aspect-video bg-[#1a1a17] rounded-[32px] shadow-sm overflow-hidden border-[8px] border-white group" id="video-frame-container">
+              <div className="relative aspect-video bg-[#1a1a17] rounded-[32px] shadow-sm overflow-hidden border-[8px] border-white dark:border-[#202023] group" id="video-frame-container">
                 {cameraActive ? (
                   <div className="relative w-full h-full">
                     <video 
@@ -1398,23 +1432,23 @@ export default function App() {
               </div>
 
               {/* Active Model Classifier Engine Selector */}
-              <div className="bg-[#fcfdfa] border border-[#ecece0] rounded-[24px] p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4" id="model-mode-controls-card">
+              <div className="bg-[#fcfdfa] dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-[24px] p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4" id="model-mode-controls-card">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-[#f0f2ee] flex items-center justify-center text-[#7c8d7c] font-bold shrink-0">
+                  <div className="w-8 h-8 rounded-lg bg-[#f0f2ee] dark:bg-[#1f1f22] flex items-center justify-center text-[#7c8d7c] dark:text-[#a1a1aa] font-bold shrink-0">
                     <Cpu className="w-4 h-4" />
                   </div>
                   <div>
-                    <h4 className="text-xs font-bold text-[#2d2d28] uppercase tracking-wide">Recognizer Classifier Pipeline</h4>
-                    <p className="text-[10px] text-[#7a7a6a] mt-0.5">Choose standard translation or run live predictions with your locally trained TensorFlow.js neural network</p>
+                    <h4 className="text-xs font-bold text-[#2d2d28] dark:text-[#f4f4f5] uppercase tracking-wide">Recognizer Classifier Pipeline</h4>
+                    <p className="text-[10px] text-[#7a7a6a] dark:text-[#a1a1aa] mt-0.5">Choose standard translation or run live predictions with your locally trained TensorFlow.js neural network</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5 bg-[#f0f2ee]/85 p-1 rounded-xl border border-[#e0e4db] self-stretch md:self-auto justify-center md:justify-start">
+                <div className="flex items-center gap-1.5 bg-[#f0f2ee]/85 dark:bg-[#1f1f22]/85 p-1 rounded-xl border border-[#e0e4db] dark:border-[#2d2d32] self-stretch md:self-auto justify-center md:justify-start">
                   <button
                     onClick={() => setPredictionSource('simulated')}
                     className={`px-3 py-1.5 rounded-lg text-[10px] uppercase font-bold tracking-wider transition-all whitespace-nowrap ${
                       predictionSource === 'simulated'
-                        ? "bg-[#ebdcd1] text-[#a36b5e] shadow-sm"
-                        : "text-[#5a6b5a] hover:text-[#2d2d28]"
+                        ? "bg-[#ebdcd1] dark:bg-[#453730] text-[#a36b5e] dark:text-[#ebdcd1] shadow-sm"
+                        : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
                     }`}
                   >
                     Simulated Sandbox API
@@ -1429,29 +1463,29 @@ export default function App() {
                     }}
                     className={`px-3 py-1.5 rounded-lg text-[10px] uppercase font-bold tracking-wider transition-all flex items-center gap-1.5 whitespace-nowrap relative ${
                       predictionSource === 'tensorflow'
-                        ? "bg-[#7c8d7c] text-white shadow-sm"
-                        : "text-[#5a6b5a] hover:text-[#2d2d28]"
+                        ? "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white shadow-sm"
+                        : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
                     }`}
                   >
                     <span>My TF.js Neural Model</span>
                     {trainedClientModel ? (
                       <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
                     ) : (
-                      <span className="text-[8px] bg-black/10 px-1 py-0.2 rounded text-[#a3a39e]">Locked</span>
+                      <span className="text-[8px] bg-black/10 dark:bg-white/10 px-1 py-0.2 rounded text-[#a3a39e] dark:text-[#a1a1aa]">Locked</span>
                     )}
                   </button>
                 </div>
               </div>
 
               {/* Hardware & Sandbox Frame Controls */}
-              <div className="bg-white border border-[#ecece0] rounded-3xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4" id="scanner-controls-card">
+              <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4" id="scanner-controls-card">
                 <div className="flex flex-wrap items-center gap-3">
                   <button
                     onClick={toggleCamera}
                     className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-bold uppercase tracking-wide transition-all ${
                       cameraActive 
-                        ? "bg-[#ebdcd1] text-[#a36b5e] border border-[#ebdcd1]" 
-                        : "bg-[#7c8d7c] text-white hover:bg-[#7c8d7c]/90"
+                        ? "bg-[#ebdcd1] dark:bg-[#453730] text-[#a36b5e] dark:text-[#ebdcd1] border border-[#ebdcd1] dark:border-[#523d32]" 
+                        : "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white hover:bg-[#7c8d7c]/90 dark:hover:bg-[#4a5c4e]/90"
                     }`}
                     id="toggle-hardware"
                   >
@@ -1463,7 +1497,7 @@ export default function App() {
                     <select
                       value={selectedDeviceId}
                       onChange={handleDeviceChange}
-                      className="bg-[#fdfcf9] border border-[#e0e4db] text-[#4a4a40] text-xs font-semibold py-2.5 px-3 rounded-2xl focus:outline-none focus:ring-1 focus:ring-[#7c8d7c] transition-all cursor-pointer shadow-sm hover:bg-[#f0f2ee]"
+                      className="bg-[#fdfcf9] dark:bg-[#151518] border border-[#e0e4db] dark:border-[#2d2d32] text-[#4a4a40] dark:text-[#d4d4d8] text-xs font-semibold py-2.5 px-3 rounded-2xl focus:outline-none focus:ring-1 focus:ring-[#7c8d7c] transition-all cursor-pointer shadow-sm hover:bg-[#f0f2ee] dark:hover:bg-[#1f1f22]"
                       id="camera-select"
                       title="Select camera source"
                     >
@@ -1478,7 +1512,7 @@ export default function App() {
                   <button
                     onClick={captureAndTranslate}
                     disabled={isTranslating}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-[#f0f2ee] border border-[#e0e4db] text-[#4a4a40] hover:bg-[#e0e4db]/40 rounded-2xl text-xs font-bold uppercase tracking-wide transition-all disabled:opacity-40"
+                    className="flex items-center gap-2 px-5 py-2.5 bg-[#f0f2ee] dark:bg-[#1f1f22] border border-[#e0e4db] dark:border-[#2d2d32] text-[#4a4a40] dark:text-[#d4d4d8] hover:bg-[#e0e4db]/40 dark:hover:bg-white/5 rounded-2xl text-xs font-bold uppercase tracking-wide transition-all disabled:opacity-40"
                     id="trigger-snapshot"
                   >
                     {isTranslating ? <RefreshCw className="w-4 h-4 animate-spin text-[#7c8d7c]" /> : <Camera className="w-4 h-4 text-[#7c8d7c]" />}
@@ -1486,38 +1520,38 @@ export default function App() {
                   </button>
                 </div>
 
-                <div className="flex items-center gap-4 border-t sm:border-t-0 pt-3 sm:pt-0 w-full sm:w-auto justify-end border-[#ecece0]">
-                  <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-[#5a5a4a] select-none">
+                <div className="flex items-center gap-4 border-t sm:border-t-0 pt-3 sm:pt-0 w-full sm:w-auto justify-end border-[#ecece0] dark:border-[#2d2d32]">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-[#5a5a4a] dark:text-[#a1a1aa] select-none">
                     <input 
                       type="checkbox"
                       checked={autoScan}
                       disabled={!cameraActive}
                       onChange={(e) => setAutoScan(e.target.checked)}
-                      className="rounded border-[#e0e4db] text-[#7c8d7c] focus:ring-[#7c8d7c]"
+                      className="rounded border-[#e0e4db] dark:border-[#2d2d32] text-[#7c8d7c] focus:ring-[#7c8d7c] dark:bg-[#121214]"
                     />
                     <span>Looped Auto Scan (Every 4s)</span>
                   </label>
                   
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-[#9a9a8a] bg-[#fdfcf9] px-2.5 py-1 rounded-md border border-[#ecece0]">
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-[#9a9a8a] dark:text-[#a1a1aa] bg-[#fdfcf9] dark:bg-[#151518] px-2.5 py-1 rounded-md border border-[#ecece0] dark:border-[#2d2d32]">
                     Confidence: {latestResult ? `${latestResult.confidence.toFixed(1)}%` : "N/A"}
                   </span>
                 </div>
               </div>
 
               {/* Confidence Guardrails & Threshold Settings */}
-              <div className="bg-[#fcfdfa] border border-[#ecece0] rounded-3xl p-5 flex flex-col md:flex-row items-center justify-between gap-5 shadow-sm" id="confidence-guardrails-card">
+              <div className="bg-[#fcfdfa] dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-5 flex flex-col md:flex-row items-center justify-between gap-5 shadow-sm" id="confidence-guardrails-card">
                 <div className="flex items-center gap-3 w-full md:w-auto">
-                  <div className="w-10 h-10 rounded-2xl bg-[#ebdcd1] flex items-center justify-center text-[#a36b5e] shrink-0">
+                  <div className="w-10 h-10 rounded-2xl bg-[#ebdcd1] dark:bg-[#453730] flex items-center justify-center text-[#a36b5e] dark:text-[#ebdcd1] shrink-0">
                     <Sliders className="w-5 h-5" />
                   </div>
                   <div>
-                    <h4 className="text-xs font-bold text-[#2d2d28] uppercase tracking-wide">Confidence Threshold Support</h4>
-                    <p className="text-[10px] text-[#7a7a6a] mt-0.5">Filter sign matches under selected accuracy: <strong className="text-[#a36b5e]">{confidenceThreshold}%</strong></p>
+                    <h4 className="text-xs font-bold text-[#2d2d28] dark:text-[#f4f4f5] uppercase tracking-wide">Confidence Threshold Support</h4>
+                    <p className="text-[10px] text-[#7a7a6a] dark:text-[#a1a1aa] mt-0.5">Filter sign matches under selected accuracy: <strong className="text-[#a36b5e] dark:text-[#ebdcd1]">{confidenceThreshold}%</strong></p>
                   </div>
                 </div>
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full md:w-auto">
                   <div className="flex items-center gap-2 flex-1 sm:flex-initial">
-                    <span className="text-[10px] font-mono text-[#9a9a8a]">10%</span>
+                    <span className="text-[10px] font-mono text-[#9a9a8a] dark:text-[#a1a1aa]">10%</span>
                     <input 
                       type="range" 
                       min="10" 
@@ -1525,16 +1559,16 @@ export default function App() {
                       step="5"
                       value={confidenceThreshold}
                       onChange={(e) => setConfidenceThreshold(Number(e.target.value))}
-                      className="w-full sm:w-40 h-2 bg-[#f0f2ee] rounded-lg appearance-none cursor-pointer accent-[#7c8d7c] border border-[#e0e4db]"
+                      className="w-full sm:w-40 h-2 bg-[#f0f2ee] dark:bg-[#121214] rounded-lg appearance-none cursor-pointer accent-[#7c8d7c] border border-[#e0e4db] dark:border-[#2d2d32]"
                     />
-                    <span className="text-[10px] font-mono text-[#9a9a8a]">95%</span>
+                    <span className="text-[10px] font-mono text-[#9a9a8a] dark:text-[#a1a1aa]">95%</span>
                   </div>
                   <span className={`text-[10px] uppercase font-bold tracking-wider px-3 py-1.5 rounded-xl border text-center whitespace-nowrap min-w-[150px] ${
                     latestResult 
                       ? latestResult.confidence >= confidenceThreshold 
-                        ? 'bg-[#e2f0d9] text-[#3d652b] border-[#c0dfad]' 
-                        : 'bg-rose-50 text-rose-700 border-rose-100 animate-pulse'
-                      : 'bg-[#fdfcf9] text-[#9a9a8a] border-[#ecece0]'
+                        ? 'bg-[#e2f0d9] dark:bg-[#243e1d]/80 text-[#3d652b] dark:text-[#cbdcbc] border-[#c0dfad] dark:border-[#385e2b]' 
+                        : 'bg-rose-50 dark:bg-rose-950/20 text-rose-700 dark:text-rose-400 border-rose-100 dark:border-[#6b2520] animate-pulse'
+                      : 'bg-[#fdfcf9] dark:bg-[#151518] text-[#9a9a8a] dark:text-[#a1a1aa] border-[#ecece0] dark:border-[#2d2d32]'
                   }`}>
                     {latestResult 
                       ? latestResult.confidence >= confidenceThreshold
@@ -1547,20 +1581,20 @@ export default function App() {
               </div>
 
               {/* Prediction Smoothing & Stabilization Panel */}
-              <div className="bg-white border border-[#ecece0] rounded-[32px] p-6 shadow-sm space-y-6" id="prediction-stabilizer-panel">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#f0f2ee]">
+              <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-[32px] p-6 shadow-sm space-y-6" id="prediction-stabilizer-panel">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#f0f2ee] dark:border-[#2d2d32]">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-[#f0f4ee] flex items-center justify-center text-[#4b6a4a] shrink-0">
+                    <div className="w-10 h-10 rounded-2xl bg-[#f0f4ee] dark:bg-[#1f1f22] flex items-center justify-center text-[#4b6a4a] dark:text-[#cbdcbc] shrink-0">
                       <Sparkles className="w-5 h-5 animate-pulse" />
                     </div>
                     <div>
-                      <h3 className="text-sm font-bold text-[#2d2d28] tracking-tight">AI Prediction Smoothing Engine</h3>
-                      <p className="text-[11px] text-[#7a7a6a] mt-0.5">Locks active sign gestures via a real-time moving average filter</p>
+                      <h3 className="text-sm font-bold text-[#2d2d28] dark:text-[#f4f4f5] tracking-tight">AI Prediction Smoothing Engine</h3>
+                      <p className="text-[11px] text-[#7a7a6a] dark:text-[#a1a1aa] mt-0.5">Locks active sign gestures via a real-time moving average filter</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 bg-[#f0f2ee] px-3 py-1.5 rounded-2xl border border-[#e0e4db]">
-                    <span className="text-[10px] uppercase tracking-wide font-bold text-[#5c6e5a] whitespace-nowrap">Engine Status:</span>
-                    <span className="flex items-center gap-1.5 text-[10px] font-bold text-[#3d652b]">
+                  <div className="flex items-center gap-2 bg-[#f0f2ee] dark:bg-[#1f1f22] px-3 py-1.5 rounded-2xl border border-[#e0e4db] dark:border-[#2d2d32]">
+                    <span className="text-[10px] uppercase tracking-wide font-bold text-[#5c6e5a] dark:text-[#a1a1aa] whitespace-nowrap">Engine Status:</span>
+                    <span className="flex items-center gap-1.5 text-[10px] font-bold text-[#3d652b] dark:text-emerald-400">
                       <span className="w-2 h-2 rounded-full bg-[#52a447] animate-ping" />
                       ACTIVE & STABLE
                     </span>
@@ -1571,10 +1605,10 @@ export default function App() {
                   {/* Left Column: Moving Average Window Tuner & Stabilized Output Monitor */}
                   <div className="lg:col-span-5 flex flex-col justify-between gap-6">
                     {/* Window Slider */}
-                    <div className="space-y-3 bg-[#fdfcf9] border border-[#ecece0] p-4 rounded-2xl">
+                    <div className="space-y-3 bg-[#fdfcf9] dark:bg-[#151518] border border-[#ecece0] dark:border-[#2d2d32] p-4 rounded-2xl">
                       <div className="flex items-center justify-between">
-                        <label className="text-xs font-bold text-[#4a4a40] uppercase tracking-wider">Smoother Window Size</label>
-                        <span className="text-xs font-mono font-bold text-[#7c8d7c] bg-[#e0f1dd] border border-[#b2d9ad] px-2 py-0.5 rounded-lg">{smoothingWindow} frames</span>
+                        <label className="text-xs font-bold text-[#4a4a40] dark:text-[#f4f4f5] uppercase tracking-wider">Smoother Window Size</label>
+                        <span className="text-xs font-mono font-bold text-[#7c8d7c] dark:text-[#cbdcbc] bg-[#e0f1dd] dark:bg-[#203c20] border border-[#b2d9ad] dark:border-[#385e2b] px-2 py-0.5 rounded-lg">{smoothingWindow} frames</span>
                       </div>
                       <input 
                         type="range"
@@ -1583,70 +1617,70 @@ export default function App() {
                         step="1"
                         value={smoothingWindow}
                         onChange={(e) => setSmoothingWindow(Number(e.target.value))}
-                        className="w-full h-2 bg-[#f0f2ee] rounded-lg appearance-none cursor-pointer accent-[#7c8d7c] border border-transparent"
+                        className="w-full h-2 bg-[#f0f2ee] dark:bg-[#2d2d32] rounded-lg appearance-none cursor-pointer accent-[#7c8d7c] border border-transparent"
                       />
-                      <div className="flex justify-between text-[9px] text-[#9a9a8a] font-mono leading-tight">
+                      <div className="flex justify-between text-[9px] text-[#9a9a8a] dark:text-[#a1a1aa] font-mono leading-tight">
                         <span>Flicker-prone (2f)</span>
                         <span>Balanced (8f)</span>
                         <span>Heavy Filter (16f)</span>
                       </div>
-                      <p className="text-[10px] leading-relaxed text-[#7a7a6a] bg-white border border-[#ecece0]/50 p-2 rounded-xl mt-1">
+                      <p className="text-[10px] leading-relaxed text-[#7a7a6a] dark:text-[#a1a1aa] bg-white dark:bg-[#1e1e22]/60 border border-[#ecece0]/50 dark:border-[#2d2d32]/50 p-2 rounded-xl mt-1">
                         Increasing the sliding frame window reduces prediction flickering but adds subtle latency.
                       </p>
                     </div>
 
                     {/* Quick Stats: Stabilized Output */}
-                    <div className="bg-[#fcfdfa] border border-[#e2e2d0] rounded-2xl p-4 flex flex-col justify-between gap-4">
+                    <div className="bg-[#fcfdfa] dark:bg-[#151518] border border-[#e2e2d0] dark:border-[#2d2d32] rounded-2xl p-4 flex flex-col justify-between gap-4">
                       <div className="flex items-center justify-between">
-                        <span className="text-[10px] uppercase font-bold tracking-widest text-[#9a9a8a]">Active Translation Match</span>
+                        <span className="text-[10px] uppercase font-bold tracking-widest text-[#9a9a8a] dark:text-[#a1a1aa]">Active Translation Match</span>
                         {stabilizedResult ? (
-                          <span className="flex items-center gap-1 text-[9px] font-bold uppercase py-0.5 px-2 bg-[#e2f0d9] text-[#3d652b] border border-[#c0dfad] rounded-md">
+                          <span className="flex items-center gap-1 text-[9px] font-bold uppercase py-0.5 px-2 bg-[#e2f0d9] dark:bg-[#243e1d] text-[#3d652b] dark:text-emerald-300 border border-[#c0dfad] dark:border-[#385e2b] rounded-md">
                             Lock Established
                           </span>
                         ) : (
-                          <span className="text-[9px] font-bold uppercase py-0.5 px-2 bg-amber-50 text-amber-700 border border-amber-100 rounded-md">
+                          <span className="text-[9px] font-bold uppercase py-0.5 px-2 bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border border-amber-100 dark:border-amber-900/50 rounded-md">
                             No Hand In Frame
                           </span>
                         )}
                       </div>
 
                       <div className="flex items-center gap-4 py-1">
-                        <div className="h-16 w-16 bg-[#ebdcd1] rounded-2xl flex items-center justify-center border border-[#e2ceb9] shrink-0 text-3xl font-black text-[#5c3c35]">
+                        <div className="h-16 w-16 bg-[#ebdcd1] dark:bg-[#453730] rounded-2xl flex items-center justify-center border border-[#e2ceb9] dark:border-[#523d32] shrink-0 text-3xl font-black text-[#5c3c35] dark:text-[#ebdcd1]">
                           {stabilizedResult ? stabilizedResult.predictedChar : "?"}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-[11px] uppercase tracking-wide font-bold text-[#4a4a40]">Smoothed Gesture</p>
+                          <p className="text-[11px] uppercase tracking-wide font-bold text-[#4a4a40] dark:text-[#f4f4f5]">Smoothed Gesture</p>
                           <div className="flex items-baseline gap-1 mt-0.5">
-                            <span className="text-lg font-mono font-black text-[#7c8d7c]">
+                            <span className="text-lg font-mono font-black text-[#7c8d7c] dark:text-emerald-400">
                               {stabilizedResult ? `${stabilizedResult.confidence.toFixed(1)}%` : "0.0%"}
                             </span>
-                            <span className="text-[10px] text-[#9a9a8a]">confidence avg</span>
+                            <span className="text-[10px] text-[#9a9a8a] dark:text-[#a1a1aa]">confidence avg</span>
                           </div>
                         </div>
                       </div>
 
                       {/* Moving average buffer metrics detail */}
-                      <div className="text-[10px] text-[#7a7a6a] border-t border-[#ecece0] pt-2.5 space-y-1">
+                      <div className="text-[10px] text-[#7a7a6a] dark:text-[#a1a1aa] border-t border-[#ecece0] dark:border-[#2d2d32] pt-2.5 space-y-1">
                         <div className="flex justify-between">
                           <span>Raw Feed Match:</span>
-                          <span className="font-mono font-semibold text-[#2d2d28]">{latestResult ? `"${latestResult.predictedChar}" (${latestResult.confidence.toFixed(1)}%)` : "None"}</span>
+                          <span className="font-mono font-semibold text-[#2d2d28] dark:text-[#f4f4f5]">{latestResult ? `"${latestResult.predictedChar}" (${latestResult.confidence.toFixed(1)}%)` : "None"}</span>
                         </div>
                         <div className="flex justify-between">
                           <span>Active Filter Buffer:</span>
-                          <span className="font-mono font-semibold text-[#5c6e5a]">{predictionBufferRef.current.length} / {smoothingWindow} frames</span>
+                          <span className="font-mono font-semibold text-[#5c6e5a] dark:text-emerald-400">{predictionBufferRef.current.length} / {smoothingWindow} frames</span>
                         </div>
                       </div>
                     </div>
                   </div>
 
                   {/* Right Column: Prediction Confidence Graph */}
-                  <div className="lg:col-span-7 bg-[#fbfbfa] border border-[#ecece0] p-4 rounded-3xl flex flex-col justify-between gap-3">
-                    <div className="flex items-center justify-between pb-2 border-b border-[#f0f2ee]">
+                  <div className="lg:col-span-7 bg-[#fbfbfa] dark:bg-[#151518] border border-[#ecece0] dark:border-[#2d2d32] p-4 rounded-3xl flex flex-col justify-between gap-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-[#f0f2ee] dark:border-[#2d2d32]">
                       <div className="flex items-center gap-2">
                         <Activity className="w-4 h-4 text-[#7c8d7c]" />
-                        <span className="text-xs font-bold text-[#4a4a40] uppercase tracking-wider">Confidence Waves (Oscilloscope)</span>
+                        <span className="text-xs font-bold text-[#4a4a40] dark:text-[#f4f4f5] uppercase tracking-wider">Confidence Waves (Oscilloscope)</span>
                       </div>
-                      <span className="text-[9px] bg-white px-2 py-0.5 rounded-md border border-[#ecece0] font-mono text-[#9a9a8a]">Live Camera Feed</span>
+                      <span className="text-[9px] bg-white dark:bg-[#1e1e22] px-2 py-0.5 rounded-md border border-[#ecece0] dark:border-[#2d2d32] font-mono text-[#9a9a8a] dark:text-[#a1a1aa]">Live Camera Feed</span>
                     </div>
 
                     {chartData.length > 0 ? (
@@ -1695,75 +1729,75 @@ export default function App() {
               </div>
 
               {/* Dynamic Live Translation Analysis Feedback Layout */}
-              <div className="bg-[#f4f2e9] rounded-[28px] border border-[#e8e4db] p-6 shadow-sm flex flex-col md:flex-row items-stretch gap-6" id="output-hud">
+              <div className="bg-[#f4f2e9] dark:bg-[#25231e] rounded-[28px] border border-[#e8e4db] dark:border-[#3a352d] p-6 shadow-sm flex flex-col md:flex-row items-stretch gap-6" id="output-hud">
                 <div className="flex-1 space-y-2">
                   <div className="flex items-center gap-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#52a447]"></span>
-                    <span className="text-[10px] uppercase font-bold tracking-widest text-[#9a9a8a] block">AI Translation & Diagnostics Feed</span>
+                    <span className="text-[10px] uppercase font-bold tracking-widest text-[#9a9a8a] dark:text-[#a1a1aa] block">AI Translation & Diagnostics Feed</span>
                   </div>
                   
                   {latestResult ? (
                     <div>
                       <div className="flex items-baseline gap-2">
-                        <span className="text-4xl font-extrabold text-[#2d2d28] font-sans">
+                        <span className="text-4xl font-extrabold text-[#2d2d28] dark:text-[#f4f4f5] font-sans">
                           "{latestResult.predictedChar}"
                         </span>
-                        <span className="text-xs text-[#7c8d7c] font-black tracking-wider uppercase font-sans bg-white/70 px-2 py-0.5 rounded border border-[#ecece0]">
+                        <span className="text-xs text-[#7c8d7c] dark:text-[#a2e0a2] font-black tracking-wider uppercase font-sans bg-white/70 dark:bg-[#1a1a1d]/60 px-2 py-0.5 rounded border border-[#ecece0] dark:border-[#2d2d32]">
                           Predicted Target Key Match
                         </span>
                       </div>
-                      <p className="text-xs text-[#5a5a4a] leading-relaxed mt-2.5 italic">
+                      <p className="text-xs text-[#5a5a4a] dark:text-[#d4d4d8] leading-relaxed mt-2.5 italic">
                         {latestResult.explanation}
                       </p>
                     </div>
                   ) : (
-                    <p className="text-xs text-[#7a7a6a] italic py-3">
+                    <p className="text-xs text-[#7a7a6a] dark:text-[#a1a1aa] italic py-3">
                       Capture a stream frame to begin neural recognition with the AI system.
                     </p>
                   )}
                 </div>
 
-                <div className="hidden md:block w-[1px] bg-[#e8e4db]" />
+                <div className="hidden md:block w-[1px] bg-[#e8e4db] dark:bg-[#3d382f]" />
 
                 <div className="md:w-64 flex flex-col justify-between gap-3">
                   <div>
-                    <span className="text-[9px] uppercase font-bold tracking-widest text-[#9a9a8a] block mb-2">Posture Corrector Advice</span>
+                    <span className="text-[9px] uppercase font-bold tracking-widest text-[#9a9a8a] dark:text-[#a1a1aa] block mb-2">Posture Corrector Advice</span>
                     {latestResult && latestResult.tips ? (
-                      <ul className="space-y-1.5 text-xs text-[#5a5a4a]" id="live-tips">
+                      <ul className="space-y-1.5 text-xs text-[#5a5a4a] dark:text-[#d4d4d8]" id="live-tips">
                         {latestResult.tips.map((tip, idx) => (
                           <li key={idx} className="flex gap-1.5 items-start">
-                            <Sparkles className="w-3.5 h-3.5 mt-0.5 text-[#a36b5e] shrink-0" />
+                            <Sparkles className="w-3.5 h-3.5 mt-0.5 text-[#a36b5e] dark:text-amber-500 shrink-0" />
                             <span className="leading-tight">{tip}</span>
                           </li>
                         ))}
                       </ul>
                     ) : (
-                      <p className="text-[11px] text-[#9a9a8a] italic">Awaiting structural posture tips...</p>
+                      <p className="text-[11px] text-[#9a9a8a] dark:text-[#a1a1aa] italic">Awaiting structural posture tips...</p>
                     )}
                   </div>
-                  <div className="pt-2 border-t border-[#e8e4db]/70 flex items-center justify-between text-[10px] font-sans text-[#9a9a8a] font-semibold">
+                  <div className="pt-2 border-t border-[#e8e4db]/70 dark:border-[#3d382f] flex items-center justify-between text-[10px] font-sans text-[#9a9a8a] dark:text-[#a1a1aa] font-semibold">
                     <span>MAPPED UNDER PORT 3000</span>
-                    <span className="text-[#7c8d7c] uppercase">Stable Model</span>
+                    <span className="text-[#7c8d7c] dark:text-[#a2e0a2] uppercase">Stable Model</span>
                   </div>
                 </div>
               </div>
 
               {/* Gesture-to-Text Sentence Formation Area */}
-              <div className="bg-white border border-[#ecece0] rounded-[32px] p-6 shadow-sm space-y-5" id="gesture-to-text-card">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-[#f0f2ee]">
+              <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-[32px] p-6 shadow-sm space-y-5" id="gesture-to-text-card">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-[#f0f2ee] dark:border-[#2d2d32]">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-[#ebdcd1] flex items-center justify-center text-[#5c3c35] shrink-0">
+                    <div className="w-10 h-10 rounded-2xl bg-[#ebdcd1] dark:bg-[#453730] flex items-center justify-center text-[#5c3c35] dark:text-[#ebdcd1] shrink-0">
                       <FileText className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="text-sm font-bold text-[#2d2d28] tracking-tight">Gesture-to-Text Converter</h3>
-                      <p className="text-[11px] text-[#7a7a6a] mt-0.5">Translate individual signs in sequence to construct raw phrases and copy them</p>
+                      <h3 className="text-sm font-bold text-[#2d2d28] dark:text-[#f4f4f5] tracking-tight">Gesture-to-Text Converter</h3>
+                      <p className="text-[11px] text-[#7a7a6a] dark:text-[#a1a1aa] mt-0.5">Translate individual signs in sequence to construct raw phrases and copy them</p>
                     </div>
                   </div>
                   
                   {/* Auto-Translate/Append Stream Lock Switch */}
-                  <div className="flex items-center gap-3 bg-[#fdfcf9] px-3.5 py-1.5 rounded-2xl border border-[#ecece0]">
-                    <label htmlFor="auto-append-switch" className="text-[10px] uppercase font-bold tracking-wider text-[#5c6e5a] cursor-pointer">
+                  <div className="flex items-center gap-3 bg-[#fdfcf9] dark:bg-[#151518] px-3.5 py-1.5 rounded-2xl border border-[#ecece0] dark:border-[#2d2d32]">
+                    <label htmlFor="auto-append-switch" className="text-[10px] uppercase font-bold tracking-wider text-[#5c6e5a] dark:text-emerald-400 cursor-pointer">
                       Auto-Append Locks
                     </label>
                     <input 
@@ -1771,8 +1805,8 @@ export default function App() {
                       type="checkbox"
                       checked={autoAppend}
                       onChange={(e) => setAutoAppend(e.target.checked)}
-                      className="w-8 h-4 bg-gray-200 rounded-full appearance-none cursor-pointer relative checked:bg-[#7c8d7c] transition-colors duration-200
-                      before:content-[''] before:absolute before:w-3 before:h-3 before:rounded-full before:bg-white before:top-0.5 before:left-0.5 checked:before:translate-x-4 before:transition-transform before:duration-200 border border-gray-300"
+                      className="w-8 h-4 bg-gray-200 dark:bg-gray-800 rounded-full appearance-none cursor-pointer relative checked:bg-[#7c8d7c] transition-colors duration-200
+                      before:content-[''] before:absolute before:w-3 before:h-3 before:rounded-full before:bg-white before:top-0.5 before:left-0.5 checked:before:translate-x-4 before:transition-transform before:duration-200 border border-gray-300 dark:border-gray-700"
                     />
                   </div>
                 </div>
@@ -1780,8 +1814,8 @@ export default function App() {
                 {/* Display Area for Formed Sentence */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] uppercase font-bold tracking-widest text-[#9a9a8a]">Formed Text / Practice Notepad</span>
-                    <span className="text-[10px] font-mono font-semibold text-[#7c8d7c] bg-[#f0f4ee] border border-[#d8edd4] px-2 py-0.5 rounded-lg">
+                    <span className="text-[10px] uppercase font-bold tracking-widest text-[#9a9a8a] dark:text-[#a1a1aa]">Formed Text / Practice Notepad</span>
+                    <span className="text-[10px] font-mono font-semibold text-[#7c8d7c] dark:text-[#cbdcbc] bg-[#f0f4ee] dark:bg-[#1e301e]/60 border border-[#d8edd4] dark:border-[#385e2b] px-2 py-0.5 rounded-lg">
                       {formedSentence.length} characters
                     </span>
                   </div>
@@ -1791,13 +1825,13 @@ export default function App() {
                       value={formedSentence}
                       onChange={(e) => setFormedSentence(e.target.value)}
                       placeholder="Awaiting hand gestures... Enable stream locks, hold stable poses above your confidence threshold, or manually tap 'Append Current Match' below."
-                      className="w-full h-32 p-4 text-sm font-sans bg-[#fbfbfa] text-[#2d2d28] border border-[#e2e2d0] rounded-2xl resize-none focus:outline-none focus:border-[#7c8d7c] focus:ring-1 focus:ring-[#7c8d7c] placeholder:text-[#9a9a8a] pl-4 pr-4 leading-relaxed"
+                      className="w-full h-32 p-4 text-sm font-sans bg-[#fbfbfa] dark:bg-[#151518] text-[#2d2d28] dark:text-white border border-[#e2e2d0] dark:border-[#2d2d32] rounded-2xl resize-none focus:outline-none focus:border-[#7c8d7c] focus:ring-1 focus:ring-[#7c8d7c] placeholder:text-[#9a9a8a] dark:placeholder:text-[#52525b] pl-4 pr-4 leading-relaxed"
                       id="formed-sentence-textarea"
                     />
                     {formedSentence && (
                       <button
                         onClick={handleClearSentence}
-                        className="absolute bottom-3 right-3 text-[10px] font-bold text-rose-600 hover:text-rose-700 bg-white/90 border border-rose-100 hover:border-rose-200 px-2.5 py-1.5 rounded-xl flex items-center gap-1.5 shadow-sm transition-all duration-200"
+                        className="absolute bottom-3 right-3 text-[10px] font-bold text-rose-600 dark:text-rose-400 hover:text-rose-700 bg-white/90 dark:bg-[#1c1c1f]/95 border border-rose-100 dark:border-rose-950 hover:border-rose-200 px-2.5 py-1.5 rounded-xl flex items-center gap-1.5 shadow-sm transition-all duration-200"
                         id="clear-notepad-btn"
                         title="Clear Notepad"
                       >
@@ -1809,20 +1843,20 @@ export default function App() {
                 </div>
 
                 {/* Text-to-Speech Interface Panel */}
-                <div className="bg-[#fcfbf7] border border-[#ebebe2] rounded-2xl p-4 space-y-3" id="tts-controls-panel">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-2 border-b border-[#f2f2e6]">
+                <div className="bg-[#fcfbf7] dark:bg-[#1c1a16] border border-[#ebebe2] dark:border-[#2b2a26] rounded-2xl p-4 space-y-3" id="tts-controls-panel">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-2 border-b border-[#f2f2e6] dark:border-[#2b2a26]">
                     <div className="flex items-center gap-2">
-                      <Volume2 className={`w-4 h-4 text-[#ebdcd1] ${isSpeaking ? 'animate-bounce text-[#7c8d7c]' : 'text-[#8a8a7a]'}`} />
-                      <span className="text-xs font-bold text-[#4a4a40] uppercase tracking-wider">Audio Reader & TTS Engine</span>
+                      <Volume2 className={`w-4 h-4 text-[#ebdcd1] ${isSpeaking ? 'animate-bounce text-[#7c8d7c] dark:text-emerald-400' : 'text-[#8a8a7a] dark:text-[#a1a1aa]'}`} />
+                      <span className="text-xs font-bold text-[#4a4a40] dark:text-[#f4f4f5] uppercase tracking-wider">Audio Reader & TTS Engine</span>
                     </div>
                     {isSpeaking && (
-                      <div className="flex items-center gap-1 bg-[#f0f4ee] px-2 py-0.5 rounded-lg border border-[#d2e8cc]">
-                        <span className="text-[9px] font-bold text-[#3d652b] uppercase">Speaking:</span>
+                      <div className="flex items-center gap-1 bg-[#f0f4ee] dark:bg-[#1a2f1a] px-2 py-0.5 rounded-lg border border-[#d2e8cc] dark:border-[#254d25]">
+                        <span className="text-[9px] font-bold text-[#3d652b] dark:text-emerald-400 uppercase">Speaking:</span>
                         <span className="inline-flex gap-0.5 items-end h-2.5 w-8">
-                          <span className="w-0.5 bg-[#4b6a4a] h-1 animate-pulse rounded-full" />
-                          <span className="w-0.5 bg-[#4b6a4a] h-2.5 animate-pulse rounded-full" />
-                          <span className="w-0.5 bg-[#4b6a4a] h-1.5 animate-pulse rounded-full" />
-                          <span className="w-0.5 bg-[#4b6a4a] h-2 animate-pulse rounded-full" />
+                          <span className="w-0.5 bg-[#4b6a4a] dark:bg-emerald-400 h-1 animate-pulse rounded-full" />
+                          <span className="w-0.5 bg-[#4b6a4a] dark:bg-emerald-400 h-2.5 animate-pulse rounded-full" />
+                          <span className="w-0.5 bg-[#4b6a4a] dark:bg-emerald-400 h-1.5 animate-pulse rounded-full" />
+                          <span className="w-0.5 bg-[#4b6a4a] dark:bg-emerald-400 h-2 animate-pulse rounded-full" />
                         </span>
                       </div>
                     )}
@@ -1831,12 +1865,12 @@ export default function App() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Voice selector option */}
                     <div className="space-y-1.5">
-                      <label htmlFor="tts-voice-select" className="text-[10px] uppercase font-bold tracking-wider text-[#7a7a6a]">Select Voice Option</label>
+                      <label htmlFor="tts-voice-select" className="text-[10px] uppercase font-bold tracking-wider text-[#7a7a6a] dark:text-[#a1a1aa]">Select Voice Option</label>
                       <select
                         id="tts-voice-select"
                         value={selectedVoiceName}
                         onChange={(e) => setSelectedVoiceName(e.target.value)}
-                        className="w-full text-xs font-sans text-[#2d2d28] bg-white border border-[#e2e2d0] rounded-xl px-3 py-2 focus:outline-none focus:border-[#7c8d7c] cursor-pointer"
+                        className="w-full text-xs font-sans text-[#2d2d28] dark:text-[#d4d4d8] bg-white dark:bg-[#151518] border border-[#e2e2d0] dark:border-[#2d2d32] rounded-xl px-3 py-2 focus:outline-none focus:border-[#7c8d7c] cursor-pointer"
                       >
                         {availableVoices.length > 0 ? (
                           availableVoices.map((voice) => (
@@ -1853,9 +1887,9 @@ export default function App() {
                     {/* Speed/Rate & Pitch Controls */}
                     <div className="flex items-center gap-3">
                       <div className="flex-1 space-y-1">
-                        <div className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider text-[#7a7a6a]">
+                        <div className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider text-[#7a7a6a] dark:text-[#a1a1aa]">
                           <label htmlFor="tts-rate-slider">Speed</label>
-                          <span className="font-mono text-[9px] bg-white border border-[#ecece0] px-1.5 py-0.2 rounded">{speechRate.toFixed(1)}x</span>
+                          <span className="font-mono text-[9px] bg-white dark:bg-[#151518] border border-[#ecece0] dark:border-[#2d2d32] text-gray-800 dark:text-gray-200 px-1.5 py-0.2 rounded">{speechRate.toFixed(1)}x</span>
                         </div>
                         <input
                           id="tts-rate-slider"
@@ -1865,14 +1899,14 @@ export default function App() {
                           step="0.1"
                           value={speechRate}
                           onChange={(e) => setSpeechRate(parseFloat(e.target.value))}
-                          className="w-full h-1.5 bg-[#edece6] rounded appearance-none cursor-pointer accent-[#7c8d7c]"
+                          className="w-full h-1.5 bg-[#edece6] dark:bg-[#2a2a2f] rounded appearance-none cursor-pointer accent-[#7c8d7c]"
                         />
                       </div>
 
                       <div className="flex-1 space-y-1">
-                        <div className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider text-[#7a7a6a]">
+                        <div className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider text-[#7a7a6a] dark:text-[#a1a1aa]">
                           <label htmlFor="tts-pitch-slider">Pitch</label>
-                          <span className="font-mono text-[9px] bg-white border border-[#ecece0] px-1.5 py-0.2 rounded">{speechPitch.toFixed(1)}</span>
+                          <span className="font-mono text-[9px] bg-white dark:bg-[#151518] border border-[#ecece0] dark:border-[#2d2d32] text-gray-800 dark:text-gray-200 px-1.5 py-0.2 rounded">{speechPitch.toFixed(1)}</span>
                         </div>
                         <input
                           id="tts-pitch-slider"
@@ -1882,7 +1916,7 @@ export default function App() {
                           step="0.1"
                           value={speechPitch}
                           onChange={(e) => setSpeechPitch(parseFloat(e.target.value))}
-                          className="w-full h-1.5 bg-[#edece6] rounded appearance-none cursor-pointer accent-[#7c8d7c]"
+                          className="w-full h-1.5 bg-[#edece6] dark:bg-[#2a2a2f] rounded appearance-none cursor-pointer accent-[#7c8d7c]"
                         />
                       </div>
                     </div>
@@ -1895,8 +1929,8 @@ export default function App() {
                       disabled={!formedSentence.trim()}
                       className={`flex-1 text-xs font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-all duration-200 border shadow-sm ${
                         formedSentence.trim()
-                          ? 'bg-[#5c3c35] hover:bg-[#4d322c] text-white border-[#5c3c35]'
-                          : 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
+                          ? 'bg-[#5c3c35] dark:bg-[#83564c] hover:bg-[#4d322c] text-white border-[#5c3c35] dark:border-[#83564c]'
+                          : 'bg-gray-50 dark:bg-[#151518]/40 text-gray-300 dark:text-[#424249] border-gray-100 dark:border-[#202024]/40 cursor-not-allowed'
                       }`}
                       id="tts-play-btn"
                     >
@@ -1909,8 +1943,8 @@ export default function App() {
                       disabled={!isSpeaking}
                       className={`text-xs font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-all duration-200 border shadow-sm ${
                         isSpeaking
-                          ? 'bg-rose-50 hover:bg-rose-100 text-rose-600 border-rose-100'
-                          : 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
+                          ? 'bg-rose-50 dark:bg-[#3b171a] hover:bg-rose-100 dark:hover:bg-[#4d1f22] text-rose-600 dark:text-rose-400 border-rose-100 dark:border-rose-950'
+                          : 'bg-gray-50 dark:bg-[#151518]/40 text-gray-300 dark:text-[#424249] border-gray-100 dark:border-[#202024]/40 cursor-not-allowed'
                       }`}
                       id="tts-stop-btn"
                     >
@@ -1929,8 +1963,8 @@ export default function App() {
                       disabled={!stabilizedResult}
                       className={`text-xs font-bold px-4 py-2.5 rounded-2xl flex items-center gap-2 transition-all duration-200 shadow-sm border ${
                         stabilizedResult 
-                          ? 'bg-[#7c8d7c] text-white border-[#687c68] hover:bg-[#687c68]' 
-                          : 'bg-gray-50 text-[#9a9a8a] border-gray-200 cursor-not-allowed'
+                          ? 'bg-[#7c8d7c] dark:bg-[#4d5c4d] text-white border-[#687c68] dark:border-[#3b473b] hover:bg-[#687c68]/90' 
+                          : 'bg-gray-50 dark:bg-[#151518]/40 text-[#9a9a8a] dark:text-[#424249] border-gray-200 dark:border-[#202024]/40 cursor-not-allowed'
                       }`}
                       id="append-match-btn"
                     >
@@ -1941,10 +1975,10 @@ export default function App() {
                     {/* Add Space button */}
                     <button
                       onClick={handleAddSpace}
-                      className="text-xs font-bold bg-white text-[#4a4a40] border border-[#e2e2d0] hover:bg-[#fcfdfa] hover:border-[#7c8d7c] px-4 py-2.5 rounded-2xl flex items-center gap-2 transition-all duration-200 shadow-sm"
+                      className="text-xs font-bold bg-white dark:bg-[#1c1c20] text-[#4a4a40] dark:text-[#e4e4e7] border border-[#e2e2d0] dark:border-[#2d2d32] hover:bg-[#fcfdfa] dark:hover:bg-[#252529] hover:border-[#7c8d7c] px-4 py-2.5 rounded-2xl flex items-center gap-2 transition-all duration-200 shadow-sm"
                       id="add-space-btn"
                     >
-                      <FileCode className="w-4 h-4 text-[#7a7a6a]" />
+                      <FileCode className="w-4 h-4 text-[#7a7a6a] dark:text-[#a1a1aa]" />
                       Space
                     </button>
 
@@ -1954,8 +1988,8 @@ export default function App() {
                       disabled={formedSentence.length === 0}
                       className={`text-xs font-bold px-4 py-2.5 rounded-2xl flex items-center gap-2 transition-all duration-200 shadow-sm border ${
                         formedSentence.length > 0 
-                          ? 'bg-white text-rose-600 border-rose-100 hover:bg-rose-50 hover:border-rose-200' 
-                          : 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
+                          ? 'bg-white dark:bg-[#1c1c20] text-rose-600 dark:text-rose-400 border-rose-100 dark:border-rose-950 hover:bg-rose-50 dark:hover:bg-[#3b171a]/30 hover:border-rose-200' 
+                          : 'bg-gray-50 dark:bg-[#151518]/40 text-gray-300 dark:text-[#424249] border-gray-100 dark:border-[#202024]/40 cursor-not-allowed'
                       }`}
                       id="backspace-btn"
                     >
@@ -1971,9 +2005,9 @@ export default function App() {
                     className={`text-xs font-bold px-5 py-2.5 rounded-2xl flex items-center gap-2 transition-all duration-200 shadow-sm border ${
                       formedSentence.length > 0
                         ? copied
-                          ? 'bg-[#e2f0d9] text-[#3d652b] border-[#c0dfad]'
-                          : 'bg-[#ebdcd1] text-[#5c3c35] border-[#ebdcd1] hover:bg-[#dfcdbf]'
-                        : 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
+                          ? 'bg-[#e2f0d9] dark:bg-[#243e1d] text-[#3d652b] dark:text-emerald-300 border-[#c0dfad] dark:border-[#385e2b]'
+                          : 'bg-[#ebdcd1] dark:bg-[#453730] text-[#5c3c35] dark:text-[#f3dfcf] border-[#ebdcd1] dark:border-[#523d32] hover:bg-[#dfcdbf]'
+                        : 'bg-gray-50 dark:bg-[#151518]/40 text-gray-300 dark:text-[#424249] border-gray-100 dark:border-[#202024]/40 cursor-not-allowed'
                     }`}
                     id="copy-sentence-btn"
                   >
@@ -2012,45 +2046,44 @@ export default function App() {
 
             {/* Right: Practice Progress, Roadmap Milestones, and Session Logs */}
             <div className="xl:col-span-4 space-y-6" id="dashboard-right">
-              
-              {/* Target practicing card */}
-              <div className="bg-white rounded-[32px] p-6 shadow-sm border border-[#ecece0] space-y-4" id="target-focus-card">
-                <div className="flex items-center gap-2 text-xs font-bold text-[#7c8d7c] uppercase tracking-wider font-mono">
-                  <Flame className="w-4 h-4 fill-[#7c8d7c] text-[#7c8d7c]" />
+                   {/* Target practicing card */}
+              <div className="bg-white dark:bg-[#1e1e22] rounded-[32px] p-6 shadow-sm border border-[#ecece0] dark:border-[#2d2d32] space-y-4" id="target-focus-card">
+                <div className="flex items-center gap-2 text-xs font-bold text-[#7c8d7c] dark:text-[#a2e0a2] uppercase tracking-wider font-mono">
+                  <Flame className="w-4 h-4 fill-[#7c8d7c] dark:fill-[#4a5c4e] text-[#7c8d7c] dark:text-[#a2e0a2]" />
                   Active Learning Target
                 </div>
                 
-                <div className="bg-[#fdfcf9] border border-[#ecece0] rounded-2xl p-4 flex items-center justify-between gap-4">
+                <div className="bg-[#fdfcf9] dark:bg-[#151518] border border-[#ecece0] dark:border-[#2d2d32] rounded-2xl p-4 flex items-center justify-between gap-4">
                   <div className="flex-1 min-w-0">
-                    <span className="text-3xl font-black text-[#2d2d28] font-sans">{selectedGesture.char}</span>
-                    <p className="text-xs font-serif italic text-slate-500 mt-1 truncate">
+                    <span className="text-3xl font-black text-[#2d2d28] dark:text-[#f4f4f5] font-sans">{selectedGesture.char}</span>
+                    <p className="text-xs font-serif italic text-slate-500 dark:text-slate-400 mt-1 truncate">
                       Category: {selectedGesture.category.toUpperCase()}
                     </p>
                   </div>
                   {/* Action tip block */}
-                  <div className="bg-[#f0f2ee] p-2 rounded-xl text-[10px] leading-tight font-medium text-[#4a4a40] max-w-xs border border-[#e0e4db]">
+                  <div className="bg-[#f0f2ee] dark:bg-[#1f1f22] p-2 rounded-xl text-[10px] leading-tight font-medium text-[#4a4a40] dark:text-[#d4d4d8] max-w-xs border border-[#e0e4db] dark:border-[#2d2d32]">
                     <strong>Posture Hint:</strong> {selectedGesture.visualTip}
                   </div>
                 </div>
 
-                <div className="space-y-2 text-xs text-[#5a5a4a] leading-relaxed" id="target-detail">
+                <div className="space-y-2 text-xs text-[#5a5a4a] dark:text-[#a1a1aa] leading-relaxed" id="target-detail">
                   <p>{selectedGesture.description}</p>
                 </div>
               </div>
 
               {/* MediaPipe Hands telemetry diagnostics card */}
-              <div className="bg-white rounded-[32px] p-6 shadow-sm border border-[#ecece0] space-y-4 animate-fade-in" id="cv-telemetry-card">
+              <div className="bg-white dark:bg-[#1e1e22] rounded-[32px] p-6 shadow-sm border border-[#ecece0] dark:border-[#2d2d32] space-y-4 animate-fade-in" id="cv-telemetry-card">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-xs font-bold text-[#7c8d7c] uppercase tracking-wider font-mono">
-                    <Activity className="w-4 h-4 text-[#7c8d7c] animate-pulse" />
+                  <div className="flex items-center gap-2 text-xs font-bold text-[#7c8d7c] dark:text-[#a2e0a2] uppercase tracking-wider font-mono">
+                    <Activity className="w-4 h-4 text-[#7c8d7c] dark:text-[#a2e0a2] animate-pulse" />
                     Computer Vision Telemetry
                   </div>
                   <span className={`text-[9px] font-mono font-bold px-2.5 py-0.5 rounded-md border ${
                     mediaPipeLoaded 
-                      ? "bg-[#f0f2ee] text-[#52a447] border-[#e0e4db]" 
+                      ? "bg-[#f0f2ee] dark:bg-[#1c2e1c] text-[#52a447] dark:text-emerald-400 border-[#e0e4db] dark:border-[#2a452a]" 
                       : mediaPipeError 
-                      ? "bg-rose-50 text-rose-600 border-rose-100" 
-                      : "bg-amber-50 text-amber-600 border-amber-100 animate-pulse"
+                      ? "bg-rose-50 dark:bg-rose-950/25 text-rose-600 dark:text-rose-400 border-rose-100 dark:border-rose-900/50" 
+                      : "bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-900/55 animate-pulse"
                   }`}>
                     {mediaPipeLoaded ? "MEDIAPIPE LIVE" : mediaPipeError ? "LOAD ERROR" : "LOADING CV MODEL..."}
                   </span>
@@ -2058,15 +2091,15 @@ export default function App() {
 
                 {/* Hand Detection Stats */}
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-[#fdfcf9] border border-[#ecece0] rounded-2xl p-3 text-center transition-all hover:border-[#7c8d7c]/30">
-                    <span className="text-[10px] text-[#9a9a8a] uppercase font-bold tracking-wider font-mono block">Hands Tracked</span>
-                    <span className="text-2xl font-black text-[#2d2d28] font-mono mt-1 block">
+                  <div className="bg-[#fdfcf9] dark:bg-[#151518] border border-[#ecece0] dark:border-[#2d2d32] rounded-2xl p-3 text-center transition-all hover:border-[#7c8d7c]/30">
+                    <span className="text-[10px] text-[#9a9a8a] dark:text-[#a1a1aa] uppercase font-bold tracking-wider font-mono block">Hands Tracked</span>
+                    <span className="text-2xl font-black text-[#2d2d28] dark:text-[#f4f4f5] font-mono mt-1 block">
                       {detectedHandsCount}
                     </span>
                   </div>
-                  <div className="bg-[#fdfcf9] border border-[#ecece0] rounded-2xl p-3 text-center transition-all hover:border-[#7c8d7c]/30">
-                    <span className="text-[10px] text-[#9a9a8a] uppercase font-bold tracking-wider font-mono block">Tracking Index</span>
-                    <span className="text-2xl font-black text-[#7c8d7c] font-mono mt-1 block">
+                  <div className="bg-[#fdfcf9] dark:bg-[#151518] border border-[#ecece0] dark:border-[#2d2d32] rounded-2xl p-3 text-center transition-all hover:border-[#7c8d7c]/30">
+                    <span className="text-[10px] text-[#9a9a8a] dark:text-[#a1a1aa] uppercase font-bold tracking-wider font-mono block">Tracking Index</span>
+                    <span className="text-2xl font-black text-[#7c8d7c] dark:text-[#cbdcbc] font-mono mt-1 block">
                       {detectedHandsCount > 0 ? "OPTIMAL" : "AWAITING"}
                     </span>
                   </div>
@@ -2074,19 +2107,19 @@ export default function App() {
 
                 {/* Landmarks Coordinate Table */}
                 <div className="space-y-2">
-                  <span className="text-[10px] text-[#9a9a8a] uppercase font-bold tracking-widest font-mono block">
+                  <span className="text-[10px] text-[#9a9a8a] dark:text-[#a1a1aa] uppercase font-bold tracking-widest font-mono block">
                     Finger Joint Coordinates (X, Y, Depth)
                   </span>
                   
                   {handLandmarksSample.length > 0 ? (
-                    <div className="border border-[#f0f2ee] rounded-2xl overflow-hidden text-[10px] font-mono">
-                      <div className="bg-[#f0f2ee] px-3 py-1.5 grid grid-cols-4 font-bold text-[#5a5a4a] border-b border-[#ecece0]">
+                    <div className="border border-[#f0f2ee] dark:border-[#2d2d32] rounded-2xl overflow-hidden text-[10px] font-mono">
+                      <div className="bg-[#f0f2ee] dark:bg-[#1f1f22] px-3 py-1.5 grid grid-cols-4 font-bold text-[#5a5a4a] dark:text-[#a1a1aa] border-b border-[#ecece0] dark:border-[#2d2d32]">
                         <span>Joint</span>
-                        <span className="text-right text-slate-600">X</span>
-                        <span className="text-right text-slate-600">Y</span>
-                        <span className="text-right text-slate-600">Depth</span>
+                        <span className="text-right text-slate-600 dark:text-slate-400">X</span>
+                        <span className="text-right text-slate-600 dark:text-slate-400">Y</span>
+                        <span className="text-right text-slate-600 dark:text-slate-400">Depth</span>
                       </div>
-                      <div className="divide-y divide-[#f0f2ee] max-h-[140px] overflow-y-auto bg-[#fdfcf9]">
+                      <div className="divide-y divide-[#f0f2ee] dark:divide-[#2d2d32] max-h-[140px] overflow-y-auto bg-[#fdfcf9] dark:bg-[#151518]">
                         {[
                           { index: 0, label: "Wrist Base" },
                           { index: 4, label: "Thumb Tip" },
@@ -2097,18 +2130,18 @@ export default function App() {
                         ].map((item) => {
                           const lm = handLandmarksSample[item.index];
                           return lm ? (
-                            <div key={item.index} className="px-3 py-1.5 grid grid-cols-4 hover:bg-[#f0f2ee]/30 transition-colors">
-                              <span className="font-sans font-bold text-[#4a4a40] truncate">{item.label}</span>
-                              <span className="text-right text-slate-500 font-mono">{(lm.x).toFixed(3)}</span>
-                              <span className="text-right text-slate-500 font-mono">{(lm.y).toFixed(3)}</span>
-                              <span className="text-right text-[#a36b5e] font-mono">{(lm.z || 0).toFixed(3)}</span>
+                            <div key={item.index} className="px-3 py-1.5 grid grid-cols-4 hover:bg-[#f0f2ee]/30 dark:hover:bg-white/5 transition-colors">
+                              <span className="font-sans font-bold text-[#4a4a40] dark:text-[#d4d4d8] truncate">{item.label}</span>
+                              <span className="text-right text-slate-500 dark:text-slate-400 font-mono">{(lm.x).toFixed(3)}</span>
+                              <span className="text-right text-slate-500 dark:text-slate-400 font-mono">{(lm.y).toFixed(3)}</span>
+                              <span className="text-right text-[#a36b5e] dark:text-amber-500 font-mono">{(lm.z || 0).toFixed(3)}</span>
                             </div>
                           ) : null;
                         })}
                       </div>
                     </div>
                   ) : (
-                    <div className="bg-[#f0f2ee]/30 border border-[#ecece0] rounded-2xl p-4 text-center text-xs text-[#9a9a8a] italic leading-relaxed">
+                    <div className="bg-[#f0f2ee]/30 dark:bg-[#18181b]/40 border border-[#ecece0] dark:border-[#2d2d32] rounded-2xl p-4 text-center text-xs text-[#9a9a8a] dark:text-[#a1a1aa] italic leading-relaxed">
                       {cameraActive 
                         ? "Move hand into camera frame to initialize layout skeletal overlay" 
                         : "Turn on the system webcam to engage MediaPipe computing nodes"}
@@ -2117,13 +2150,13 @@ export default function App() {
                 </div>
 
                 {/* Hand Visualizer Controller Panel */}
-                <div className="pt-3 border-t border-[#ecece0] space-y-3" id="visualizer-tuner-panel">
-                  <span className="text-[10px] text-[#9a9a8a] uppercase font-bold tracking-widest font-mono block">
+                <div className="pt-3 border-t border-[#ecece0] dark:border-[#2d2d32] space-y-3" id="visualizer-tuner-panel">
+                  <span className="text-[10px] text-[#9a9a8a] dark:text-[#a1a1aa] uppercase font-bold tracking-widest font-mono block">
                     Landmark Rendering Engine Preset
                   </span>
 
                   {/* Preset Buttons */}
-                  <div className="grid grid-cols-4 gap-1 bg-[#f0f2ee] p-1 rounded-xl border border-[#e0e4db]" id="preset-selector">
+                  <div className="grid grid-cols-4 gap-1 bg-[#f0f2ee] dark:bg-[#18181b] p-1 rounded-xl border border-[#e0e4db] dark:border-[#2d2d32]" id="preset-selector">
                     {(['emerald', 'cyberpunk', 'ghost', 'rainbow'] as const).map((style) => (
                       <button
                         key={style}
@@ -2132,7 +2165,7 @@ export default function App() {
                         className={`py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all truncate ${
                           vizStyle === style
                             ? "bg-[#7c8d7c] text-white shadow-sm"
-                            : "text-[#5a6b5a] hover:text-[#2d2d28]"
+                            : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
                         }`}
                       >
                         {style}
@@ -2141,10 +2174,10 @@ export default function App() {
                   </div>
 
                   {/* Tuner Sliders */}
-                  <div className="space-y-2 bg-[#fdfcf9] border border-[#ecece0] rounded-xl p-3 text-[10px] text-[#5a5a4a]" id="rendering-sliders">
+                  <div className="space-y-2 bg-[#fdfcf9] dark:bg-[#151518] border border-[#ecece0] dark:border-[#2d2d32] rounded-xl p-3 text-[10px] text-[#5a5a4a] dark:text-[#a1a1aa]" id="rendering-sliders">
                     <div className="flex items-center justify-between">
                       <span className="font-semibold">Line Thickness:</span>
-                      <span className="font-mono bg-[#f0f2ee] px-1.5 py-0.5 rounded text-[9px]">{lineThickness}px</span>
+                      <span className="font-mono bg-[#f0f2ee] dark:bg-[#202023] px-1.5 py-0.5 rounded text-[9px]">{lineThickness}px</span>
                     </div>
                     <input
                       type="range"
@@ -2152,12 +2185,12 @@ export default function App() {
                       max="8"
                       value={lineThickness}
                       onChange={(e) => setLineThickness(Number(e.target.value))}
-                      className="w-full h-1 bg-[#e0e4db] rounded-lg appearance-none cursor-pointer accent-[#7c8d7c]"
+                      className="w-full h-1 bg-[#e0e4db] dark:bg-[#2c2c31] rounded-lg appearance-none cursor-pointer accent-[#7c8d7c]"
                     />
 
                     <div className="flex items-center justify-between mt-2">
                       <span className="font-semibold">Joint Nodes:</span>
-                      <span className="font-mono bg-[#f0f2ee] px-1.5 py-0.5 rounded text-[9px]">{jointRadius}px radius</span>
+                      <span className="font-mono bg-[#f0f2ee] dark:bg-[#202023] px-1.5 py-0.5 rounded text-[9px]">{jointRadius}px radius</span>
                     </div>
                     <input
                       type="range"
@@ -2165,91 +2198,91 @@ export default function App() {
                       max="10"
                       value={jointRadius}
                       onChange={(e) => setJointRadius(Number(e.target.value))}
-                      className="w-full h-1 bg-[#e0e4db] rounded-lg appearance-none cursor-pointer accent-[#7c8d7c]"
+                      className="w-full h-1 bg-[#e0e4db] dark:bg-[#2c2c31] rounded-lg appearance-none cursor-pointer accent-[#7c8d7c]"
                     />
                   </div>
 
                   {/* Dynamic Switches */}
                   <div className="grid grid-cols-2 gap-3" id="rendering-switches">
-                    <label className="flex items-center gap-2 cursor-pointer text-[10px] font-semibold text-[#5a5a4a] select-none bg-[#fdfcf9] border border-[#ecece0] p-2 rounded-xl hover:bg-[#f0f2ee]/45 transition-colors">
+                    <label className="flex items-center gap-2 cursor-pointer text-[10px] font-semibold text-[#5a5a4a] dark:text-[#a1a1aa] select-none bg-[#fdfcf9] dark:bg-[#151518] border border-[#ecece0] dark:border-[#2d2d32] p-2 rounded-xl hover:bg-[#f0f2ee]/45 dark:hover:bg-white/5 transition-colors">
                       <input
                         type="checkbox"
                         checked={showCoordinateIndices}
                         onChange={(e) => setShowCoordinateIndices(e.target.checked)}
-                        className="rounded border-[#e0e4db] text-[#7c8d7c] focus:ring-[#7c8d7c] w-3.5 h-3.5"
+                        className="rounded border-[#e0e4db] dark:border-[#2d2d32] text-[#7c8d7c] focus:ring-[#7c8d7c] w-3.5 h-3.5"
                       />
                       <span>Show Joint IDs</span>
                     </label>
 
-                    <label className="flex items-center gap-2 cursor-pointer text-[10px] font-semibold text-[#5a5a4a] select-none bg-[#fdfcf9] border border-[#ecece0] p-2 rounded-xl hover:bg-[#f0f2ee]/45 transition-colors">
+                    <label className="flex items-center gap-2 cursor-pointer text-[10px] font-semibold text-[#5a5a4a] dark:text-[#a1a1aa] select-none bg-[#fdfcf9] dark:bg-[#151518] border border-[#ecece0] dark:border-[#2d2d32] p-2 rounded-xl hover:bg-[#f0f2ee]/45 dark:hover:bg-white/5 transition-colors">
                       <input
                         type="checkbox"
                         checked={glowEnabled}
                         onChange={(e) => setGlowEnabled(e.target.checked)}
-                        className="rounded border-[#e0e4db] text-[#7c8d7c] focus:ring-[#7c8d7c] w-3.5 h-3.5"
+                        className="rounded border-[#e0e4db] dark:border-[#2d2d32] text-[#7c8d7c] focus:ring-[#7c8d7c] w-3.5 h-3.5"
                       />
                       <span>Glow Connectors</span>
                     </label>
                   </div>
                 </div>
 
-                <div className="text-[10px] text-[#9a9a8a] leading-relaxed bg-[#f0f2ee]/40 rounded-xl p-2.5 border border-[#e0e4db]/60">
-                  <span className="font-bold text-[#4a4a40] block mb-0.5">Skeletal Calibration Tips:</span>
+                <div className="text-[10px] text-[#9a9a8a] dark:text-[#a1a1aa] leading-relaxed bg-[#f0f2ee]/40 dark:bg-[#1d1d20]/40 rounded-xl p-2.5 border border-[#e0e4db]/60 dark:border-[#2d2d32]/60">
+                  <span className="font-bold text-[#4a4a40] dark:text-[#cbdcbc] block mb-0.5">Skeletal Calibration Tips:</span>
                   - Position hand centered inside dotted target ring.<br/>
                   - Keep wrist straight and parallel to the viewport.
                 </div>
               </div>
 
               {/* Practice Stats Summary */}
-              <div className="bg-white rounded-[32px] p-6 shadow-sm border border-[#ecece0]" id="roadmap-mini-card">
-                <div className="flex items-center justify-between mb-4 pb-2 border-b border-[#f0f2ee]">
-                  <h3 className="font-bold text-[#2d2d28] text-sm tracking-tight">Vite-React-Express Setup</h3>
-                  <span className="text-[10px] uppercase bg-[#f0f2ee] px-2.5 py-1 rounded text-[#7c8d7c] font-black tracking-widest font-mono">
+              <div className="bg-white dark:bg-[#1e1e22] rounded-[32px] p-6 shadow-sm border border-[#ecece0] dark:border-[#2d2d32]" id="roadmap-mini-card">
+                <div className="flex items-center justify-between mb-4 pb-2 border-b border-[#f0f2ee] dark:border-[#2d2d32]">
+                  <h3 className="font-bold text-[#2d2d28] dark:text-[#f4f4f5] text-sm tracking-tight">Vite-React-Express Setup</h3>
+                  <span className="text-[10px] uppercase bg-[#f0f2ee] dark:bg-[#1c1c1f] px-2.5 py-1 rounded text-[#7c8d7c] dark:text-emerald-400 font-black tracking-widest font-mono">
                     Day 1 / 30
                   </span>
                 </div>
 
-                <div className="space-y-3.5 text-xs text-[#5a5a4a]" id="milestone-progress-mini">
-                  <div className="flex gap-2 items-start text-[11px] bg-[#f0f2ee]/50 p-2.5 rounded-xl border border-[#e0e4db]/60">
+                <div className="space-y-3.5 text-xs text-[#5a5a4a] dark:text-[#a1a1aa]" id="milestone-progress-mini">
+                  <div className="flex gap-2 items-start text-[11px] bg-[#f0f2ee]/50 dark:bg-[#1c1c1f]/50 p-2.5 rounded-xl border border-[#e0e4db]/60 dark:border-[#2d2d32]/30">
                     <CheckCircle2 className="w-4 h-4 text-[#52a447] shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-bold text-[#2d2d28]">Vite + Express Architecture</p>
+                      <p className="font-bold text-[#2d2d28] dark:text-[#cbdcbc]">Vite + Express Architecture</p>
                       <p className="text-[10px] text-[#9a9a8a] mt-0.5">Express server configured on port 3000 to cleanly proxy pipeline calls</p>
                     </div>
                   </div>
-                  <div className="flex gap-2 items-start text-[11px] bg-[#f0f2ee]/50 p-2.5 rounded-xl border border-[#e0e4db]/60">
+                  <div className="flex gap-2 items-start text-[11px] bg-[#f0f2ee]/50 dark:bg-[#1c1c1f]/50 p-2.5 rounded-xl border border-[#e0e4db]/60 dark:border-[#2d2d32]/30">
                     <CheckCircle2 className="w-4 h-4 text-[#52a447] shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-bold text-[#2d2d28]">Fallback Sandbox Simulation</p>
+                      <p className="font-bold text-[#2d2d28] dark:text-[#cbdcbc]">Fallback Sandbox Simulation</p>
                       <p className="text-[10px] text-[#9a9a8a] mt-0.5">Includes automatic client state simulator mockups for testing offline</p>
                     </div>
                   </div>
                   <div className="flex gap-2 items-start text-[11px] opacity-60">
                     <div className="w-4 h-4 rounded-full border border-neutral-300 shrink-0 flex items-center justify-center text-[8px] font-mono leading-none font-black mt-0.5 text-neutral-400">03</div>
                     <div>
-                      <p className="font-bold text-[#2d2d28]">Interactive Practicing Core</p>
+                      <p className="font-bold text-[#2d2d28] dark:text-[#cbdcbc]">Interactive Practicing Core</p>
                       <p className="text-[10px] text-[#9a9a8a] mt-0.5">A-Z static dictionary selection with frame stream snapping</p>
                     </div>
                   </div>
                 </div>
 
-                <div className="mt-4 bg-[#f0f2ee] rounded-xl p-3.5 border border-[#e0e4db]">
+                <div className="mt-4 bg-[#f0f2ee] dark:bg-[#1c1c1f] rounded-xl p-3.5 border border-[#e0e4db] dark:border-[#2d2d32]">
                   <div className="flex justify-between text-xs mb-1.5 font-sans font-semibold">
                     <span>Setup Checklist Progress</span>
                     <span>100% (Day 1 Phase)</span>
                   </div>
-                  <div className="w-full h-1.5 bg-[#e0e4db] rounded-full overflow-hidden">
+                  <div className="w-full h-1.5 bg-[#e0e4db] dark:bg-zinc-800 rounded-full overflow-hidden">
                     <div className="w-full h-full bg-[#7c8d7c]" />
                   </div>
                 </div>
               </div>
 
               {/* History list card */}
-              <div className="bg-white rounded-[32px] p-6 shadow-sm border border-[#ecece0] flex flex-col justify-between" id="recent-history">
+              <div className="bg-white dark:bg-[#1e1e22] rounded-[32px] p-6 shadow-sm border border-[#ecece0] dark:border-[#2d2d32] flex flex-col justify-between" id="recent-history">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
                     <History className="w-4 h-4 text-[#7c8d7c]" />
-                    <h3 className="font-bold text-sm text-[#2d2d28] font-sans">Recent Sessions</h3>
+                    <h3 className="font-bold text-sm text-[#2d2d28] dark:text-[#f4f4f5] font-sans">Recent Sessions</h3>
                   </div>
                   {sessions.length > 0 && (
                     <button 
@@ -2263,24 +2296,24 @@ export default function App() {
 
                 <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1" id="history-scroller">
                   {sessions.map((ses) => (
-                    <div key={ses.id} className="p-3 rounded-2xl bg-[#fdfcf9] border border-[#f0f2ee] flex items-center justify-between gap-3" id={`history-item-${ses.id}`}>
+                    <div key={ses.id} className="p-3 rounded-2xl bg-[#fdfcf9] dark:bg-[#151518] border border-[#f0f2ee] dark:border-[#2d2d32]/60 flex items-center justify-between gap-3" id={`history-item-${ses.id}`}>
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-7 h-7 rounded-lg bg-[#f0f2ee] text-xs font-black text-[#7c8d7c] flex items-center justify-center border border-[#e0e4db] shrink-0">
+                        <div className="w-7 h-7 rounded-lg bg-[#f0f2ee] dark:bg-[#1c1c1f] text-xs font-black text-[#7c8d7c] dark:text-[#cbdcbc] flex items-center justify-center border border-[#e0e4db] dark:border-[#2d2d32] shrink-0">
                           ASL
                         </div>
                         <div className="min-w-0">
-                          <p className="text-[11px] font-bold text-[#2d2d28] truncate">{ses.caption}</p>
-                          <p className="text-[9px] text-[#9a9a8a] font-medium mt-0.5">{ses.timestamp}</p>
+                          <p className="text-[11px] font-bold text-[#2d2d28] dark:text-[#cbdcbc] truncate">{ses.caption}</p>
+                          <p className="text-[9px] text-[#9a9a8a] mt-0.5">{ses.timestamp}</p>
                         </div>
                       </div>
-                      <span className="text-xs font-extrabold text-[#7c8d7c] whitespace-nowrap shrink-0">
+                      <span className="text-xs font-extrabold text-[#7c8d7c] dark:text-[#cbdcbc] whitespace-nowrap shrink-0">
                         {ses.confidence.toFixed(1)}%
                       </span>
                     </div>
                   ))}
 
                   {sessions.length === 0 && (
-                    <div className="py-6 text-center text-xs text-[#9a9a8a] italic" id="empty-history-hud">
+                    <div className="py-6 text-center text-xs text-[#9a9a8a] dark:text-[#a1a1aa] italic" id="empty-history-hud">
                       Perform an ASL capture to log your practice metrics.
                     </div>
                   )}
@@ -2288,7 +2321,7 @@ export default function App() {
 
                 <button 
                   onClick={() => alert("History Logs are backed up dynamically in standard Client LocalStorage for security. No private camera pixels leave your hardware container.")}
-                  className="mt-4 w-full py-2.5 bg-[#f0f2ee] text-[#4a4a40] border border-[#e0e4db] hover:bg-[#e0e4db]/30 rounded-2xl font-bold text-xs uppercase tracking-wider transition-all"
+                  className="mt-4 w-full py-2.5 bg-[#f0f2ee] dark:bg-[#1c1c1e] text-[#4a4a40] dark:text-[#cbd5e1] border border-[#e0e4db] dark:border-[#2d2d32] hover:bg-[#e0e4db]/30 dark:hover:bg-[#27272a] rounded-2xl font-bold text-xs uppercase tracking-wider transition-all"
                 >
                   Backup Local History
                 </button>
@@ -2302,9 +2335,9 @@ export default function App() {
         {/* ASL Reference Tab view separately */}
         {activeTab === 'dictionary' && (
           <div className="space-y-6" id="dictionary-tab-view">
-            <div className="bg-white border border-[#ecece0] rounded-3xl p-6 shadow-sm space-y-3" id="dictionary-intro-hero">
-              <h2 className="text-xl font-bold text-[#2d2d28]">American Sign Language Dictionary</h2>
-              <p className="text-xs text-[#5a5a4a] leading-relaxed max-w-3xl">
+            <div className="bg-[#ffffff] dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-6 shadow-sm space-y-3" id="dictionary-intro-hero">
+              <h2 className="text-xl font-bold text-[#2d2d28] dark:text-[#f4f4f5]">American Sign Language Dictionary</h2>
+              <p className="text-xs text-[#5a5a4a] dark:text-[#cbd5e1] leading-relaxed max-w-3xl">
                 Explore correct posture, wrist rotational alignment, and knuckles placement for A-Z alphabetic letters and common entry-level greetings. Toggle active practicing on any of the cards to bind that gesture inside the camera translation scanner HUD preview.
               </p>
             </div>
@@ -2337,19 +2370,19 @@ export default function App() {
         {/* Gesture Data Collector Workspace tab view */}
         {activeTab === 'collector' && (
           <div className="space-y-6 animate-fade-in" id="collector-tab-view">
-            <div className="bg-white border border-[#ecece0] rounded-3xl p-6 shadow-sm space-y-3" id="collector-header">
+            <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-6 shadow-sm space-y-3" id="collector-header">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
-                  <h2 className="text-xl font-bold text-[#2d2d28] flex items-center gap-2">
-                    <Database className="w-5.5 h-5.5 text-[#7c8d7c]" />
+                  <h2 className="text-xl font-bold text-[#2d2d28] dark:text-[#f4f4f5] flex items-center gap-2">
+                    <Database className="w-5.5 h-5.5 text-[#7c8d7c] dark:text-[#a2e0a2]" />
                     Interactive Gesture Recording & Dataset Dashboard
                   </h2>
-                  <p className="text-xs text-[#5a5a4a] leading-relaxed max-w-3xl mt-1">
+                  <p className="text-xs text-[#5a5a4a] dark:text-[#cbd5e1] leading-relaxed max-w-3xl mt-1">
                     Record, tag, and organize custom sign language postures. Capture hand coordinates (21 joints mapped in standard 3D space) directly from your webcam. Export datasets as standard JSON schema.
                   </p>
                 </div>
                 <div className="flex items-center gap-2 self-stretch sm:self-auto shrink-0 font-sans">
-                  <label className="flex items-center gap-2 px-3 py-1.5 bg-[#f0f2ee] hover:bg-[#e0e4db]/40 border border-[#e0e4db] rounded-xl text-xs font-bold text-[#4a4a40] cursor-pointer transition-colors shadow-sm">
+                  <label className="flex items-center gap-2 px-3 py-1.5 bg-[#f0f2ee] dark:bg-[#1c1c1f] hover:bg-[#e0e4db]/40 border border-[#e0e4db] dark:border-[#2d2d32] rounded-xl text-xs font-bold text-[#4a4a40] dark:text-[#cbd5e1] cursor-pointer transition-colors shadow-sm">
                     <Upload className="w-3.5 h-3.5 text-[#7c8d7c]" />
                     <span>Merge JSON</span>
                     <input 
@@ -2378,23 +2411,23 @@ export default function App() {
               <div className="lg:col-span-5 space-y-6">
                 
                 {/* Step-by-Step Dataset Creator Wizard Panel */}
-                <div className="bg-white border border-[#ecece0] rounded-3xl p-6 shadow-sm space-y-4" id="collector-wizard-card">
-                  <h3 className="font-extrabold text-sm text-[#2d2d28] flex items-center gap-2 uppercase tracking-wide font-mono border-b border-[#f0f2ee] pb-2.5">
-                    <Sparkles className="w-4.5 h-4.5 text-[#7c8d7c]" />
+                <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-6 shadow-sm space-y-4" id="collector-wizard-card">
+                  <h3 className="font-extrabold text-sm text-[#2d2d28] dark:text-[#f4f4f5] flex items-center gap-2 uppercase tracking-wide font-mono border-b border-[#f0f2ee] dark:border-[#2d2d32] pb-2.5">
+                    <Sparkles className="w-4.5 h-4.5 text-[#7c8d7c] dark:text-emerald-400" />
                     Dataset Creator Wizard
                   </h3>
 
                   {/* Wizard Step 1: Camera Setup */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-[#2d2d28]">Step 1: Calibration & Hardware Feed</span>
-                      <span className={`font-mono font-bold text-[10px] px-2 py-0.5 rounded ${cameraActive ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100 animate-pulse'}`}>
+                      <span className="font-bold text-[#2d2d28] dark:text-[#cbdcbc]">Step 1: Calibration & Hardware Feed</span>
+                      <span className={`font-mono font-bold text-[10px] px-2 py-0.5 rounded ${cameraActive ? 'bg-emerald-50 dark:bg-[#152e15] text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-[#204a20]' : 'bg-amber-50 dark:bg-[#2e2315] text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-[#4a3520] animate-pulse'}`}>
                         {cameraActive ? 'HARDWARE ONLINE' : 'AWAITING FEEDS'}
                       </span>
                     </div>
                     {!cameraActive ? (
-                      <div className="bg-[#fdfcf9] border border-dashed border-[#ecece0] rounded-2xl p-4 text-center">
-                        <p className="text-[11px] text-[#7a7a6a] mb-3 leading-relaxed">
+                      <div className="bg-[#fdfcf9] dark:bg-[#151518] border border-dashed border-[#ecece0] dark:border-[#2d2d32] rounded-2xl p-4 text-center">
+                        <p className="text-[11px] text-[#7a7a6a] dark:text-[#a1a1aa] mb-3 leading-relaxed">
                           Your hardware system camera feed is currently offline. Enable the camera module to stream coordinates.
                         </p>
                         <button
@@ -2406,14 +2439,14 @@ export default function App() {
                         </button>
                       </div>
                     ) : (
-                      <div className="bg-[#f0f2ee]/40 border border-[#e0e4db] rounded-2xl p-3 flex items-center justify-between text-xs">
+                      <div className="bg-[#f0f2ee]/40 dark:bg-[#1a2e1a]/40 border border-[#e0e4db] dark:border-[#254225] rounded-2xl p-3 flex items-center justify-between text-xs">
                         <div className="flex items-center gap-2">
-                          <Activity className="w-4 h-4 text-emerald-600 animate-pulse" />
-                          <span className="text-[#5a6b5a] font-medium font-sans">
+                          <Activity className="w-4 h-4 text-emerald-600 dark:text-emerald-400 animate-pulse" />
+                          <span className="text-[#5a6b5a] dark:text-[#cbdcbc] font-medium font-sans">
                             MediaPipe Core Trackers: <strong className="font-bold">{liveFps || '60'} FPS</strong>
                           </span>
                         </div>
-                        <span className="font-mono bg-emerald-100 text-emerald-800 font-black px-1.5 py-0.5 rounded text-[9px]">
+                        <span className="font-mono bg-emerald-100 dark:bg-[#172e17] text-emerald-800 dark:text-emerald-300 font-black px-1.5 py-0.5 rounded text-[9px]">
                           {detectedHandsCount === 1 ? '1 HAND CALIBRATED' : detectedHandsCount > 1 ? `${detectedHandsCount} HAND DETECTION` : 'ALIGNING HANDS...'}
                         </span>
                       </div>
@@ -2421,10 +2454,10 @@ export default function App() {
                   </div>
 
                   {/* Wizard Step 2: Target Customization label */}
-                  <div className="space-y-2 pt-2 border-t border-[#f0f2ee]">
+                  <div className="space-y-2 pt-2 border-t border-[#f0f2ee] dark:border-[#2d2d32]">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-[#2d2d28]">Step 2: Key In Posture Target Label</span>
-                      <span className="text-[10px] font-mono font-bold text-[#9a9a8a]">CURRENT_TAG</span>
+                      <span className="font-bold text-[#2d2d28] dark:text-[#cbdcbc]">Step 2: Key In Posture Target Label</span>
+                      <span className="text-[10px] font-mono font-bold text-[#9a9a8a] dark:text-[#a1a1aa]">CURRENT_TAG</span>
                     </div>
                     <div className="flex gap-2">
                       <input
@@ -2432,7 +2465,7 @@ export default function App() {
                         value={sampleLabel}
                         onChange={(e) => setSampleLabel(e.target.value.toUpperCase().slice(0, 15))}
                         placeholder="e.g. A, HELLO, PEACE"
-                        className="flex-1 bg-[#fdfcf9] border border-[#e0e4db] text-xs font-bold text-[#2d2d28] py-2 px-3 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#7c8d7c] transition-shadow uppercase font-mono shadow-sm"
+                        className="flex-1 bg-[#fdfcf9] dark:bg-[#151518] border border-[#e0e4db] dark:border-[#2d2d32] text-xs font-bold text-[#2d2d28] dark:text-white py-2 px-3 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#7c8d7c] transition-shadow uppercase font-mono shadow-sm"
                         maxLength={15}
                       />
                       <div className="flex gap-1">
@@ -2443,8 +2476,8 @@ export default function App() {
                             type="button"
                             className={`px-2 py-1 text-[10px] font-mono font-extrabold border rounded-lg transition-colors ${
                               sampleLabel === preset 
-                                ? 'bg-[#7c8d7c] text-white border-[#7c8d7c]' 
-                                : 'bg-white hover:bg-neutral-50 border-neutral-200 text-neutral-500'
+                                ? 'bg-[#7c8d7c] dark:bg-[#4d5c4d] text-white border-[#7c8d7c] dark:border-[#3b473b]' 
+                                : 'bg-white dark:bg-[#151518] hover:bg-neutral-50 dark:hover:bg-neutral-900 border-neutral-200 dark:border-[#2d2d32] text-neutral-500 dark:text-[#a1a1aa]'
                             }`}
                           >
                             {preset}
@@ -2455,14 +2488,14 @@ export default function App() {
                   </div>
 
                   {/* Wizard Step 3: Trigger Landmarks Capture Nodes */}
-                  <div className="space-y-3 pt-2 border-t border-[#f0f2ee]">
+                  <div className="space-y-3 pt-2 border-t border-[#f0f2ee] dark:border-[#2d2d32]">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-[#2d2d28]">Step 3: Collect Telemetry Coordinates</span>
-                      <span className="text-[10px] text-[#9a9a8a] font-mono font-bold">MODE_SELECTOR</span>
+                      <span className="font-bold text-[#2d2d28] dark:text-[#cbdcbc]">Step 3: Collect Telemetry Coordinates</span>
+                      <span className="text-[10px] text-[#9a9a8a] dark:text-[#a1a1aa] font-mono font-bold">MODE_SELECTOR</span>
                     </div>
 
                     {collectorError && (
-                      <div className="bg-rose-50 border border-rose-100 text-[#a36b5e] rounded-xl p-2.5 text-[10px] leading-relaxed flex items-start gap-2">
+                      <div className="bg-rose-50 dark:bg-[#2e1517] border border-rose-100 dark:border-rose-950 text-[#a36b5e] dark:text-rose-400 rounded-xl p-2.5 text-[10px] leading-relaxed flex items-start gap-2">
                         <ShieldAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                         <span>{collectorError}</span>
                       </div>
@@ -2478,7 +2511,7 @@ export default function App() {
                         className={`py-3 px-4 rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-sm ${
                           cameraActive && detectedHandsCount > 0
                             ? 'bg-[#7c8d7c] text-white hover:bg-[#6c7d6c]'
-                            : 'bg-neutral-100 text-neutral-400 border border-neutral-200 cursor-not-allowed'
+                            : 'bg-neutral-100 dark:bg-neutral-900 text-neutral-400 dark:text-neutral-600 border border-neutral-200 dark:border-neutral-800 cursor-not-allowed'
                         }`}
                       >
                         <Plus className="w-4 h-4" />
@@ -2492,10 +2525,10 @@ export default function App() {
                         type="button"
                         className={`py-3 px-4 rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 border shadow-sm ${
                           continuousActive
-                            ? 'bg-[#a36b5e] text-white border-[#a36b5e] hover:bg-[#935b4e]'
+                            ? 'bg-[#a36b5e] dark:bg-[#c2614c] text-white border-[#a36b5e] dark:border-[#c2614c] hover:bg-[#935b4e]'
                             : cameraActive
-                            ? 'bg-[#fdfcf9] text-[#7c8d7c] border-[#e0e4db] hover:bg-[#f0f2ee]'
-                            : 'bg-neutral-50 text-neutral-400 border-neutral-100 cursor-not-allowed'
+                            ? 'bg-[#fdfcf9] dark:bg-[#1c1c1e] text-[#7c8d7c] dark:text-[#cbdcbc] border-[#e0e4db] dark:border-[#2d2d32] hover:bg-[#f0f2ee] dark:hover:bg-neutral-900 hover:border-[#7c8d7c]'
+                            : 'bg-neutral-50 dark:bg-[#151518]/40 text-neutral-400 dark:text-neutral-600 border border-neutral-100 dark:border-neutral-900/40 cursor-not-allowed'
                         }`}
                       >
                         {continuousActive ? (
@@ -2505,7 +2538,7 @@ export default function App() {
                           </>
                         ) : (
                           <>
-                            <Play className="w-3.5 h-3.5 text-[#7c8d7c]" />
+                            <Play className="w-3.5 h-3.5 text-[#7c8d7c] dark:text-[#cbdcbc]" />
                             Continuous Capture
                           </>
                         )}
@@ -2514,7 +2547,7 @@ export default function App() {
                     </div>
 
                     {/* Capture Feedback Frame flash effect emulator */}
-                    <div className="relative aspect-video bg-neutral-900 rounded-2xl overflow-hidden border border-[#e0e4db]" id="collector-preview-placeholder">
+                    <div className="relative aspect-video bg-neutral-900 rounded-2xl overflow-hidden border border-[#e0e4db] dark:border-[#2d2d32]" id="collector-preview-placeholder">
                       {cameraActive ? (
                         <div className="relative w-full h-full">
                           <video 
@@ -2543,15 +2576,15 @@ export default function App() {
 
                           {/* Flash feedback animation */}
                           {flashCollectorEffect && (
-                            <div className="absolute inset-0 bg-white/90 animate-pulse pointer-events-none z-10 flex items-center justify-center">
-                              <span className="bg-[#7c8d7c] text-white font-mono text-xs font-black uppercase tracking-wider px-3 py-1.5 rounded-xl shadow-lg border border-white/15">
+                            <div className="absolute inset-0 bg-white/90 dark:bg-black/90 animate-pulse pointer-events-none z-10 flex items-center justify-center">
+                              <span className="bg-[#7c8d7c] dark:bg-emerald-600 text-white font-mono text-xs font-black uppercase tracking-wider px-3 py-1.5 rounded-xl shadow-lg border border-white/15">
                                 SAMPLE RECORDED ✓
                               </span>
                             </div>
                           )}
                         </div>
                       ) : (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center text-[#9a9a8a] text-[11px]" id="collector-cam-inactive">
+                        <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center text-[#9a9a8a] dark:text-[#a1a1aa] text-[11px]" id="collector-cam-inactive">
                           <Camera className="w-8 h-8 text-neutral-400 mb-2" />
                           <p>Webcam feedback module currently offline.</p>
                           <button
@@ -2566,15 +2599,15 @@ export default function App() {
                     </div>
 
                     {/* Continuous speed customization */}
-                    <div className="bg-[#fdfcf9] border border-[#ecece0] rounded-xl p-3 flex items-center justify-between gap-4 text-[10px]">
+                    <div className="bg-[#fdfcf9] dark:bg-[#151518] border border-[#ecece0] dark:border-[#2d2d32] rounded-xl p-3 flex items-center justify-between gap-4 text-[10px]">
                       <div>
-                        <span className="font-bold text-[#4a4a40] block">Continuous Recording Rate</span>
-                        <span className="text-[#9a9a8a] text-[9px]">Interval rate for automated loop records.</span>
+                        <span className="font-bold text-[#4a4a40] dark:text-[#cbdcbc] block">Continuous Recording Rate</span>
+                        <span className="text-[#9a9a8a] dark:text-[#a1a1aa] text-[9px]">Interval rate for automated loop records.</span>
                       </div>
                       <select
                         value={continuousTimerMs}
                         onChange={(e) => setContinuousTimerMs(Number(e.target.value))}
-                        className="bg-[#f0f2ee] border border-[#e0e4db] text-xs font-bold text-[#2d2d28] p-1.5 rounded-lg focus:outline-none"
+                        className="bg-[#f0f2ee] dark:bg-[#1c1c1e] border border-[#e0e4db] dark:border-[#2d2d32] text-xs font-bold text-[#2d2d28] dark:text-[#cbdcbc] p-1.5 rounded-lg focus:outline-none"
                       >
                         <option value={1000}>Fast (1.0s)</option>
                         <option value={1500}>Medium (1.5s)</option>
@@ -2585,36 +2618,35 @@ export default function App() {
 
                   </div>
                 </div>
-
               </div>
 
-              {/* Right Column: Recorded Samples Hub & Balance Metrics charts */}
+                        {/* Right Column: Recorded Samples Hub & Balance Metrics charts */}
               <div className="lg:col-span-7 space-y-6">
                 
                 {/* Real-time Dataset Ballance KPI metrics */}
-                <div className="bg-white border border-[#ecece0] rounded-3xl p-6 shadow-sm space-y-4" id="dataset-analytics-panel">
-                  <h3 className="font-extrabold text-sm text-[#2d2d28] uppercase tracking-wide font-mono border-b border-[#f0f2ee] pb-2.5">
+                <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-6 shadow-sm space-y-4" id="dataset-analytics-panel">
+                  <h3 className="font-extrabold text-sm text-[#2d2d28] dark:text-[#f4f4f5] uppercase tracking-wide font-mono border-b border-[#f0f2ee] dark:border-[#2d2d32] pb-2.5">
                     Dataset Distribution Analytics
                   </h3>
                   
                   {collectedSamples.length > 0 ? (
                     <div className="space-y-3">
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <div className="bg-[#fdfcf9] border border-[#ecece0] rounded-2xl p-3 text-center">
-                          <span className="text-[9px] text-[#9a9a8a] font-mono uppercase block">Total Samples</span>
-                          <span className="text-xl font-black text-[#2d2d28] font-mono mt-1 block">
+                        <div className="bg-[#fdfcf9] dark:bg-[#151518] border border-[#ecece0] dark:border-[#2d2d32] rounded-2xl p-3 text-center">
+                          <span className="text-[9px] text-[#9a9a8a] dark:text-[#a1a1aa] font-mono uppercase block">Total Samples</span>
+                          <span className="text-xl font-black text-[#2d2d28] dark:text-[#f4f4f5] font-mono mt-1 block">
                             {collectedSamples.length}
                           </span>
                         </div>
-                        <div className="bg-[#fdfcf9] border border-[#ecece0] rounded-2xl p-3 text-center">
-                          <span className="text-[9px] text-[#9a9a8a] font-mono uppercase block">Unique Classes</span>
-                          <span className="text-xl font-black text-[#7c8d7c] font-mono mt-1 block">
+                        <div className="bg-[#fdfcf9] dark:bg-[#151518] border border-[#ecece0] dark:border-[#2d2d32] rounded-2xl p-3 text-center">
+                          <span className="text-[9px] text-[#9a9a8a] dark:text-[#a1a1aa] font-mono uppercase block">Unique Classes</span>
+                          <span className="text-xl font-black text-[#7c8d7c] dark:text-[#cbdcbc] font-mono mt-1 block">
                             {Array.from(new Set(collectedSamples.map(s => s.label))).length}
                           </span>
                         </div>
-                        <div className="bg-[#fdfcf9] border border-[#ecece0] rounded-2xl p-3 text-center col-span-2">
-                          <span className="text-[9px] text-[#9a9a8a] font-mono uppercase block">Most Screened Class</span>
-                          <span className="text-xs font-bold text-[#2d2d28] font-mono mt-2 block truncate">
+                        <div className="bg-[#fdfcf9] dark:bg-[#151518] border border-[#ecece0] dark:border-[#2d2d32] rounded-2xl p-3 text-center col-span-2">
+                          <span className="text-[9px] text-[#9a9a8a] dark:text-[#a1a1aa] font-mono uppercase block">Most Screened Class</span>
+                          <span className="text-xs font-bold text-[#2d2d28] dark:text-[#cbdcbc] font-mono mt-2 block truncate font-black">
                             {(() => {
                               const counts: Record<string, number> = {};
                               collectedSamples.forEach(s => counts[s.label] = (counts[s.label] || 0) + 1);
@@ -2627,7 +2659,7 @@ export default function App() {
 
                       {/* Distribution horizontal progress bars */}
                       <div className="space-y-2">
-                        <span className="text-[9px] text-[#9a9a8a] uppercase tracking-wider font-mono font-bold block animate-pulse">
+                        <span className="text-[9px] text-[#9a9a8a] dark:text-[#a1a1aa] uppercase tracking-wider font-mono font-bold block animate-pulse">
                           Recorded Sample Density by label class
                         </span>
                         <div className="max-h-[140px] overflow-y-auto space-y-2.5 pr-1 font-sans">
@@ -2640,10 +2672,10 @@ export default function App() {
                               return (
                                 <div key={label} className="text-[10px] space-y-1">
                                   <div className="flex justify-between font-mono font-semibold">
-                                    <span className="text-[#2d2d28]">Class Label: "{label}"</span>
-                                    <span className="text-[#9a9a8a]">{count} samples ({pct}%)</span>
+                                    <span className="text-[#2d2d28] dark:text-[#cbdcbc]">Class Label: "{label}"</span>
+                                    <span className="text-[#9a9a8a] dark:text-[#a1a1aa]">{count} samples ({pct}%)</span>
                                   </div>
-                                  <div className="w-full h-1.5 bg-[#f0f2ee] rounded-full overflow-hidden">
+                                  <div className="w-full h-1.5 bg-[#f0f2ee] dark:bg-zinc-800 rounded-full overflow-hidden">
                                     <div className="h-full bg-[#7c8d7c] rounded-full transition-all duration-300" style={{ width: `${pct}%` }} />
                                   </div>
                                 </div>
@@ -2654,18 +2686,18 @@ export default function App() {
                       </div>
                     </div>
                   ) : (
-                    <div className="py-6 text-center text-xs text-[#9a9a8a] italic leading-relaxed">
+                    <div className="py-6 text-center text-xs text-[#9a9a8a] dark:text-[#a1a1aa] italic leading-relaxed">
                       Collect coordinates to view interactive balance distribution analytics. Use preset letters or type labels above.
                     </div>
                   )}
                 </div>
 
                 {/* Recorded Samples Table Database */}
-                <div className="bg-white border border-[#ecece0] rounded-3xl p-6 shadow-sm space-y-4" id="samples-database-card">
-                  <div className="flex items-center justify-between border-b border-[#f0f2ee] pb-2.5">
-                    <h3 className="font-extrabold text-sm text-[#2d2d28] uppercase tracking-wide font-mono flex items-center gap-2">
+                <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-6 shadow-sm space-y-4" id="samples-database-card">
+                  <div className="flex items-center justify-between border-b border-[#f0f2ee] dark:border-[#2d2d32] pb-2.5">
+                    <h3 className="font-extrabold text-sm text-[#2d2d28] dark:text-[#f4f4f5] uppercase tracking-wide font-mono flex items-center gap-2">
                       Live Coordinate Buffer
-                      <span className="bg-[#f0f2ee] text-[#7c8d7c] text-[10px] px-2.5 py-0.5 rounded-full border border-[#e0e4db] font-black">
+                      <span className="bg-[#f0f2ee] dark:bg-[#1c1c1f] text-[#7c8d7c] dark:text-[#cbdcbc] text-[10px] px-2.5 py-0.5 rounded-full border border-[#e0e4db] dark:border-[#2d2d22] font-black">
                         {collectedSamples.length} ITEMS
                       </span>
                     </h3>
@@ -2686,23 +2718,23 @@ export default function App() {
                       return (
                         <div 
                           key={sample.id} 
-                          className="p-3.5 rounded-2xl bg-[#fdfcf9] border border-[#f0f2ee] space-y-2.5 hover:border-[#7c8d7c]/30 transition-colors"
+                          className="p-3.5 rounded-2xl bg-[#fdfcf9] dark:bg-[#151518] border border-[#f0f2ee] dark:border-[#2d2d32]/60 space-y-2.5 hover:border-[#7c8d7c]/30 transition-colors"
                           id={sample.id}
                         >
                           <div className="flex items-center justify-between gap-4 text-xs">
                             <div className="flex items-center gap-2.5 min-w-0">
-                              <span className="font-mono bg-[#7c8d7c] text-white px-2 py-0.5 rounded font-black text-[10px]">
+                              <span className="font-mono bg-[#7c8d7c] dark:bg-[#4d5c4d] text-white px-2 py-0.5 rounded font-black text-[10px]">
                                 {sample.label}
                               </span>
                               <div className="min-w-0">
-                                <p className="font-mono text-[9px] text-[#9a9a8a] truncate">Hash: {idShort}</p>
-                                <p className="text-[10px] text-neutral-500 font-sans mt-0.5">{sample.timestamp} ({sample.landmarks.length} joints)</p>
+                                <p className="font-mono text-[9px] text-[#9a9a8a] dark:text-[#a1a1aa] truncate">Hash: {idShort}</p>
+                                <p className="text-[10px] text-neutral-500 dark:text-[#cbdcbc] font-sans mt-0.5">{sample.timestamp} ({sample.landmarks.length} joints)</p>
                               </div>
                             </div>
                             <button
                               onClick={() => handleDeleteSample(sample.id)}
                               type="button"
-                              className="text-neutral-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-neutral-100 transition-colors"
+                              className="text-neutral-400 dark:text-[#a1a1aa] hover:text-red-500 p-1.5 rounded-lg hover:bg-neutral-100 dark:hover:bg-[#202024] transition-colors"
                               title="Delete coordinate landmark sample"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -2710,13 +2742,13 @@ export default function App() {
                           </div>
 
                           {/* Raw Coordinate expansion nodes */}
-                          <details className="group bg-[#f0f2ee]/40 rounded-xl overflow-hidden border border-[#e0e4db]/50 text-[9px] font-mono">
-                            <summary className="px-3 py-1.5 cursor-pointer font-bold text-[#5a5a4a] select-none hover:bg-[#f0f2ee]/80 transition-colors list-none flex items-center justify-between">
+                          <details className="group bg-[#f0f2ee]/40 dark:bg-[#18181a]/40 rounded-xl overflow-hidden border border-[#e0e4db]/50 dark:border-[#2d2d32]/50 text-[9px] font-mono">
+                            <summary className="px-3 py-1.5 cursor-pointer font-bold text-[#5a5a4a] dark:text-[#cbdcbc] select-none hover:bg-[#f0f2ee]/80 dark:hover:bg-white/5 transition-colors list-none flex items-center justify-between">
                               <span>Show Hand Vectors JSON</span>
                               <span className="text-[8px] opacity-60 group-open:hidden">▼ Expand</span>
                               <span className="text-[8px] opacity-60 hidden group-open:inline">▲ Collapse</span>
                             </summary>
-                            <div className="p-3 bg-[#e8eae4]/30 border-t border-[#e0e4db] max-h-[120px] overflow-y-auto text-[8px] text-zinc-600 leading-normal scrollbar-thin">
+                            <div className="p-3 bg-[#e8eae4]/30 dark:bg-zinc-950/20 border-t border-[#e0e4db] dark:border-[#2d2d32] max-h-[120px] overflow-y-auto text-[8px] text-zinc-600 dark:text-zinc-400 leading-normal scrollbar-thin">
                               <pre className="whitespace-pre-wrap">
                                 {JSON.stringify(sample.landmarks.slice(0, 6), null, 2)}
                                 <span className="opacity-40 italic block mt-1">... [{sample.landmarks.length - 6} more joint coordinates]</span>
@@ -2728,14 +2760,13 @@ export default function App() {
                     })}
 
                     {collectedSamples.length === 0 && (
-                      <div className="py-12 text-center text-xs text-[#9a9a8a] italic leading-relaxed">
+                      <div className="py-12 text-center text-xs text-[#9a9a8a] dark:text-[#a1a1aa] italic leading-relaxed">
                         No telemetry coordinates compiled yet.<br/>
                         Align your hand posture and click <strong className="font-bold">Snap landmarks</strong>.
                       </div>
                     )}
                   </div>
                 </div>
-
               </div>
 
             </div>
@@ -2771,13 +2802,13 @@ export default function App() {
 
         {/* Sandbox Architecture & Files Explained Tab view separately */}
         {activeTab === 'files' && (
-          <div className="bg-white border border-[#ecece0] rounded-3xl p-6 shadow-sm space-y-6 text-xs text-[#4a4a40]" id="files-tab-view">
-            <div className="border-b border-[#f0f2ee] pb-4 flex items-center justify-between" id="developer-gateway-title">
+          <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-6 shadow-sm space-y-6 text-xs text-[#4a4a40] dark:text-[#cbd5e1]" id="files-tab-view">
+            <div className="border-b border-[#f0f2ee] dark:border-[#2d2d32] pb-4 flex items-center justify-between" id="developer-gateway-title">
               <div>
-                <h2 className="text-base font-bold text-[#2d2d28]">Sandbox File System Explanation</h2>
-                <p className="text-xs text-[#7a7a6a] mt-0.5">A tour of files created to build the 30-Day Project Foundation is detailed below</p>
+                <h2 className="text-base font-bold text-[#2d2d28] dark:text-[#f4f4f5]">Sandbox File System Explanation</h2>
+                <p className="text-xs text-[#7a7a6a] dark:text-[#a1a1aa] mt-0.5">A tour of files created to build the 30-Day Project Foundation is detailed below</p>
               </div>
-              <span className="bg-[#f0f2ee] text-[#7c8d7c] font-mono text-[10px] px-3 py-1 rounded border border-[#e0e4db] font-black">
+              <span className="bg-[#f0f2ee] dark:bg-[#1c1c1f] text-[#7c8d7c] dark:text-[#cbdcbc] font-mono text-[10px] px-3 py-1 rounded border border-[#e0e4db] dark:border-[#2d2d22] font-black">
                 STABLE RELEASE
               </span>
             </div>
@@ -2785,24 +2816,24 @@ export default function App() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6" id="files-grid">
               
               <div className="space-y-4 font-sans leading-relaxed" id="api-files-info">
-                <h3 className="font-bold text-[#2d2d28] flex items-center gap-2">
-                  <FileCode className="w-4.5 h-4.5 text-[#7c8d7c]" />
-                  1. Server Side Core: <code className="bg-neutral-100 p-1 rounded font-mono font-bold">/server.ts</code>
+                <h3 className="font-bold text-[#2d2d28] dark:text-[#f4f4f5] flex items-center gap-2">
+                  <FileCode className="w-4.5 h-4.5 text-[#7c8d7c] dark:text-[#9cd39c]" />
+                  1. Server Side Core: <code className="bg-neutral-100 dark:bg-zinc-800 text-slate-800 dark:text-slate-200 p-1 rounded font-mono font-bold">/server.ts</code>
                 </h3>
                 <p>
                   Acts as the gateway controller. Implements rapid Express orchestration mapping port 3000 as the only externally accessible proxy layer. 
                 </p>
                 <ul className="list-disc pl-5 space-y-1.5 font-sans">
-                  <li><strong>Health check API</strong> (<code className="font-mono text-[11px] bg-neutral-100 px-1 rounded">/api/health</code>): Dynamically check and notify if the Gemini service keys are live.</li>
-                  <li><strong>Multimodal Frame recognition API</strong> (<code className="font-mono text-[11px] bg-neutral-100 px-1 rounded">/api/translate-frame</code>): Receives camera elements snapshots in standard base64 strings and prompts Gemini-3.5-flash with schema constraints.</li>
+                  <li><strong>Health check API</strong> (<code className="font-mono text-[11px] bg-neutral-100 dark:bg-[#27272a] text-slate-800 dark:text-slate-200 px-1 rounded">/api/health</code>): Dynamically check and notify if the Gemini service keys are live.</li>
+                  <li><strong>Multimodal Frame recognition API</strong> (<code className="font-mono text-[11px] bg-neutral-100 dark:bg-[#27272a] text-slate-800 dark:text-slate-200 px-1 rounded">/api/translate-frame</code>): Receives camera elements snapshots in standard base64 strings and prompts Gemini-3.5-flash with schema constraints.</li>
                   <li><strong>Simulated sandbox offline</strong>: Fallback state handler maps realistic translation responses on offline systems so learners aren't blocked.</li>
                 </ul>
               </div>
 
               <div className="space-y-4 font-sans leading-relaxed" id="client-files-info">
-                <h3 className="font-bold text-[#2d2d28] flex items-center gap-2">
-                  <Layers className="w-4.5 h-4.5 text-[#7c8d7c]" />
-                  2. UI Components: <code className="bg-neutral-100 p-1 rounded font-mono font-bold">/src/components/*</code>
+                <h3 className="font-bold text-[#2d2d28] dark:text-[#f4f4f5] flex items-center gap-2">
+                  <Layers className="w-4.5 h-4.5 text-[#7c8d7c] dark:text-[#9cd39c]" />
+                  2. UI Components: <code className="bg-neutral-100 dark:bg-zinc-800 text-slate-800 dark:text-slate-200 p-1 rounded font-mono font-bold">/src/components/*</code>
                 </h3>
                 <p>
                   Built standard robust structures:
@@ -2815,9 +2846,9 @@ export default function App() {
               </div>
 
               <div className="space-y-4 font-sans leading-relaxed" id="cv-files-info">
-                <h3 className="font-bold text-[#2d2d28] flex items-center gap-2">
-                  <Activity className="w-4.5 h-4.5 text-[#7c8d7c]" />
-                  3. Computer Vision Core: <code className="bg-neutral-100 p-1 rounded font-mono font-bold">MediaPipe Hands SDK</code>
+                <h3 className="font-bold text-[#2d2d28] dark:text-[#f4f4f5] flex items-center gap-2">
+                  <Activity className="w-4.5 h-4.5 text-[#7c8d7c] dark:text-[#9cd39c]" />
+                  3. Computer Vision Core: <code className="bg-neutral-100 dark:bg-zinc-800 text-slate-800 dark:text-slate-200 p-1 rounded font-mono font-bold">MediaPipe Hands SDK</code>
                 </h3>
                 <p>
                   Drives live high-performance on-device computer vision tracking:
@@ -2831,12 +2862,12 @@ export default function App() {
 
             </div>
 
-            <div className="p-4 bg-[#fdfcf9] border border-[#e8e4db] rounded-2xl flex items-start gap-3" id="deployment-hint">
-              <Info className="w-4.5 h-4.5 mt-0.5 text-[#a36b5e] shrink-0" />
+            <div className="p-4 bg-[#fdfcf9] dark:bg-[#151518] border border-[#e8e4db] dark:border-[#2d2d32] rounded-2xl flex items-start gap-3" id="deployment-hint">
+              <Info className="w-4.5 h-4.5 mt-0.5 text-[#a36b5e] dark:text-[#e28370] shrink-0" />
               <div>
-                <h4 className="font-bold text-[#2d2d28]">Vite Compilation Strategy</h4>
-                <p className="mt-0.5 leading-relaxed text-[#5a5a4a]">
-                  Our scripts are configured so compiling output automatically stores under <code className="bg-neutral-100 px-1 py-0.5 rounded font-mono text-[10px]">/dist</code> during <code className="font-mono text-[10px] bg-neutral-100 px-1 py-0.5 rounded">npm run build</code>, ensuring seamless deployment in all environment containers.
+                <h4 className="font-bold text-[#2d2d28] dark:text-[#cbd5e1]">Vite Compilation Strategy</h4>
+                <p className="mt-0.5 leading-relaxed text-[#5a5a4a] dark:text-[#a1a1aa]">
+                  Our scripts are configured so compiling output automatically stores under <code className="bg-neutral-100 dark:bg-[#202022] text-slate-800 dark:text-slate-200 px-1 py-0.5 rounded font-mono text-[10px]">/dist</code> during <code className="font-mono text-[10px] bg-neutral-100 dark:bg-[#202022] text-slate-800 dark:text-slate-200 px-1 py-0.5 rounded">npm run build</code>, ensuring seamless deployment in all environment containers.
                 </p>
               </div>
             </div>
@@ -2846,7 +2877,7 @@ export default function App() {
       </main>
 
       {/* Decorative footer */}
-      <footer className="mt-auto h-16 bg-white/50 border-t border-[#ecece0] px-6 sm:px-8 flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-[#9a9a8a]" id="page-footer">
+      <footer className="mt-auto h-16 bg-white/50 dark:bg-[#121214]/50 border-t border-[#ecece0] dark:border-[#2d2d32] px-6 sm:px-8 flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-[#9a9a8a] dark:text-[#9e9e9e]" id="page-footer">
         <div className="flex gap-4 sm:gap-6 truncate">
           <span>Server: Express 4.x Port 3000</span>
           <span className="hidden md:inline">Model: Gemini 3.5 Flash Client</span>
