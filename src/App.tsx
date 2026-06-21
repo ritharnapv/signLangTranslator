@@ -4,6 +4,10 @@ import TimelineRoadmap from './components/TimelineRoadmap';
 import SignDictionary from './components/SignDictionary';
 import DatasetManagement from './components/DatasetManagement';
 import ModelTrainer from './components/ModelTrainer';
+import UserAuth from './components/UserAuth';
+import UserProfile from './components/UserProfile';
+import { auth } from './firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import * as tf from '@tensorflow/tfjs';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, Legend, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { 
@@ -79,7 +83,17 @@ export default function App() {
     localStorage.setItem('dark_mode_preference', String(darkMode));
   }, [darkMode]);
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'dictionary' | 'roadmap' | 'collector' | 'datasets' | 'trainer' | 'files'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'dictionary' | 'roadmap' | 'collector' | 'datasets' | 'trainer' | 'files' | 'profile'>('dashboard');
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [authLoading, setAuthLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (usr) => {
+      setCurrentUser(usr);
+      setAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
   const [trainedClientModel, setTrainedClientModel] = useState<tf.LayersModel | null>(null);
   const [trainedClasses, setTrainedClasses] = useState<string[]>([]);
   const [predictionSource, setPredictionSource] = useState<'simulated' | 'tensorflow'>('simulated');
@@ -1201,6 +1215,27 @@ export default function App() {
     return "data:image/jpeg;base64,/9j/2wCEAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=";
   };
 
+  if (authLoading) {
+    return (
+      <div className={`min-h-screen flex flex-col items-center justify-center p-4 ${darkMode ? 'bg-[#121214] text-[#d4d4d8]' : 'bg-[#fdfcf9] text-[#4a4a40]'}`} id="auth-loading-screen">
+        <div className="w-12 h-12 bg-[#7c8d7c] rounded-3xl flex items-center justify-center text-white animate-spin mb-4 shadow-md">
+          <RefreshCw className="w-6 h-6" />
+        </div>
+        <p className="text-sm font-bold font-sans tracking-wide">SignSense AI</p>
+        <p className="text-[10px] text-neutral-400 mt-1 font-mono uppercase tracking-widest">Enabling secure authentication...</p>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <UserAuth 
+        onAuthSuccess={() => setActiveTab('dashboard')} 
+        darkMode={darkMode} 
+      />
+    );
+  }
+
   return (
     <div className="bg-[#fdfcf9] dark:bg-[#121214] text-[#4a4a40] dark:text-[#d4d4d8] min-h-screen flex flex-col font-sans selection:bg-[#7c8d7c]/20" id="main-container">
       
@@ -1299,6 +1334,17 @@ export default function App() {
           >
             Sandbox File System
           </button>
+          <button
+            onClick={() => setActiveTab('profile')}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
+              activeTab === 'profile'
+                ? "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white shadow-sm"
+                : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
+            }`}
+            id="tab-profile-btn"
+          >
+            Account Profile
+          </button>
         </div>
 
         {/* Right Nav-bar: Dark mode switcher & health tags */}
@@ -1325,9 +1371,20 @@ export default function App() {
             } animate-pulse`}></span>
             <span className="hidden sm:inline">{health.status === "connected" ? "API CONNECTED" : "SANDBOX LOCAL"}</span>
           </div>
-          <div className="w-9 h-9 rounded-full bg-[#f0f2ee] dark:bg-[#1f1f22] border border-[#e0e4db] dark:border-[#2d2d32] flex items-center justify-center text-xs font-bold text-[#7c8d7c] dark:text-[#a1a1aa]" title="Self Practice Account">
-            RP
-          </div>
+          <button 
+            onClick={() => setActiveTab('profile')}
+            className={`w-9 h-9 rounded-full px-1 border flex items-center justify-center text-xs font-bold tracking-wider relative uppercase transition-all duration-300 cursor-pointer ${
+              activeTab === 'profile'
+                ? "bg-[#7c8d7c] text-white border-[#7c8d7c]"
+                : "bg-[#f0f2ee] dark:bg-[#1f1f22] border-[#e0e4db] dark:border-[#2d2d32] text-[#7c8d7c] dark:text-[#a1a1aa] hover:border-[#7c8d7c]"
+            }`}
+            title="User Settings Coordinates"
+            id="nav-profile-avatar"
+          >
+            {currentUser?.displayName 
+              ? currentUser.displayName.substring(0, 2) 
+              : currentUser?.email?.substring(0, 2) || "OP"}
+          </button>
         </div>
       </nav>
 
@@ -2872,6 +2929,22 @@ export default function App() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* User Profile Tab View */}
+        {activeTab === 'profile' && (
+          <UserProfile 
+            localSessions={sessions}
+            localSamples={collectedSamples}
+            onRestoreSessions={(restored) => setSessions(restored)}
+            onRestoreSamples={(restored) => {
+              setCollectedSamples(restored);
+              localStorage.setItem('asl_collected_samples', JSON.stringify(restored));
+            }}
+            onSignOut={() => {
+              setActiveTab('dashboard');
+            }}
+          />
         )}
 
       </main>
