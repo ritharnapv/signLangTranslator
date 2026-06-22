@@ -2833,6 +2833,7 @@ export default function App() {
         {/* Dataset Management Tab */}
         {activeTab === 'datasets' && (
           <DatasetManagement 
+            currentUser={currentUser}
             collectedSamples={collectedSamples}
             onImportSamples={(samples) => {
               setCollectedSamples(samples);

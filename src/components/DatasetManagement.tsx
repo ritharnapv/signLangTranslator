@@ -3,9 +3,12 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Upload, Trash2, Download, Code2, Database, Plus, FileJson, 
   Search, Check, Copy, BarChart3, BrainCircuit, ListFilter, 
-  RefreshCcw, AlertCircle, FileSpreadsheet, Share2, Clipboard, ChevronDown, ChevronUp
+  RefreshCcw, AlertCircle, FileSpreadsheet, Share2, Clipboard, ChevronDown, ChevronUp,
+  Edit2, Cloud, HardDrive, Save, Activity
 } from 'lucide-react';
 import { CollectedSample } from '../types';
+import { db } from '../firebase';
+import { collection, doc, getDocs, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 
 interface DatasetItem {
   id: string;
@@ -16,15 +19,19 @@ interface DatasetItem {
   categories: string[];
   sampleStatistics: Record<string, number>;
   size: string;
+  ownerId?: string;
+  ownerEmail?: string;
 }
 
 interface DatasetManagementProps {
+  currentUser: any;
   collectedSamples: CollectedSample[];
   onImportSamples: (samples: CollectedSample[]) => void;
   onClearLocalSamples: () => void;
 }
 
 export default function DatasetManagement({ 
+  currentUser,
   collectedSamples, 
   onImportSamples,
   onClearLocalSamples 
@@ -33,6 +40,13 @@ export default function DatasetManagement({
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [storageMode, setStorageMode] = useState<'cloud' | 'local'>('cloud');
+  
+  // Custom Edit Dataset metadata (CRUD "Update")
+  const [editingDataset, setEditingDataset] = useState<DatasetItem | null>(null);
+  const [editName, setEditName] = useState<string>('');
+  const [editDesc, setEditDesc] = useState<string>('');
+  const [isSavingEdit, setIsSavingEdit] = useState<boolean>(false);
   
   // Tab within Dataset Hub
   const [innerTab, setInnerTab] = useState<'datasets' | 'api' | 'package'>('datasets');
@@ -59,22 +73,40 @@ export default function DatasetManagement({
   const [copiedCodeId, setCopiedCodeId] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchDatasets();
-  }, []);
+    fetchDatasets(storageMode);
+  }, [storageMode, currentUser]);
 
-  const fetchDatasets = async () => {
+  const fetchDatasets = async (modeOverride?: 'cloud' | 'local') => {
+    const activeMode = modeOverride || storageMode;
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/datasets');
-      if (!res.ok) {
-        throw new Error(`Failed to load datasets: ${res.statusText}`);
+      if (activeMode === 'cloud') {
+        if (!currentUser) {
+          setDatasets([]);
+          return;
+        }
+        // Fetch from Firestore: users/{uid}/datasets
+        const colRef = collection(db, "users", currentUser.uid, "datasets");
+        const querySnap = await getDocs(colRef);
+        const fetched: DatasetItem[] = [];
+        querySnap.forEach((docSnap) => {
+          fetched.push(docSnap.data() as DatasetItem);
+        });
+        // Sort by creation time descending
+        fetched.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        setDatasets(fetched);
+      } else {
+        const res = await fetch('/api/datasets');
+        if (!res.ok) {
+          throw new Error(`Failed to load datasets: ${res.statusText}`);
+        }
+        const data = await res.json();
+        setDatasets(data);
       }
-      const data = await res.json();
-      setDatasets(data);
     } catch (err: any) {
       console.error(err);
-      setError(err.message || "Network error while downloading global datasets.");
+      setError(err.message || "Network error while downloading datasets.");
     } finally {
       setIsLoading(false);
     }
@@ -87,7 +119,7 @@ export default function DatasetManagement({
     }, 4500);
   };
 
-  // Compile local webcam session specimens to save as dataset to backend
+  // Compile local webcam session specimens to save as dataset
   const handleCompileSession = async (e: React.FormEvent) => {
     e.preventDefault();
     if (collectedSamples.length === 0) {
@@ -102,22 +134,52 @@ export default function DatasetManagement({
     setIsCompiling(true);
     setError(null);
     try {
-      const res = await fetch('/api/datasets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: newName,
-          description: newDesc || "Custom structured sign dataset package containing 3D skeletal landforms compiled from practice webcam capture frames.",
-          samples: collectedSamples
-        })
+      const uniqueId = `dataset_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+      
+      const categoriesSet = new Set<string>();
+      const sampleStatistics: Record<string, number> = {};
+      collectedSamples.forEach((sample) => {
+        const label = (sample.label || "UNKNOWN").toUpperCase();
+        categoriesSet.add(label);
+        sampleStatistics[label] = (sampleStatistics[label] || 0) + 1;
       });
+      const categories = Array.from(categoriesSet);
+      const sizeStr = `${Math.round(JSON.stringify(collectedSamples).length / 1024)} KB`;
 
-      if (!res.ok) {
-        throw new Error("Backend was unable to compile the dataset file.");
+      const newDataset: DatasetItem = {
+        id: uniqueId,
+        name: newName,
+        description: newDesc || "Custom compiled sign options recorded from interactive webcam sandbox sessions.",
+        createdAt: new Date().toISOString(),
+        samples: collectedSamples,
+        categories: categories,
+        sampleStatistics: sampleStatistics,
+        size: sizeStr,
+        ownerId: currentUser?.uid || "anonymous",
+        ownerEmail: currentUser?.email || ""
+      };
+
+      if (storageMode === 'cloud') {
+        if (!currentUser) {
+          throw new Error("You must be logged in to save database gestures under your account profile.");
+        }
+        // Doc ref under authenticated cloud user
+        const docRef = doc(db, "users", currentUser.uid, "datasets", uniqueId);
+        await setDoc(docRef, newDataset);
+        notifySuccess(`New custom dataset "${newName}" saved and hosted securely on Cloud Firestore under your profile!`);
+      } else {
+        const res = await fetch('/api/datasets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newDataset)
+        });
+
+        if (!res.ok) {
+          throw new Error("Backend was unable to compile the dataset file.");
+        }
+        notifySuccess(`New custom dataset "${newName}" saved and hosted successfully on local server!`);
       }
 
-      await res.json();
-      notifySuccess(`New custom dataset "${newName}" saved and hosted successfully on the server!`);
       setNewName('');
       setNewDesc('');
       onClearLocalSamples(); // Reset recording buffer
@@ -129,26 +191,78 @@ export default function DatasetManagement({
     }
   };
 
-  // Delete a dataset from backend storage
+  // Delete a dataset from workspace
   const handleDeleteDataset = async (id: string, name: string) => {
-    if (!confirm(`Are you sure you want to permanently delete "${name}" from the host workspace? This operation is irreversible.`)) {
+    if (!confirm(`Are you sure you want to permanently delete "${name}"? This operation is irreversible.`)) {
       return;
     }
     try {
       setIsLoading(true);
-      const res = await fetch(`/api/datasets/${id}`, {
-        method: 'DELETE'
-      });
-      if (!res.ok) {
-        throw new Error("Unable to delete dataset target file.");
+      if (storageMode === 'cloud') {
+        if (!currentUser) throw new Error("Authentication session expired.");
+        const docRef = doc(db, "users", currentUser.uid, "datasets", id);
+        await deleteDoc(docRef);
+        notifySuccess(`Dataset "${name}" deleted from Cloud Firestore.`);
+      } else {
+        const res = await fetch(`/api/datasets/${id}`, {
+          method: 'DELETE'
+        });
+        if (!res.ok) {
+          throw new Error("Unable to delete dataset target file.");
+        }
+        notifySuccess(`Dataset "${name}" successfully deleted from local filesystem.`);
       }
-      notifySuccess(`Dataset "${name}" successfully deleted from system.`);
       if (selectedDatasetId === id) setSelectedDatasetId(null);
       await fetchDatasets();
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || "Delete operation failed.");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Update a dataset's metadata (CRUD Update)
+  const handleUpdateDataset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingDataset) return;
+    if (!editName.trim()) {
+      setError("Dataset name cannot be empty.");
+      return;
+    }
+
+    setIsSavingEdit(true);
+    setError(null);
+    try {
+      if (storageMode === 'cloud') {
+        if (!currentUser) throw new Error("Authentication session required.");
+        const docRef = doc(db, "users", currentUser.uid, "datasets", editingDataset.id);
+        await updateDoc(docRef, {
+          name: editName,
+          description: editDesc
+        });
+        notifySuccess(`Dataset "${editName}" metadata successfully updated in Cloud Firestore!`);
+      } else {
+        const updatedDataset = {
+          ...editingDataset,
+          name: editName,
+          description: editDesc
+        };
+        const res = await fetch('/api/datasets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedDataset)
+        });
+        if (!res.ok) {
+          throw new Error("Server rejected overwriting local dataset metadata.");
+        }
+        notifySuccess(`Dataset "${editName}" metadata updated on local server!`);
+      }
+      setEditingDataset(null);
+      await fetchDatasets();
+    } catch (err: any) {
+      setError(err.message || "Failed to update dataset metadata.");
+    } finally {
+      setIsSavingEdit(false);
     }
   };
 
@@ -156,6 +270,22 @@ export default function DatasetManagement({
   const handleImportToWebcam = (item: DatasetItem) => {
     onImportSamples(item.samples);
     notifySuccess(`Successfully imported ${item.samples.length} sample points from "${item.name}" into local workspace recording buffer!`);
+  };
+
+  // Download raw dataset as self-contained .json file client-side
+  const handleDownloadDataset = (item: DatasetItem) => {
+    try {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(item, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `${item.name.toLowerCase().replace(/\s+/g, '_')}_dataset.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+      notifySuccess(`Dataset "${item.name}" download launched successfully!`);
+    } catch (err: any) {
+      setError(`Download failed client-side: ${err.message}`);
+    }
   };
 
   // Drag and Drop files handlers
@@ -239,27 +369,52 @@ export default function DatasetManagement({
     reader.readAsText(file);
   };
 
-  // Confirm and upload the verified JSON dataset file to server
+  // Confirm and upload the verified JSON dataset file to selected storage engine
   const submitUploadedDataset = async () => {
     if (!uploadedPreview) return;
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/datasets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: uploadedPreview.name,
-          description: uploadedPreview.description,
-          samples: uploadedPreview.samples
-        })
-      });
+      const uniqueId = `dataset_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+      const sizeStr = `${Math.round(JSON.stringify(uploadedPreview.samples).length / 1024)} KB`;
+      
+      const newDataset = {
+        id: uniqueId,
+        name: uploadedPreview.name,
+        description: uploadedPreview.description,
+        createdAt: new Date().toISOString(),
+        samples: uploadedPreview.samples,
+        categories: uploadedPreview.categories,
+        sampleStatistics: uploadedPreview.samples.reduce((acc: Record<string, number>, curr: any) => {
+          const l = (curr.label || "UNKNOWN").toUpperCase();
+          acc[l] = (acc[l] || 0) + 1;
+          return acc;
+        }, {}),
+        size: sizeStr,
+        ownerId: currentUser?.uid || "anonymous",
+        ownerEmail: currentUser?.email || ""
+      };
 
-      if (!res.ok) {
-        throw new Error("Host rejected saving the uploaded dataset.");
+      if (storageMode === 'cloud') {
+        if (!currentUser) {
+          throw new Error("You must be logged in to save database gestures under your account profile.");
+        }
+        const docRef = doc(db, "users", currentUser.uid, "datasets", uniqueId);
+        await setDoc(docRef, newDataset);
+        notifySuccess(`Dataset "${uploadedPreview.name}" successfully compiled and deposited to Cloud Firestore!`);
+      } else {
+        const res = await fetch('/api/datasets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newDataset)
+        });
+
+        if (!res.ok) {
+          throw new Error("Host rejected saving the uploaded dataset.");
+        }
+        notifySuccess(`Successfully uploaded and compiled external dataset to local server: "${uploadedPreview.name}"`);
       }
 
-      notifySuccess(`Successfully uploaded and compiled external dataset: "${uploadedPreview.name}"`);
       setUploadedPreview(null);
       await fetchDatasets();
     } catch (err: any) {
@@ -514,8 +669,66 @@ curl -X DELETE http://localhost:3000/api/datasets/${dsId}`;
         {innerTab === 'datasets' && (
           <div className="space-y-8" id="explore-tab-view">
             
-            {/* Search and Upload bar */}
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center" id="search-upload-header">
+            {/* Storage Selection Controls block */}
+            <div className="bg-stone-50 dark:bg-[#1a1a1e] border border-[#ecece0] dark:border-[#2d2d32]/80 p-4.5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4" id="storage-engine-selector">
+              <div className="space-y-1 text-center sm:text-left">
+                <h4 className="text-xs font-extrabold text-[#2d2d28] dark:text-[#f4f4f5] flex items-center gap-1.5 justify-center sm:justify-start">
+                  <Cloud className="w-4 h-4 text-[#7c8d7c]" />
+                  Active Gesture Storage Database
+                </h4>
+                <p className="text-[11px] text-[#7a7a6a] dark:text-[#a1a1aa]">
+                  Select the backing database for gestures collection and training calibrations.
+                </p>
+              </div>
+
+              <div className="flex bg-stone-100 dark:bg-[#121214] p-1 rounded-xl border border-[#ecece0] dark:border-[#2b2b2e]" id="mode-selector-tabs">
+                <button
+                  type="button"
+                  onClick={() => setStorageMode('cloud')}
+                  className={`px-3.5 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer ${
+                    storageMode === 'cloud'
+                      ? "bg-[#7c8d7c] text-white shadow-sm font-bold"
+                      : "text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-100"
+                  }`}
+                  id="storage-to-cloud"
+                >
+                  <Cloud className="w-3.5 h-3.5" />
+                  Cloud Firestore
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStorageMode('local')}
+                  className={`px-3.5 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer ${
+                    storageMode === 'local'
+                      ? "bg-[#7c8d7c] text-white shadow-sm font-bold"
+                      : "text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-100"
+                  }`}
+                  id="storage-to-local"
+                >
+                  <HardDrive className="w-3.5 h-3.5" />
+                  Local Host Files
+                </button>
+              </div>
+            </div>
+
+            {storageMode === 'cloud' && !currentUser && (
+              <div className="text-center py-16 bg-[#fcfcf9] rounded-2xl border border-dashed border-[#ecece0] space-y-4" id="cloud-unauthed-state">
+                <Cloud className="w-12 h-12 mx-auto text-[#7a7a6a] opacity-60 animate-pulse" />
+                <h4 className="text-sm font-bold text-[#2d2d28]">Secure Firestore Cloud Storage</h4>
+                <p className="text-xs text-[#7a7a6a] max-w-sm mx-auto leading-relaxed">
+                  Connect your customized datasets directly with your sign coordinator account to persist 3D skeletal vectors across sessions.
+                </p>
+                <div className="pt-2 text-xs font-mono font-bold text-[#7c8d7c] uppercase">
+                  ◀ Check "Coordinator Auth" menu to sign up or log in
+                </div>
+              </div>
+            )}
+            
+            {/* Conditional wrapper based on storage mode authorization */}
+            {(storageMode !== 'cloud' || currentUser) && (
+              <>
+                {/* Search and Upload bar */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center" id="search-upload-header">
               <div className="md:col-span-12 lg:col-span-5 relative" id="search-input-field-wrap">
                 <Search className="absolute left-3.5 top-3 w-4 h-4 text-[#7a7a6a]" />
                 <input 
@@ -772,19 +985,32 @@ curl -X DELETE http://localhost:3000/api/datasets/${dsId}`;
                                   Import to Recording Dashboard
                                 </button>
 
-                                <a 
-                                  href={`/api/datasets/${item.id}/download`}
-                                  download
-                                  className="flex items-center gap-1.5 text-[11px] text-white font-bold bg-[#7c8d7c] hover:bg-[#6c7d6c] px-3.5 py-2 rounded-xl border border-[#7c8d7c] transition shadow-sm"
+                                <button 
+                                  onClick={() => handleDownloadDataset(item)}
+                                  className="flex items-center gap-1.5 text-[11px] text-white font-bold bg-[#7c8d7c] hover:bg-[#6c7d6c] px-3.5 py-2 rounded-xl border border-[#7c8d7c] transition shadow-sm cursor-pointer"
                                   id={`action-download-${item.id}`}
                                 >
                                   <Download className="w-3.5 h-3.5" />
                                   Download raw JSON Dataset
-                                </a>
+                                </button>
+
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditingDataset(item);
+                                    setEditName(item.name);
+                                    setEditDesc(item.description);
+                                  }}
+                                  className="flex items-center justify-center text-[#7c8d7c] hover:bg-[#7c8d7c]/5 p-2 rounded-xl transition cursor-pointer"
+                                  title="Update Dataset Info"
+                                  id={`action-edit-${item.id}`}
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
 
                                 <button 
                                   onClick={() => handleDeleteDataset(item.id, item.name)}
-                                  className="flex items-center justify-center text-[#a36b5e] hover:bg-[#a36b5e]/5 p-2 rounded-xl transition"
+                                  className="flex items-center justify-center text-[#a36b5e] hover:bg-[#a36b5e]/5 p-2 rounded-xl transition cursor-pointer"
                                   title="Delete Master Dataset File"
                                   id={`action-delete-${item.id}`}
                                 >
@@ -806,9 +1032,11 @@ curl -X DELETE http://localhost:3000/api/datasets/${dsId}`;
             <div className="bg-[#f0f2ee]/50 border border-[#e0e4db] rounded-2xl p-4 text-xs font-sans text-[#5a5a4a] space-y-1" id="explore-info-tip">
               <strong>💡 Integration Tip</strong>: You can record raw 3D hand skeletal landmark points with twenty-one joint parameters (X, Y, Z vector offsets) in the <strong>Recording Dashboard</strong>, download them back as structured arrays, or host them as shared master datasets right here.
             </div>
-
-          </div>
+          </>
         )}
+
+      </div>
+    )}
 
         {/* TAB 2: COMPILE CURRENT CAMERA SESSION BUFFERS */}
         {innerTab === 'package' && (
@@ -1082,6 +1310,82 @@ curl -X DELETE http://localhost:3000/api/datasets/${dsId}`;
         )}
 
       </div>
+
+      {/* 📝 EDIT METADATA MODAL (CRUD Update) */}
+      <AnimatePresence>
+        {editingDataset && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in" id="edit-metadata-modal-parent">
+            <motion.div 
+              initial={{ scale: 0.93, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.93, opacity: 0 }}
+              className="bg-white rounded-3xl border border-[#ecece0] p-6 max-w-md w-full shadow-2xl space-y-5"
+              id="edit-metadata-modal-box"
+            >
+              <div className="flex items-center gap-2 pb-2 border-b border-stone-100">
+                <Edit2 className="w-5 h-5 text-[#7c8d7c]" />
+                <h3 className="text-sm font-extrabold text-[#2d2d28] uppercase tracking-wide">Update Dataset Information</h3>
+              </div>
+
+              <form onSubmit={handleUpdateDataset} className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] text-[#7a7a6a] uppercase tracking-wider font-bold block">Dataset Name</label>
+                  <input 
+                    type="text" 
+                    required 
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="w-full text-xs font-sans px-3 py-2 border border-[#ecece0] rounded-xl focus:border-[#7c8d7c] focus:ring-1 focus:ring-[#7c8d7c] outline-none bg-stone-50"
+                    id="edit-dataset-name-field"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] text-[#7a7a6a] uppercase tracking-wider font-bold block">Dataset Description</label>
+                  <textarea 
+                    rows={4}
+                    value={editDesc}
+                    onChange={(e) => setEditDesc(e.target.value)}
+                    className="w-full text-xs font-sans px-3 py-2 border border-[#ecece0] rounded-xl focus:border-[#7c8d7c] focus:ring-1 focus:ring-[#7c8d7c] outline-none bg-stone-50"
+                    id="edit-dataset-desc-field"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2.5 pt-2">
+                  <button 
+                    type="button" 
+                    onClick={() => setEditingDataset(null)}
+                    disabled={isSavingEdit}
+                    className="px-4 py-2 text-xs font-bold font-mono text-neutral-500 hover:text-neutral-800 uppercase cursor-pointer"
+                    id="cancel-edit-btn"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit" 
+                    disabled={isSavingEdit}
+                    className="px-5 py-2 text-xs font-bold text-white bg-[#7c8d7c] hover:bg-[#6c7d6c] disabled:opacity-50 rounded-xl transition font-mono flex items-center gap-1.5 cursor-pointer"
+                    id="submit-edit-btn"
+                  >
+                    {isSavingEdit ? (
+                      <>
+                        <RefreshCcw className="w-3.5 h-3.5 animate-spin" />
+                        Saving Updates...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-3.5 h-3.5" />
+                        Save Changes
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }
