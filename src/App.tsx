@@ -6,8 +6,9 @@ import DatasetManagement from './components/DatasetManagement';
 import ModelTrainer from './components/ModelTrainer';
 import UserAuth from './components/UserAuth';
 import UserProfile from './components/UserProfile';
-import { auth } from './firebase';
+import { auth, db } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
+import { collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import * as tf from '@tensorflow/tfjs';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, Legend, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { 
@@ -94,6 +95,100 @@ export default function App() {
     });
     return () => unsubscribe();
   }, []);
+
+  // Custom gestures state & sync logic
+  const [customGestures, setCustomGestures] = useState<ASLGesture[]>(() => {
+    try {
+      const stored = localStorage.getItem('asl_custom_gestures');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Sync custom gestures from Cloud Firestore when user logs in
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const loadCloudGestures = async () => {
+      try {
+        const colRef = collection(db, "users", currentUser.uid, "gestures");
+        const snap = await getDocs(colRef);
+        const fetched: ASLGesture[] = [];
+        snap.forEach((doc) => {
+          fetched.push(doc.data() as ASLGesture);
+        });
+        if (fetched.length > 0) {
+          setCustomGestures(fetched);
+          localStorage.setItem('asl_custom_gestures', JSON.stringify(fetched));
+        }
+      } catch (err) {
+        console.error("Firestore Error loading custom gestures:", err);
+      }
+    };
+
+    loadCloudGestures();
+  }, [currentUser]);
+
+  // Handler to add a new custom gesture
+  const handleAddCustomGesture = async (charName: string, desc: string, tip: string) => {
+    const formattedChar = charName.trim().toUpperCase();
+    if (!formattedChar) throw new Error("Gesture label cannot be empty.");
+    if (formattedChar.length > 15) throw new Error("Gesture label cannot exceed 15 characters.");
+    
+    // Check if duplicate in presets or existing customs
+    const presets = ['A', 'B', 'C', 'HI', 'LOVE'];
+    if (presets.includes(formattedChar)) {
+      throw new Error(`"${formattedChar}" is a reserved system default gesture.`);
+    }
+    const isDuplicate = customGestures.some(g => g.char === formattedChar);
+    if (isDuplicate) throw new Error(`A custom gesture for "${formattedChar}" already exists.`);
+
+    const newGesture: ASLGesture = {
+      id: `gesture_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+      char: formattedChar,
+      description: desc || `Custom hand posture defined for label "${formattedChar}".`,
+      category: 'custom',
+      visualTip: tip || "Keep your hand still and clearly in front of the camera lens."
+    };
+
+    const updated = [...customGestures, newGesture];
+    setCustomGestures(updated);
+    localStorage.setItem('asl_custom_gestures', JSON.stringify(updated));
+
+    if (currentUser) {
+      try {
+        const docRef = doc(db, "users", currentUser.uid, "gestures", newGesture.id);
+        await setDoc(docRef, newGesture);
+      } catch (err) {
+        console.error("Firestore Error saving custom gesture:", err);
+      }
+    }
+  };
+
+  // Handler to delete a custom gesture
+  const handleDeleteCustomGesture = async (id: string) => {
+    const targetGesture = customGestures.find(g => g.id === id);
+    if (!targetGesture) return;
+
+    if (!confirm(`Are you sure you want to permanently delete the custom gesture "${targetGesture.char}"? This will also remove its lookup definitions.`)) {
+      return;
+    }
+
+    const updated = customGestures.filter(g => g.id !== id);
+    setCustomGestures(updated);
+    localStorage.setItem('asl_custom_gestures', JSON.stringify(updated));
+
+    if (currentUser) {
+      try {
+        const docRef = doc(db, "users", currentUser.uid, "gestures", id);
+        await deleteDoc(docRef);
+      } catch (err) {
+        console.error("Firestore Error deleting custom gesture:", err);
+      }
+    }
+  };
+
   const [trainedClientModel, setTrainedClientModel] = useState<tf.LayersModel | null>(null);
   const [trainedClasses, setTrainedClasses] = useState<string[]>([]);
   const [predictionSource, setPredictionSource] = useState<'simulated' | 'tensorflow'>('simulated');
@@ -633,16 +728,29 @@ export default function App() {
           const charResult = classes[result.maxIndex] || "?";
           const rawConf = Number(result.confidence.toFixed(1));
 
+          const matchingCustom = customGestures.find(cg => cg.char.toUpperCase() === charResult.toUpperCase());
+          const explanation = matchingCustom 
+            ? `Successfully recognized your custom-trained gesture "${matchingCustom.char}"! Posture description: ${matchingCustom.description}`
+            : `Inferred live in real time using your browser-compiled Multi-Layer Perceptron (MLP) Artificial Neural Network. Your 3D landmarks coordinates offset relative to wrist joint 0 and fed forward inside TF.js.`;
+          
+          const tips = matchingCustom
+            ? [
+                `Visual Practice Cue: ${matchingCustom.visualTip}`,
+                `Model classes catalogued: ${classes.join(', ')}`,
+                `Model topology: [63] -> Dense (${result.layer1Units}) -> Dense (${result.layer2Units}) -> Softmax (${classes.length})`
+              ]
+            : [
+                `Model classes catalogued: ${classes.join(', ')}`,
+                `Categorical cross-entropy probability: ${rawConf}%`,
+                `Model topology: [63] -> Dense (${result.layer1Units}) -> Dense (${result.layer2Units}) -> Softmax (${classes.length})`
+              ];
+
           setLatestResult({
             predictedChar: charResult,
             confidence: rawConf,
-            explanation: `Inferred live in real time using your browser-compiled Multi-Layer Perceptron (MLP) Artificial Neural Network. Your 3D landmarks coordinates offset relative to wrist joint 0 and fed forward inside TF.js.`,
-            tips: [
-              `Model classes catalogued: ${classes.join(', ')}`,
-              `Categorical cross-entropy probability: ${rawConf}%`,
-              `Model topology: [63] -> Dense (${result.layer1Units}) -> Dense (${result.layer2Units}) -> Softmax (${classes.length})`
-            ],
-            grammarMatches: [`TF.js live local prediction`]
+            explanation,
+            tips,
+            grammarMatches: [`TF.js live local prediction`, ...(matchingCustom ? [`Custom Gesture: ${matchingCustom.char}`] : [])]
           });
 
           // Process and output smoothed prediction values
@@ -1054,16 +1162,29 @@ export default function App() {
         const charResult = trainedClasses[result.maxIndex] || "?";
         const rawConf = Number(result.confidence.toFixed(1));
 
+        const matchingCustom = customGestures.find(cg => cg.char.toUpperCase() === charResult.toUpperCase());
+        const explanation = matchingCustom 
+          ? `Successfully recognized your custom-trained gesture "${matchingCustom.char}"! Posture description: ${matchingCustom.description}`
+          : `Inferred locally using your browser-compiled Multi-Layer Perceptron (MLP) Artificial Neural Network. Your 3D landmarks coordinates offset relative to wrist joint 0 and fed forward inside TF.js.`;
+        
+        const tips = matchingCustom
+          ? [
+              `Visual Practice Cue: ${matchingCustom.visualTip}`,
+              `Model classes catalogued: ${trainedClasses.join(', ')}`,
+              `Model topology: [63] -> Dense (${result.layer1Units}) -> Dense (${result.layer2Units}) -> Softmax (${trainedClasses.length})`
+            ]
+          : [
+              `Model classes catalogued: ${trainedClasses.join(', ')}`,
+              `Categorical cross-entropy probability: ${rawConf}%`,
+              `Model topology: [63] -> Dense (${result.layer1Units}) -> Dense (${result.layer2Units}) -> Softmax (${trainedClasses.length})`
+            ];
+
         setLatestResult({
           predictedChar: charResult,
           confidence: rawConf,
-          explanation: `Inferred locally using your browser-compiled Multi-Layer Perceptron (MLP) Artificial Neural Network. Your 3D landmarks coordinates offset relative to wrist joint 0 and fed forward inside TF.js.`,
-          tips: [
-            `Model classes catalogued: ${trainedClasses.join(', ')}`,
-            `Categorical cross-entropy probability: ${rawConf}%`,
-            `Model topology: [63] -> Dense (${result.layer1Units}) -> Dense (${result.layer2Units}) -> Softmax (${trainedClasses.length})`
-          ],
-          grammarMatches: [`TF.js live local prediction`]
+          explanation,
+          tips,
+          grammarMatches: [`TF.js live local prediction`, ...(matchingCustom ? [`Custom Gesture: ${matchingCustom.char}`] : [])]
         });
 
         // Run prediction stabilizer moving-average filter!
@@ -2085,6 +2206,7 @@ export default function App() {
 
               {/* ASL Alphabet quick grid lookup */}
               <SignDictionary 
+                customGestures={customGestures}
                 onSelectGesture={(gesture) => {
                   setSelectedGesture(gesture);
                   // Auto fill translation simulator on select
@@ -2399,6 +2521,7 @@ export default function App() {
               </p>
             </div>
             <SignDictionary 
+              customGestures={customGestures}
               onSelectGesture={(gesture) => {
                 setSelectedGesture(gesture);
                 // Switch tab back to dashboard for action practice
@@ -2525,8 +2648,8 @@ export default function App() {
                         className="flex-1 bg-[#fdfcf9] dark:bg-[#151518] border border-[#e0e4db] dark:border-[#2d2d32] text-xs font-bold text-[#2d2d28] dark:text-white py-2 px-3 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#7c8d7c] transition-shadow uppercase font-mono shadow-sm"
                         maxLength={15}
                       />
-                      <div className="flex gap-1">
-                        {['A', 'B', 'C', 'HI', 'LOVE'].map((preset) => (
+                      <div className="flex flex-wrap gap-1 max-w-[240px]">
+                        {['A', 'B', 'C', 'HI', 'LOVE', ...customGestures.map(g => g.char)].map((preset) => (
                           <button
                             key={preset}
                             onClick={() => setSampleLabel(preset)}
@@ -2675,6 +2798,120 @@ export default function App() {
 
                   </div>
                 </div>
+
+                {/* Custom Gestures & Personalized Labels Manager */}
+                <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-6 shadow-sm space-y-4" id="custom-gestures-manager-card">
+                  <h3 className="font-extrabold text-sm text-[#2d2d28] dark:text-[#f4f4f5] flex items-center gap-2 uppercase tracking-wide font-mono border-b border-[#f0f2ee] dark:border-[#2d2d32] pb-2.5">
+                    <Sparkles className="w-4.5 h-4.5 text-[#a36b5e] dark:text-orange-400 font-bold" />
+                    Custom Gesture Creator
+                  </h3>
+
+                  {/* Create New Gesture Form */}
+                  <form onSubmit={async (e) => {
+                    e.preventDefault();
+                    const form = e.currentTarget;
+                    const charInput = form.elements.namedItem('gestureLabel') as HTMLInputElement;
+                    const descInput = form.elements.namedItem('gestureDesc') as HTMLTextAreaElement;
+                    const tipInput = form.elements.namedItem('gestureTip') as HTMLInputElement;
+                    
+                    try {
+                      setCollectorError(null);
+                      await handleAddCustomGesture(charInput.value, descInput.value, tipInput.value);
+                      charInput.value = '';
+                      descInput.value = '';
+                      tipInput.value = '';
+                    } catch (err: any) {
+                      setCollectorError(err.message || "Failed to create gesture.");
+                    }
+                  }} className="space-y-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-[#4a4a40] dark:text-[#cbdcbc] uppercase font-mono">Gesture Name / Label</label>
+                      <input
+                        name="gestureLabel"
+                        type="text"
+                        required
+                        placeholder="e.g. PEACE, ROCK, HEART"
+                        className="w-full bg-[#fdfcf9] dark:bg-[#151518] border border-[#e0e4db] dark:border-[#2d2d32] text-xs font-bold text-[#2d2d28] dark:text-white py-2 px-3 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#7c8d7c] transition-shadow uppercase font-mono shadow-sm"
+                        maxLength={15}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-[#4a4a40] dark:text-[#cbdcbc] uppercase font-mono">Hand Posture Description</label>
+                      <textarea
+                        name="gestureDesc"
+                        rows={2}
+                        placeholder="Describe the finger placements and rotation (e.g. Index and middle fingers extended upward in a V shape)"
+                        className="w-full bg-[#fdfcf9] dark:bg-[#151518] border border-[#e0e4db] dark:border-[#2d2d32] text-xs text-[#2d2d28] dark:text-white py-2 px-3 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#7c8d7c] transition-shadow font-sans resize-none shadow-sm"
+                        maxLength={150}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-[#4a4a40] dark:text-[#cbdcbc] uppercase font-mono">Visual Tip / Practice Guide</label>
+                      <input
+                        name="gestureTip"
+                        type="text"
+                        placeholder="Helpful cue (e.g. Keep other three fingers locked securely down)"
+                        className="w-full bg-[#fdfcf9] dark:bg-[#151518] border border-[#e0e4db] dark:border-[#2d2d32] text-xs text-[#2d2d28] dark:text-white py-2 px-3 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#7c8d7c] transition-shadow font-sans shadow-sm"
+                        maxLength={100}
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      className="w-full py-2.5 bg-[#7c8d7c] hover:bg-[#6c7d6c] text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Custom Gesture Label
+                    </button>
+                  </form>
+
+                  {/* Existing Custom Gestures List */}
+                  <div className="space-y-2 pt-2 border-t border-[#f0f2ee] dark:border-[#2d2d32]">
+                    <div className="flex items-center justify-between text-[10px] font-bold text-[#4a4a40] dark:text-[#cbdcbc] uppercase font-mono">
+                      <span>My Custom Gestures ({customGestures.length})</span>
+                      <span className="text-[#a36b5e] dark:text-orange-400">PERSISTED</span>
+                    </div>
+                    
+                    {customGestures.length === 0 ? (
+                      <div className="bg-[#fdfcf9] dark:bg-[#151518]/50 border border-dashed border-[#ecece0] dark:border-[#2d2d32] rounded-xl p-4 text-center">
+                        <p className="text-[10px] text-[#7a7a6a] dark:text-[#a1a1aa] leading-relaxed">
+                          No custom gestures created yet. Create a unique posture label above to begin recording custom 3D telemetry landmark datasets.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1 scrollbar-thin">
+                        {customGestures.map((gesture) => (
+                          <div 
+                            key={gesture.id} 
+                            className="bg-[#fdfcf9] dark:bg-[#151518] border border-[#ecece0] dark:border-[#2d2d32] p-3 rounded-xl flex items-start justify-between gap-3 shadow-sm hover:border-[#7c8d7c]/40 transition-colors"
+                          >
+                            <div className="space-y-1 min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-black font-mono bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-400 border border-purple-100 dark:border-purple-900/40 px-1.5 py-0.5 rounded uppercase">
+                                  {gesture.char}
+                                </span>
+                                <span className="text-[9px] text-[#9a9a8a] dark:text-[#a1a1aa] font-medium font-sans italic truncate">
+                                  {gesture.visualTip}
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-zinc-600 dark:text-zinc-400 leading-normal line-clamp-2">
+                                {gesture.description}
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => handleDeleteCustomGesture(gesture.id)}
+                              type="button"
+                              className="p-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-500 hover:text-rose-700 rounded-lg transition-colors shrink-0 cursor-pointer"
+                              title={`Delete ${gesture.char}`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
               </div>
 
                         {/* Right Column: Recorded Samples Hub & Balance Metrics charts */}

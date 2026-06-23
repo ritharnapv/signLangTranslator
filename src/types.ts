@@ -3,7 +3,7 @@ export interface ASLGesture {
   char: string;
   videoUrl?: string;
   description: string;
-  category: 'alphabet' | 'greeting' | 'common';
+  category: 'alphabet' | 'greeting' | 'common' | 'custom' | string;
   visualTip: string;
 }
 

@@ -92,13 +92,16 @@ const DICTIONARY_GESTURES: ASLGesture[] = [
 interface SignDictionaryProps {
   onSelectGesture: (gesture: ASLGesture) => void;
   activeGesture: ASLGesture | null;
+  customGestures?: ASLGesture[];
 }
 
-export default function SignDictionary({ onSelectGesture, activeGesture }: SignDictionaryProps) {
-  const [activeCategory, setActiveCategory] = useState<'all' | 'alphabet' | 'greeting'>('all');
+export default function SignDictionary({ onSelectGesture, activeGesture, customGestures = [] }: SignDictionaryProps) {
+  const [activeCategory, setActiveCategory] = useState<'all' | 'alphabet' | 'greeting' | 'custom'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const filteredGestures = DICTIONARY_GESTURES.filter(gesture => {
+  const allGestures = [...DICTIONARY_GESTURES, ...customGestures];
+
+  const filteredGestures = allGestures.filter(gesture => {
     const matchesCategory = activeCategory === 'all' || gesture.category === activeCategory;
     const matchesSearch = gesture.char.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           gesture.description.toLowerCase().includes(searchQuery.toLowerCase());
@@ -150,6 +153,16 @@ export default function SignDictionary({ onSelectGesture, activeGesture }: SignD
           >
             Greetings
           </button>
+          <button
+            onClick={() => setActiveCategory('custom')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              activeCategory === 'custom'
+                ? "bg-[#ebdcd1] text-[#a36b5e] font-bold shadow-sm border border-[#ebdcd1]"
+                : "text-[#7a7a6a] hover:text-[#2d2d28]"
+            }`}
+          >
+            Custom ({customGestures.length})
+          </button>
         </div>
       </div>
 
@@ -186,8 +199,12 @@ export default function SignDictionary({ onSelectGesture, activeGesture }: SignD
                     <span className="text-xl font-bold font-sans tracking-tight text-[#2d2d28] group-hover:text-[#7c8d7c] transition-colors">
                       {gesture.char}
                     </span>
-                    <span className={`text-[9px] px-2 py-0.5 rounded-full font-sans font-semibold uppercase ${
-                      gesture.category === 'alphabet' ? 'bg-[#f0f2ee] text-[#7c8d7c] border border-[#e0e4db]' : 'bg-[#ebdcd1] text-[#a36b5e] border border-[#ebdcd1]'
+                    <span className={`text-[9px] px-2 py-0.5 rounded-full font-sans font-semibold uppercase border ${
+                      gesture.category === 'alphabet' 
+                        ? 'bg-[#f0f2ee] text-[#7c8d7c] border-[#e0e4db]' 
+                        : gesture.category === 'custom' 
+                        ? 'bg-purple-50 text-purple-700 border-purple-100'
+                        : 'bg-[#ebdcd1] text-[#a36b5e] border-[#ebdcd1]'
                     }`}>
                       {gesture.category}
                     </span>

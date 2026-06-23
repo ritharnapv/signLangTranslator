@@ -1,0 +1,146 @@
+{
+  "entities": {
+    "user": {
+      "title": "UserProfile",
+      "description": "User preferences and tracking metrics",
+      "type": "object",
+      "properties": {
+        "displayName": {
+          "type": "string",
+          "description": "Real name display name"
+        },
+        "dailySignsGoal": {
+          "type": "integer",
+          "description": "Signs goal count"
+        },
+        "experienceLevel": {
+          "type": "string",
+          "description": "Skill experience level of practice"
+        },
+        "preferredPracticeTime": {
+          "type": "string",
+          "description": "Preferred practice hour"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO timestamp when updated"
+        }
+      }
+    },
+    "backup": {
+      "title": "UserBackup",
+      "description": "Cloud backup of practice logs and webcam coordinates",
+      "type": "object",
+      "properties": {
+        "sessions": {
+          "type": "array",
+          "description": "Past interactive session logs"
+        },
+        "samples": {
+          "type": "array",
+          "description": "Collected 3D hand coordinates landmarks"
+        },
+        "backedUpAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO timestamp of backup creation"
+        },
+        "totalSessions": {
+          "type": "integer"
+        },
+        "totalSamples": {
+          "type": "integer"
+        }
+      }
+    },
+    "dataset": {
+      "title": "DatasetItem",
+      "description": "Webcam gestures landmark coordinate packages",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "samples": {
+          "type": "array"
+        },
+        "categories": {
+          "type": "array"
+        },
+        "sampleStatistics": {
+          "type": "object"
+        },
+        "size": {
+          "type": "string"
+        },
+        "ownerId": {
+          "type": "string"
+        },
+        "ownerEmail": {
+          "type": "string"
+        }
+      }
+    },
+    "customGesture": {
+      "title": "CustomGesture",
+      "description": "User-authored gesture definition mapping custom labels",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique gesture identifier"
+        },
+        "char": {
+          "type": "string",
+          "description": "Custom tag or label uppercase"
+        },
+        "description": {
+          "type": "string",
+          "description": "Text description of hand coordinates shape"
+        },
+        "category": {
+          "type": "string",
+          "description": "Defaults to 'custom'"
+        },
+        "visualTip": {
+          "type": "string",
+          "description": "Aesthetic hint for users trying to match the pose"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp"
+        }
+      }
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "user",
+      "description": "Root user settings profiles"
+    },
+    "users/{userId}/backups/{backupId}": {
+      "schema": "backup",
+      "description": "Backup logs stored under uid"
+    },
+    "users/{userId}/datasets/{datasetId}": {
+      "schema": "dataset",
+      "description": "Interactive collections of sign coordinates datasets"
+    },
+    "users/{userId}/gestures/{gestureId}": {
+      "schema": "customGesture",
+      "description": "Saved user-created customized gestures and postures labels"
+    }
+  }
+}

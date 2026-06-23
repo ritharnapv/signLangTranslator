@@ -1,0 +1,55 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Default-deny catch-all rule
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Common Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // User profiles path
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId) 
+        && request.resource.data.displayName is string 
+        && request.resource.data.displayName.size() <= 100;
+      allow delete: if false; // Profiles cannot be self-deleted from browser
+
+      // Backups sub-collection
+      match /backups/{backupId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId);
+      }
+
+      // Datasets sub-collection
+      match /datasets/{datasetId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId);
+      }
+
+      // Custom Gestures sub-collection
+      match /gestures/{gestureId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+          && request.resource.data.char is string
+          && request.resource.data.char.size() <= 32
+          && request.resource.data.description is string
+          && request.resource.data.description.size() <= 500;
+        allow delete: if isOwner(userId);
+      }
+    }
+  }
+}
