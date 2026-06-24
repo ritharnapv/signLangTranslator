@@ -409,6 +409,69 @@ app.get("/api/datasets/:id/download", (req, res): Promise<any> | any => {
   }
 });
 
+// 7. POST improve sentence grammar using Gemini or rule-based fallback
+app.post("/api/improve-grammar", async (req, res): Promise<any> => {
+  try {
+    const { sentence } = req.body;
+    if (!sentence) {
+      return res.status(400).json({ error: "Missing sentence text" });
+    }
+
+    const ai = getAiClient();
+    if (!ai) {
+      // Offline fallback: rule-based grammar improvement
+      // 1. Clean up spacing
+      let text = sentence.trim().replace(/\s+/g, ' ');
+      // 2. Capitalize first letter of each sentence
+      text = text.replace(/(^\s*|[.!?]\s+)([a-z])/g, (match: string, p1: string, p2: string) => p1 + p2.toUpperCase());
+      // 3. Capitalize standalone "i"
+      text = text.replace(/\bi\b/g, 'I');
+      // 4. Clean up punctuation spacing: "hello , world" -> "hello, world"
+      text = text.replace(/\s+([.,!?])/g, '$1');
+      // 5. Remove contiguous duplicate words (case-insensitive check, but keep first)
+      const words = text.split(' ');
+      const deduplicatedWords: string[] = [];
+      for (let i = 0; i < words.length; i++) {
+        if (i === 0 || words[i].toLowerCase() !== words[i - 1].toLowerCase()) {
+          deduplicatedWords.push(words[i]);
+        }
+      }
+      const corrected = deduplicatedWords.join(' ');
+
+      return res.json({
+        original: sentence,
+        corrected: corrected,
+        simulated: true,
+        message: "Offline rule-based grammar correction applied."
+      });
+    }
+
+    // Call actual Gemini model for high-fidelity correction
+    const promptText = `You are an expert English linguist and American Sign Language interpreter. The following text has been compiled character-by-character or word-by-word from sign language recognition gestures. It may contain spelling mistakes, missing spaces, lowercase pronouns, raw consecutive words, and redundant duplicate inputs.
+Please clean up the text, correct any spelling, expand words if appropriate, merge individual letters where spelling is intended (e.g. "H E L L O" -> "HELLO"), remove unnecessary consecutive duplicate words, adjust capitalization, and return a natural, grammatically correct English sentence.
+
+Input raw sign transcript: "${sentence}"
+
+Output only the corrected, polished English sentence without any introductory or concluding text.`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: promptText,
+    });
+
+    const corrected = (response.text || "").trim();
+    res.json({
+      original: sentence,
+      corrected: corrected,
+      simulated: false
+    });
+
+  } catch (error: any) {
+    console.error("Grammar improvement error:", error);
+    res.status(500).json({ error: "Grammar correction failed", details: error.message });
+  }
+});
+
 // Configure Vite integration or static file rendering
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {

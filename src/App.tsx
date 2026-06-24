@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ASLGesture, TranslationResult, SessionHistoryItem, CollectedSample } from './types';
+import { motion } from 'motion/react';
 import TimelineRoadmap from './components/TimelineRoadmap';
 import SignDictionary from './components/SignDictionary';
 import DatasetManagement from './components/DatasetManagement';
@@ -313,12 +314,33 @@ export default function App() {
   const [copied, setCopied] = useState<boolean>(false);
   const [autoAppend, setAutoAppend] = useState<boolean>(false);
   
+  const [autoFilterDuplicates, setAutoFilterDuplicates] = useState<boolean>(true);
+  const [autoGrammar, setAutoGrammar] = useState<boolean>(true);
+  const [appendMode, setAppendMode] = useState<'word' | 'letter'>('word');
+  const [improvingGrammar, setImprovingGrammar] = useState<boolean>(false);
+  const [grammarSuggestion, setGrammarSuggestion] = useState<string | null>(null);
+
   const autoAppendRef = useRef<boolean>(false);
   const lastAutoAppendedCharRef = useRef<string | null>(null);
+  const autoFilterDuplicatesRef = useRef<boolean>(true);
+  const autoGrammarRef = useRef<boolean>(true);
+  const appendModeRef = useRef<'word' | 'letter'>('word');
 
   useEffect(() => {
     autoAppendRef.current = autoAppend;
   }, [autoAppend]);
+
+  useEffect(() => {
+    autoFilterDuplicatesRef.current = autoFilterDuplicates;
+  }, [autoFilterDuplicates]);
+
+  useEffect(() => {
+    autoGrammarRef.current = autoGrammar;
+  }, [autoGrammar]);
+
+  useEffect(() => {
+    appendModeRef.current = appendMode;
+  }, [appendMode]);
 
   // Browser-based Text-to-Speech (TTS) states
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
@@ -490,22 +512,57 @@ export default function App() {
       return [...prev, newDataPoint].slice(-30);
     });
 
-    // Handle auto-append to formed sentence
+    // Handle auto-append to formed sentence using the new smart system
     if (autoAppendRef.current && finalSmoothed >= confidenceThresholdRef.current) {
-      if (bestChar !== lastAutoAppendedCharRef.current) {
-        setFormedSentence(prev => {
-          const isWord = bestChar.length > 1;
-          const needsLeadingSpace = prev.length > 0 && !prev.endsWith(" ");
-          let addition = bestChar;
-          if (isWord) {
-            addition = (needsLeadingSpace ? " " : "") + bestChar + " ";
-          } else {
-            addition = bestChar;
-          }
-          return prev + addition;
-        });
-        lastAutoAppendedCharRef.current = bestChar;
+      smartAppendText(bestChar, true);
+    }
+  };
+
+  // Smart text append logic (with duplicate prevention, spacing, and grammar formatting)
+  const smartAppendText = (bestChar: string, isAuto: boolean) => {
+    if (isAuto && autoFilterDuplicatesRef.current && bestChar === lastAutoAppendedCharRef.current) {
+      return;
+    }
+
+    setFormedSentence(prev => {
+      let text = prev;
+      const isWord = bestChar.length > 1;
+      const spacingMode = appendModeRef.current;
+
+      // Avoid double spaces
+      if (text.endsWith("  ")) {
+        text = text.trimEnd() + " ";
       }
+
+      let addition = "";
+      if (text.length > 0 && !text.endsWith(" ")) {
+        const lastChar = text[text.length - 1];
+        const isLastPunctuation = /[.,!?]/.test(lastChar);
+        if (spacingMode === 'word' || isWord || isLastPunctuation) {
+          addition = " ";
+        }
+      }
+
+      addition += bestChar;
+
+      if (isWord || spacingMode === 'word') {
+        addition += " ";
+      }
+
+      let newSentence = text + addition;
+
+      if (autoGrammarRef.current) {
+        newSentence = newSentence.replace(/ {2,}/g, ' ');
+        newSentence = newSentence.replace(/(^\s*|[.!?]\s+)([a-z])/g, (match, p1, p2) => p1 + p2.toUpperCase());
+        newSentence = newSentence.replace(/\bi\b/g, 'I');
+        newSentence = newSentence.replace(/\s+([.,!?])/g, '$1');
+      }
+
+      return newSentence;
+    });
+
+    if (isAuto) {
+      lastAutoAppendedCharRef.current = bestChar;
     }
   };
 
@@ -531,18 +588,7 @@ export default function App() {
 
   const handleManualAppend = () => {
     if (!stabilizedResult) return;
-    const char = stabilizedResult.predictedChar;
-    setFormedSentence(prev => {
-      const isWord = char.length > 1;
-      const needsLeadingSpace = prev.length > 0 && !prev.endsWith(" ");
-      let addition = char;
-      if (isWord) {
-        addition = (needsLeadingSpace ? " " : "") + char + " ";
-      } else {
-        addition = char;
-      }
-      return prev + addition;
-    });
+    smartAppendText(stabilizedResult.predictedChar, false);
   };
 
   const handleAddSpace = () => {
@@ -558,7 +604,62 @@ export default function App() {
 
   const handleClearSentence = () => {
     setFormedSentence("");
+    setGrammarSuggestion(null);
     lastAutoAppendedCharRef.current = null;
+  };
+
+  const handleDeduplicateText = () => {
+    setFormedSentence(prev => {
+      if (!prev.trim()) return prev;
+      const words = prev.trim().split(/\s+/);
+      const filtered: string[] = [];
+      for (let i = 0; i < words.length; i++) {
+        if (i === 0 || words[i].toLowerCase() !== words[i - 1].toLowerCase()) {
+          filtered.push(words[i]);
+        }
+      }
+      return filtered.join(' ');
+    });
+  };
+
+  const handleImproveGrammarAI = async () => {
+    if (!formedSentence.trim()) return;
+    setImprovingGrammar(true);
+    setGrammarSuggestion(null);
+    try {
+      const res = await fetch("/api/improve-grammar", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ sentence: formedSentence })
+      });
+      if (!res.ok) {
+        throw new Error("Server error correcting grammar");
+      }
+      const data = await res.json();
+      if (data && data.corrected) {
+        setGrammarSuggestion(data.corrected);
+      }
+    } catch (err) {
+      console.error("Failed to improve grammar", err);
+      // Simple offline rule-based fallback locally just in case
+      const offlineText = formedSentence.trim()
+        .replace(/\s+/g, ' ')
+        .replace(/(^\s*|[.!?]\s+)([a-z])/g, (m, p1, p2) => p1 + p2.toUpperCase())
+        .replace(/\bi\b/g, 'I')
+        .replace(/\s+([.,!?])/g, '$1');
+      setGrammarSuggestion(offlineText);
+    } finally {
+      setImprovingGrammar(false);
+    }
+  };
+
+  const handleAcceptGrammar = () => {
+    if (grammarSuggestion) {
+      setFormedSentence(grammarSuggestion);
+      setGrammarSuggestion(null);
+    }
   };
 
   const handleCollectSample = () => {
@@ -1988,6 +2089,164 @@ export default function App() {
                     />
                   </div>
                 </div>
+
+                {/* Smart Sentence Builder Real-time Configuration Panel */}
+                <div className="bg-[#fcfbf9] dark:bg-[#151518] border border-[#e2e2d0] dark:border-[#2d2d32] rounded-2xl p-4 space-y-3 shadow-sm" id="sentence-builder-settings-panel">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#ecece0] dark:border-[#2d2d32] pb-2">
+                    <span className="text-[10px] uppercase font-black tracking-widest text-[#5c6e5a] dark:text-emerald-400 font-mono flex items-center gap-1.5">
+                      <Settings className="w-3.5 h-3.5 animate-spin" style={{ animationDuration: '6s' }} />
+                      Smart Sentence Builder Controls
+                    </span>
+                    <span className="text-[9px] text-[#8a8a7a] dark:text-[#a1a1aa] italic font-sans">
+                      Configure space management and duplicate filters
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {/* Spacing Mode */}
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] uppercase font-black tracking-wider text-gray-500 dark:text-gray-400 block font-mono">Space Management</label>
+                      <div className="flex rounded-lg overflow-hidden border border-[#e2e2d0] dark:border-[#2d2d32] text-xs shadow-sm bg-white dark:bg-[#1a1a1d]">
+                        <button
+                          type="button"
+                          onClick={() => setAppendMode('word')}
+                          className={`flex-1 py-1.5 text-center font-bold font-mono transition-all cursor-pointer ${
+                            appendMode === 'word'
+                              ? 'bg-[#7c8d7c] text-white shadow-inner'
+                              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-zinc-800'
+                          }`}
+                          title="Auto-insert spaces between all characters and words (Ideal for full-word symbols)"
+                        >
+                          Words
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAppendMode('letter')}
+                          className={`flex-1 py-1.5 text-center font-bold font-mono transition-all cursor-pointer ${
+                            appendMode === 'letter'
+                              ? 'bg-[#7c8d7c] text-white shadow-inner'
+                              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-zinc-800'
+                          }`}
+                          title="Do not add spaces after single letters (Ideal for spelling words out letter-by-letter)"
+                        >
+                          Letters
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Auto Deduplicate */}
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] uppercase font-black tracking-wider text-gray-500 dark:text-gray-400 block font-mono">Duplicate Filter</label>
+                      <button
+                        type="button"
+                        onClick={() => setAutoFilterDuplicates(!autoFilterDuplicates)}
+                        className={`w-full py-1.5 px-3 rounded-lg border text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer shadow-sm ${
+                          autoFilterDuplicates
+                            ? 'bg-[#f0f4ee] dark:bg-[#1a2f1a] border-[#cce4c5] text-[#3d652b] dark:text-emerald-400'
+                            : 'bg-white dark:bg-[#1a1a1d] border-gray-200 dark:border-[#2d2d32] text-gray-500 hover:border-gray-350'
+                        }`}
+                        title="Prevent appending identical gestures in immediate succession during camera streaming"
+                      >
+                        <span>Filter Duplicates</span>
+                        <span className={`w-1.5 h-1.5 rounded-full ${autoFilterDuplicates ? 'bg-[#52a447] animate-ping' : 'bg-gray-300'}`}></span>
+                      </button>
+                    </div>
+
+                    {/* Real-time Grammar */}
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] uppercase font-black tracking-wider text-gray-500 dark:text-gray-400 block font-mono">Real-time Grammar</label>
+                      <button
+                        type="button"
+                        onClick={() => setAutoGrammar(!autoGrammar)}
+                        className={`w-full py-1.5 px-3 rounded-lg border text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer shadow-sm ${
+                          autoGrammar
+                            ? 'bg-[#f0f4ee] dark:bg-[#1a2f1a] border-[#cce4c5] text-[#3d652b] dark:text-emerald-400'
+                            : 'bg-white dark:bg-[#1a1a1d] border-gray-200 dark:border-[#2d2d32] text-gray-500 hover:border-gray-350'
+                        }`}
+                        title="Auto-capitalize sentences, capitalize pronoun 'I', and fix punctuation spacing instantly"
+                      >
+                        <span>Live Grammar</span>
+                        <span className={`w-1.5 h-1.5 rounded-full ${autoGrammar ? 'bg-[#52a447] animate-ping' : 'bg-gray-300'}`}></span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Actions Row */}
+                  <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[#f2f2e6] dark:border-[#2d2d32]">
+                    {/* Manual Remove Duplicates Button */}
+                    <button
+                      type="button"
+                      onClick={handleDeduplicateText}
+                      disabled={!formedSentence.trim()}
+                      className="text-[10px] font-black tracking-wider uppercase font-mono bg-white dark:bg-[#1c1c20] text-amber-700 dark:text-amber-400 border border-amber-100 dark:border-amber-950/60 hover:bg-amber-50 dark:hover:bg-amber-950/20 px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                      title="De-duplicate consecutive repeating words in the notepad"
+                    >
+                      <Eraser className="w-3.5 h-3.5 shrink-0" />
+                      Clean Duplicates
+                    </button>
+
+                    {/* AI Grammar Correction Button */}
+                    <button
+                      type="button"
+                      onClick={handleImproveGrammarAI}
+                      disabled={!formedSentence.trim() || improvingGrammar}
+                      className="text-[10px] font-black tracking-wider uppercase font-mono bg-[#ebdcd1] dark:bg-[#453730] text-[#5c3c35] dark:text-[#f3dfcf] border border-[#ebdcd1] dark:border-[#523d32] hover:bg-[#dfcdbf] px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed ml-auto cursor-pointer"
+                      title="Polishes spelling, phrasing, duplication, capitalization, and sentence syntax using our AI grammar model"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 shrink-0 text-[#a36b5e] dark:text-orange-400" />
+                      {improvingGrammar ? "Polishing Flow..." : "Improve with AI"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Grammar Suggestion Display Callout */}
+                {grammarSuggestion && (
+                  <div 
+                    className="bg-[#f0f4ee] dark:bg-[#1e2f1e] border border-[#cce4c5] dark:border-[#2d4d2b] p-4 rounded-2xl space-y-3 shadow-sm"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] uppercase font-black tracking-widest text-[#3d652b] dark:text-emerald-400 font-mono flex items-center gap-1.5">
+                        <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 font-bold animate-bounce" />
+                        AI Grammar Review
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setGrammarSuggestion(null)}
+                        className="text-[10px] font-bold text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-pointer"
+                      >
+                        ✕ Dismiss
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                      <div className="bg-white/60 dark:bg-[#151518]/60 p-2.5 rounded-xl border border-gray-100 dark:border-[#2d2d32]/40">
+                        <span className="text-[9px] uppercase font-bold text-gray-400 block mb-1">Raw Transcript</span>
+                        <p className="text-gray-600 dark:text-gray-400 italic line-clamp-3">"{formedSentence}"</p>
+                      </div>
+                      <div className="bg-white dark:bg-[#1c1c1f] p-2.5 rounded-xl border border-[#cbe3c3] dark:border-emerald-950">
+                        <span className="text-[9px] uppercase font-bold text-[#3d652b] dark:text-emerald-400 block mb-1">Recommended Polished Copy</span>
+                        <p className="text-gray-800 dark:text-white font-semibold leading-relaxed line-clamp-3">"{grammarSuggestion}"</p>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setGrammarSuggestion(null)}
+                        className="text-xs font-bold text-gray-500 hover:text-gray-700 bg-white dark:bg-[#1c1c20] border border-gray-200 dark:border-[#2d2d32] px-3.5 py-1.5 rounded-xl transition-all cursor-pointer"
+                      >
+                        Reject
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleAcceptGrammar}
+                        className="text-xs font-bold text-white bg-[#7c8d7c] hover:bg-[#687c68] px-4 py-1.5 rounded-xl transition-all shadow-sm cursor-pointer"
+                      >
+                        Accept & Replace
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Display Area for Formed Sentence */}
                 <div className="space-y-2">
