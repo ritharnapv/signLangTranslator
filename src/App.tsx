@@ -44,7 +44,8 @@ import {
   FileText,
   Eraser,
   Sun,
-  Moon
+  Moon,
+  Languages
 } from 'lucide-react';
 
 const INITIAL_SESSIONS: SessionHistoryItem[] = [
@@ -319,6 +320,13 @@ export default function App() {
   const [appendMode, setAppendMode] = useState<'word' | 'letter'>('word');
   const [improvingGrammar, setImprovingGrammar] = useState<boolean>(false);
   const [grammarSuggestion, setGrammarSuggestion] = useState<string | null>(null);
+
+  // Translation States
+  const [translationLang, setTranslationLang] = useState<string>("Hindi");
+  const [translatedText, setTranslatedText] = useState<string>("");
+  const [isTranslatingText, setIsTranslatingText] = useState<boolean>(false);
+  const [autoTranslate, setAutoTranslate] = useState<boolean>(true);
+  const [translationError, setTranslationError] = useState<string | null>(null);
 
   const autoAppendRef = useRef<boolean>(false);
   const lastAutoAppendedCharRef = useRef<string | null>(null);
@@ -660,6 +668,106 @@ export default function App() {
       setFormedSentence(grammarSuggestion);
       setGrammarSuggestion(null);
     }
+  };
+
+  const handleTranslate = async (textToTranslate?: string, lang?: string) => {
+    const text = textToTranslate !== undefined ? textToTranslate : formedSentence;
+    const target = lang !== undefined ? lang : translationLang;
+    
+    if (!text.trim()) {
+      setTranslatedText("");
+      setTranslationError(null);
+      return;
+    }
+    
+    setIsTranslatingText(true);
+    setTranslationError(null);
+    try {
+      const res = await fetch("/api/translate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ text, targetLanguage: target })
+      });
+      if (!res.ok) {
+        throw new Error("Translation request failed");
+      }
+      const data = await res.json();
+      if (data && data.translated) {
+        setTranslatedText(data.translated);
+      } else {
+        throw new Error("Invalid response schema");
+      }
+    } catch (err: any) {
+      console.error("Translation error:", err);
+      setTranslationError(err.message || "Failed to translate output text");
+    } finally {
+      setIsTranslatingText(false);
+    }
+  };
+
+  // Debounced translation useEffect to handle real-time automatic translations
+  useEffect(() => {
+    if (!autoTranslate || !formedSentence.trim()) {
+      if (!formedSentence.trim()) {
+        setTranslatedText("");
+      }
+      return;
+    }
+
+    const delayDebounce = setTimeout(() => {
+      handleTranslate(formedSentence, translationLang);
+    }, 600); // 600ms debounce to prevent hitting rate limits during fast typing/gestures
+
+    return () => clearTimeout(delayDebounce);
+  }, [formedSentence, translationLang, autoTranslate]);
+
+  const [translationCopied, setTranslationCopied] = useState<boolean>(false);
+
+  const handleCopyTranslation = () => {
+    if (!translatedText) return;
+    navigator.clipboard.writeText(translatedText);
+    setTranslationCopied(true);
+    setTimeout(() => setTranslationCopied(false), 2000);
+  };
+
+  const handleSpeakTranslation = () => {
+    if (!translatedText || !window.speechSynthesis) return;
+    
+    // Cancel ongoing speech
+    window.speechSynthesis.cancel();
+    
+    const utterance = new SpeechSynthesisUtterance(translatedText);
+    
+    // Map languages to standard browser TTS locale identifiers
+    const langLocales: Record<string, string> = {
+      "Hindi": "hi-IN",
+      "Kannada": "kn-IN",
+      "Malayalam": "ml-IN",
+      "English": "en-US"
+    };
+    
+    const targetLocale = langLocales[translationLang] || "en-US";
+    const matchingVoice = window.speechSynthesis.getVoices().find(v => 
+      v.lang.startsWith(targetLocale) || v.lang.includes(targetLocale)
+    );
+    
+    if (matchingVoice) {
+      utterance.voice = matchingVoice;
+    } else {
+      // Direct locale fallback instruction
+      utterance.lang = targetLocale;
+    }
+    
+    utterance.rate = speechRate;
+    utterance.pitch = speechPitch;
+    
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    
+    window.speechSynthesis.speak(utterance);
   };
 
   const handleCollectSample = () => {
@@ -2276,6 +2384,144 @@ export default function App() {
                         Clear
                       </button>
                     )}
+                  </div>
+                </div>
+
+                {/* Multilingual Translation Hub Panel */}
+                <div className="bg-[#fcfbf9] dark:bg-[#151518] border border-[#e2e2d0] dark:border-[#2d2d32] rounded-2xl p-4 space-y-4 shadow-sm" id="multilingual-translation-panel">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#ecece0] dark:border-[#2d2d32] pb-2">
+                    <span className="text-[10px] uppercase font-black tracking-widest text-[#5c6e5a] dark:text-emerald-400 font-mono flex items-center gap-1.5">
+                      <Languages className="w-3.5 h-3.5 animate-pulse" />
+                      Multilingual Translation Hub
+                    </span>
+                    <div className="flex items-center gap-3">
+                      <label htmlFor="auto-translate-toggle" className="flex items-center gap-1.5 text-[10px] text-gray-500 dark:text-gray-400 font-bold font-mono cursor-pointer select-none">
+                        <input
+                          id="auto-translate-toggle"
+                          type="checkbox"
+                          checked={autoTranslate}
+                          onChange={(e) => setAutoTranslate(e.target.checked)}
+                          className="rounded text-[#7c8d7c] focus:ring-[#7c8d7c] border-[#e2e2d0] dark:border-[#2d2d32] cursor-pointer"
+                        />
+                        Real-time Translation
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    {/* Language selection pills */}
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] uppercase font-black tracking-wider text-gray-400 dark:text-gray-500 block font-mono">Select Target Language</label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {["English", "Hindi", "Kannada", "Malayalam"].map((lang) => {
+                          const flags: Record<string, string> = {
+                            "English": "🇬🇧",
+                            "Hindi": "🇮🇳",
+                            "Kannada": "🇮🇳",
+                            "Malayalam": "🇮🇳"
+                          };
+                          const isSelected = translationLang === lang;
+                          return (
+                            <button
+                              key={lang}
+                              type="button"
+                              onClick={() => {
+                                setTranslationLang(lang);
+                                if (!autoTranslate) {
+                                  handleTranslate(formedSentence, lang);
+                                }
+                              }}
+                              className={`text-xs px-3 py-1.5 rounded-xl font-bold transition-all border shadow-sm cursor-pointer flex items-center gap-1.5 ${
+                                isSelected
+                                  ? 'bg-[#7c8d7c] text-white border-[#687c68] shadow-inner font-sans'
+                                  : 'bg-white dark:bg-[#1a1a1d] text-gray-600 dark:text-gray-300 border-[#e2e2d0] dark:border-[#2d2d32] hover:bg-gray-50 dark:hover:bg-zinc-800 font-sans'
+                              }`}
+                            >
+                              <span>{flags[lang]}</span>
+                              <span>{lang}</span>
+                            </button>
+                          );
+                        })}
+
+                        {!autoTranslate && (
+                          <button
+                            type="button"
+                            onClick={() => handleTranslate(formedSentence, translationLang)}
+                            disabled={isTranslatingText || !formedSentence.trim()}
+                            className="text-[10px] font-black tracking-wider uppercase font-mono bg-[#ebdcd1] dark:bg-[#453730] text-[#5c3c35] dark:text-[#f3dfcf] border border-[#ebdcd1] dark:border-[#523d32] hover:bg-[#dfcdbf] px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed ml-auto cursor-pointer"
+                          >
+                            <RefreshCw className={`w-3 h-3 ${isTranslatingText ? 'animate-spin' : ''}`} />
+                            Translate Now
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Translation Output Card */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[9px] uppercase font-black tracking-wider text-gray-400 dark:text-gray-500 block font-mono">Translation Output ({translationLang})</label>
+                        {isTranslatingText && (
+                          <span className="text-[9px] font-bold text-gray-500 dark:text-gray-400 font-mono flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                            Translating...
+                          </span>
+                        )}
+                      </div>
+
+                      {translationError ? (
+                        <div className="bg-rose-50 dark:bg-[#201515] border border-rose-100 dark:border-rose-950 p-3 rounded-xl text-xs text-rose-600 dark:text-rose-400 font-mono">
+                          ⚠️ {translationError}
+                        </div>
+                      ) : translatedText ? (
+                        <div className="bg-[#f0f4ee]/60 dark:bg-[#1e2f1e]/30 border border-[#cce4c5]/80 dark:border-[#2d4d2b]/60 p-3.5 rounded-2xl relative space-y-3">
+                          <p className="text-sm font-sans text-gray-800 dark:text-gray-100 font-semibold leading-relaxed whitespace-pre-wrap">
+                            {translatedText}
+                          </p>
+
+                          <div className="flex items-center justify-end gap-2 border-t border-[#ecece0]/60 dark:border-[#2d2d32]/60 pt-2 text-[10px]">
+                            {/* Copy translation */}
+                            <button
+                              type="button"
+                              onClick={handleCopyTranslation}
+                              className="font-bold font-mono text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 bg-white dark:bg-[#1a1a1d] border border-gray-200 dark:border-[#2d2d32] px-2.5 py-1.5 rounded-xl flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                              title="Copy translated output to clipboard"
+                            >
+                              {translationCopied ? (
+                                <>
+                                  <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                                  <span>Copied!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3 h-3" />
+                                  <span>Copy</span>
+                                </>
+                              )}
+                            </button>
+
+                            {/* Speak translation */}
+                            <button
+                              type="button"
+                              onClick={handleSpeakTranslation}
+                              className="font-bold font-mono text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 bg-white dark:bg-[#1a1a1d] border border-gray-200 dark:border-[#2d2d32] px-2.5 py-1.5 rounded-xl flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                              title="Speak translation aloud using target language synthesis"
+                            >
+                              <Volume2 className="w-3 h-3" />
+                              <span>Speak</span>
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="bg-[#fbfbfa]/40 dark:bg-[#151518]/30 border border-dashed border-[#e2e2d0] dark:border-[#2d2d32] p-4 rounded-2xl text-center">
+                          <p className="text-xs text-gray-400 dark:text-gray-500 italic">
+                            {formedSentence.trim() 
+                              ? "Awaiting translation action..." 
+                              : "Write or append characters above to generate translation."}
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 

@@ -472,6 +472,130 @@ Output only the corrected, polished English sentence without any introductory or
   }
 });
 
+// 8. POST translate output text (multilingual translation)
+app.post("/api/translate", async (req, res): Promise<any> => {
+  try {
+    const { text, targetLanguage } = req.body;
+    if (!text) {
+      return res.status(400).json({ error: "Missing text to translate" });
+    }
+    if (!targetLanguage) {
+      return res.status(400).json({ error: "Missing target language" });
+    }
+
+    const ai = getAiClient();
+    if (!ai) {
+      // Offline fallback dictionary translation for common words if offline/no key
+      const lower = text.trim().toLowerCase();
+      const fallbackDb: Record<string, Record<string, string>> = {
+        hindi: {
+          "hello": "नमस्ते (Namaste)",
+          "hi": "नमस्ते (Namaste)",
+          "love": "प्यार (Pyar)",
+          "peace": "शांति (Shanti)",
+          "rock": "चट्टान (Chattan)",
+          "heart": "दिल (Dil)",
+          "yes": "हाँ (Haan)",
+          "no": "नहीं (Nahi)",
+          "good": "अच्छा (Achha)",
+          "please": "कृपया (Kripya)",
+          "thank you": "धन्यवाद (Dhanyawad)",
+          "how are you": "आप कैसे हैं? (Aap kaise hain?)",
+          "i love you": "मैं आपसे प्यार करता हूँ (Main aapse pyar karta hoon)",
+          "help": "मदद (Madad)",
+          "a": "ए", "b": "बी", "c": "सी"
+        },
+        kannada: {
+          "hello": "ನಮಸ್ಕಾರ (Namaskara)",
+          "hi": "ನಮಸ್ಕಾರ (Namaskara)",
+          "love": "ಪ್ರೀತಿ (Preethi)",
+          "peace": "ಶಾಂತಿ (Shanthi)",
+          "rock": "ಬಂಡೆ (Bande)",
+          "heart": "ಹೃದಯ (Hrudaya)",
+          "yes": "ಹೌದು (Haudu)",
+          "no": "ಇಲ್ಲ (Illa)",
+          "good": "ಒಳ್ಳೆಯದು (Olleyadu)",
+          "please": "ದಯವಿಟ್ಟು (Dayavittu)",
+          "thank you": "ಧನ್ಯವಾದಗಳು (Dhanyavadagalu)",
+          "how are you": "ನೀವು ಹೇಗಿದ್ದೀರಿ? (Neevu hegiddiri?)",
+          "i love you": "ನಾನು ನಿನ್ನನ್ನು ಪ್ರೀತಿಸುತ್ತೇನೆ (Naanu ninnanu preethisuthene)",
+          "help": "ಸಹಾಯ (Sahaya)",
+          "a": "ಎ", "b": "ಬಿ", "c": "ಸಿ"
+        },
+        malayalam: {
+          "hello": "നമസ്കാരം (Namaskaram)",
+          "hi": "നമസ്കാരം (Namaskaram)",
+          "love": "സ്നേഹം (Snehham)",
+          "peace": "സമാധാനം (Samadhanam)",
+          "rock": "പാറ (Paara)",
+          "heart": "ഹൃദയം (Hrudayam)",
+          "yes": "അതെ (Athe)",
+          "no": "അല്ല (Alla)",
+          "good": "നല്ലത് (Nallathu)",
+          "please": "ദയവായി (Dayavayi)",
+          "thank you": "നന്ദി (Nandi)",
+          "how are you": "സുഖമാണോ? (Sukhamano?)",
+          "i love you": "ഞാൻ നിന്നെ സ്നേഹിക്കുന്നു (Njan ninne snehikkunnu)",
+          "help": "സഹായം (Sahayam)",
+          "a": "എ", "b": "ബി", "c": "സി"
+        }
+      };
+
+      const langKey = targetLanguage.toLowerCase();
+      let translated = "";
+      if (langKey === "english") {
+        translated = text; // Already English
+      } else if (fallbackDb[langKey]) {
+        const dict = fallbackDb[langKey];
+        if (dict[lower]) {
+          translated = dict[lower];
+        } else {
+          const parts = text.split(/\s+/).map((w: string) => {
+            const lw = w.toLowerCase().replace(/[.,!?]/g, "");
+            return dict[lw] || w;
+          });
+          translated = parts.join(" ");
+        }
+      } else {
+        translated = text;
+      }
+
+      return res.json({
+        original: text,
+        translated: translated,
+        targetLanguage,
+        simulated: true,
+        message: "Offline local translation dictionary used."
+      });
+    }
+
+    const promptText = `You are an expert multilingual translator. Translate the following text from English into ${targetLanguage}.
+If the text contains spelling mistakes, first correct it logically before translating.
+Maintain the exact emotional tone and meaning. Do not include any explanations, transliterations (unless natural as part of the language), notes, or markdown. Return ONLY the final translated sentence or phrase.
+
+Text: "${text}"
+
+Translated ${targetLanguage} text:`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: promptText,
+    });
+
+    const translated = (response.text || "").trim();
+    res.json({
+      original: text,
+      translated: translated,
+      targetLanguage,
+      simulated: false
+    });
+
+  } catch (error: any) {
+    console.error("Translation error:", error);
+    res.status(500).json({ error: "Translation failed", details: error.message });
+  }
+});
+
 // Configure Vite integration or static file rendering
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
