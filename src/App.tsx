@@ -350,12 +350,21 @@ export default function App() {
     appendModeRef.current = appendMode;
   }, [appendMode]);
 
-  // Browser-based Text-to-Speech (TTS) states
+  // Browser and Cloud based Text-to-Speech (TTS) states
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoiceName, setSelectedVoiceName] = useState<string>("");
   const [speechRate, setSpeechRate] = useState<number>(1.0);
   const [speechPitch, setSpeechPitch] = useState<number>(1.0);
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
+  
+  // Custom High-Fidelity Gemini TTS and Auto-Detection states
+  const [useAiTts, setUseAiTts] = useState<boolean>(true);
+  const [aiTtsVoice, setAiTtsVoice] = useState<string>("Kore");
+  const [autoDetectLanguage, setAutoDetectLanguage] = useState<boolean>(true);
+  const [isDetectingLanguage, setIsDetectingLanguage] = useState<boolean>(false);
+  const [detectedLanguage, setDetectedLanguage] = useState<string>("English");
+  const [detectedLanguageConfidence, setDetectedLanguageConfidence] = useState<number>(1.0);
+  const [aiAudioElement, setAiAudioElement] = useState<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
@@ -378,29 +387,50 @@ export default function App() {
 
     // Keep state fully synchronized with SpeechSynthesis active speech state
     const syncInterval = setInterval(() => {
-      setIsSpeaking(window.speechSynthesis.speaking);
+      // If we are using local speech synthesis, sync with it. Otherwise, aiAudioElement manages itself.
+      if (!useAiTts) {
+        setIsSpeaking(window.speechSynthesis.speaking);
+      }
     }, 200);
 
     return () => {
       clearInterval(syncInterval);
     };
-  }, []);
+  }, [useAiTts]);
 
-  const handleSpeak = (textToSpeak: string) => {
+  const handleLocalSpeak = (textToSpeak: string, languageOverride?: string) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
-    
-    // Stop any ongoing speech first
-    window.speechSynthesis.cancel();
-    
-    if (!textToSpeak.trim()) return;
 
     const utterance = new SpeechSynthesisUtterance(textToSpeak);
+    
+    // Map languages to standard browser TTS locale identifiers
+    const langLocales: Record<string, string> = {
+      "Hindi": "hi-IN",
+      "Kannada": "kn-IN",
+      "Malayalam": "ml-IN",
+      "English": "en-US"
+    };
+
+    const targetLang = languageOverride || detectedLanguage || translationLang;
+    const targetLocale = langLocales[targetLang] || "en-US";
+
+    // Attempt to find a browser voice matching target locale, or matching selectedVoiceName
+    let matchingVoice = null;
     if (selectedVoiceName) {
-      const voiceObj = availableVoices.find(v => v.name === selectedVoiceName);
-      if (voiceObj) {
-        utterance.voice = voiceObj;
-      }
+      matchingVoice = availableVoices.find(v => v.name === selectedVoiceName);
     }
+    if (!matchingVoice) {
+      matchingVoice = availableVoices.find(v => 
+        v.lang.startsWith(targetLocale) || v.lang.includes(targetLocale)
+      );
+    }
+
+    if (matchingVoice) {
+      utterance.voice = matchingVoice;
+    } else {
+      utterance.lang = targetLocale;
+    }
+
     utterance.rate = speechRate;
     utterance.pitch = speechPitch;
     
@@ -412,11 +442,109 @@ export default function App() {
     setIsSpeaking(true);
   };
 
+  const handleSpeak = async (textToSpeak: string, languageOverride?: string) => {
+    if (!textToSpeak.trim()) return;
+
+    // Stop any current local or cloud speech
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    if (aiAudioElement) {
+      aiAudioElement.pause();
+      aiAudioElement.src = "";
+    }
+    setIsSpeaking(false);
+
+    if (useAiTts) {
+      setIsSpeaking(true);
+      try {
+        const res = await fetch("/api/tts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: textToSpeak, voiceName: aiTtsVoice })
+        });
+        if (!res.ok) {
+          throw new Error("Cloud TTS endpoint failed");
+        }
+        const data = await res.json();
+        if (data.simulated || !data.base64Audio) {
+          console.log("Cloud TTS simulated or empty; falling back to browser SpeechSynthesis.");
+          handleLocalSpeak(textToSpeak, languageOverride);
+        } else {
+          const audioUrl = `data:audio/wav;base64,${data.base64Audio}`;
+          const audio = new Audio(audioUrl);
+          setAiAudioElement(audio);
+          
+          audio.onplay = () => setIsSpeaking(true);
+          audio.onended = () => {
+            setIsSpeaking(false);
+            setAiAudioElement(null);
+          };
+          audio.onerror = () => {
+            setIsSpeaking(false);
+            setAiAudioElement(null);
+            handleLocalSpeak(textToSpeak, languageOverride);
+          };
+          await audio.play();
+        }
+      } catch (err) {
+        console.warn("AI TTS playback error:", err);
+        handleLocalSpeak(textToSpeak, languageOverride);
+      }
+    } else {
+      handleLocalSpeak(textToSpeak, languageOverride);
+    }
+  };
+
   const handleStopSpeech = () => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    if (aiAudioElement) {
+      aiAudioElement.pause();
+      aiAudioElement.src = "";
+      setAiAudioElement(null);
+    }
     setIsSpeaking(false);
   };
+
+  const handleDetectLanguage = async (text: string) => {
+    if (!text.trim()) return;
+    setIsDetectingLanguage(true);
+    try {
+      const res = await fetch("/api/detect-language", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text })
+      });
+      if (!res.ok) throw new Error("Detection request failed");
+      const data = await res.json();
+      if (data && data.language) {
+        setDetectedLanguage(data.language);
+        if (data.confidence !== undefined) {
+          setDetectedLanguageConfidence(data.confidence);
+        }
+        // Auto-synchronize translation target language when input shifts language
+        if (data.language !== "English") {
+          setTranslationLang(data.language);
+        }
+      }
+    } catch (err) {
+      console.error("Language detection error:", err);
+    } finally {
+      setIsDetectingLanguage(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!autoDetectLanguage || !formedSentence.trim()) return;
+    
+    const delayDebounce = setTimeout(() => {
+      handleDetectLanguage(formedSentence);
+    }, 800);
+
+    return () => clearTimeout(delayDebounce);
+  }, [formedSentence, autoDetectLanguage]);
 
   // Attempt to auto-restores saved TF.js model from browser local IndexedDB on startup
   useEffect(() => {
@@ -733,41 +861,8 @@ export default function App() {
   };
 
   const handleSpeakTranslation = () => {
-    if (!translatedText || !window.speechSynthesis) return;
-    
-    // Cancel ongoing speech
-    window.speechSynthesis.cancel();
-    
-    const utterance = new SpeechSynthesisUtterance(translatedText);
-    
-    // Map languages to standard browser TTS locale identifiers
-    const langLocales: Record<string, string> = {
-      "Hindi": "hi-IN",
-      "Kannada": "kn-IN",
-      "Malayalam": "ml-IN",
-      "English": "en-US"
-    };
-    
-    const targetLocale = langLocales[translationLang] || "en-US";
-    const matchingVoice = window.speechSynthesis.getVoices().find(v => 
-      v.lang.startsWith(targetLocale) || v.lang.includes(targetLocale)
-    );
-    
-    if (matchingVoice) {
-      utterance.voice = matchingVoice;
-    } else {
-      // Direct locale fallback instruction
-      utterance.lang = targetLocale;
-    }
-    
-    utterance.rate = speechRate;
-    utterance.pitch = speechPitch;
-    
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-    
-    window.speechSynthesis.speak(utterance);
+    if (!translatedText) return;
+    handleSpeak(translatedText, translationLang);
   };
 
   const handleCollectSample = () => {
@@ -2526,14 +2621,14 @@ export default function App() {
                 </div>
 
                 {/* Text-to-Speech Interface Panel */}
-                <div className="bg-[#fcfbf7] dark:bg-[#1c1a16] border border-[#ebebe2] dark:border-[#2b2a26] rounded-2xl p-4 space-y-3" id="tts-controls-panel">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-2 border-b border-[#f2f2e6] dark:border-[#2b2a26]">
+                <div className="bg-[#fcfbf7] dark:bg-[#1c1a16] border border-[#ebebe2] dark:border-[#2b2a26] rounded-2xl p-5 space-y-4 shadow-sm" id="tts-controls-panel">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-[#f2f2e6] dark:border-[#2b2a26]">
                     <div className="flex items-center gap-2">
                       <Volume2 className={`w-4 h-4 text-[#ebdcd1] ${isSpeaking ? 'animate-bounce text-[#7c8d7c] dark:text-emerald-400' : 'text-[#8a8a7a] dark:text-[#a1a1aa]'}`} />
                       <span className="text-xs font-bold text-[#4a4a40] dark:text-[#f4f4f5] uppercase tracking-wider">Audio Reader & TTS Engine</span>
                     </div>
                     {isSpeaking && (
-                      <div className="flex items-center gap-1 bg-[#f0f4ee] dark:bg-[#1a2f1a] px-2 py-0.5 rounded-lg border border-[#d2e8cc] dark:border-[#254d25]">
+                      <div className="flex items-center gap-1 bg-[#f0f4ee] dark:bg-[#1a2f1a] px-2.5 py-0.5 rounded-lg border border-[#d2e8cc] dark:border-[#254d25]">
                         <span className="text-[9px] font-bold text-[#3d652b] dark:text-emerald-400 uppercase">Speaking:</span>
                         <span className="inline-flex gap-0.5 items-end h-2.5 w-8">
                           <span className="w-0.5 bg-[#4b6a4a] dark:bg-emerald-400 h-1 animate-pulse rounded-full" />
@@ -2545,26 +2640,112 @@ export default function App() {
                     )}
                   </div>
 
+                  {/* Engine selection and Auto Detect toggle */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 bg-gray-50/60 dark:bg-zinc-900/40 p-3 rounded-2xl border border-gray-100 dark:border-zinc-800">
+                    <div className="space-y-1.5">
+                      <span className="text-[9px] uppercase font-black tracking-wider text-gray-400 dark:text-gray-500 block font-mono">TTS Voice Engine</span>
+                      <div className="flex gap-1 bg-white dark:bg-[#111] p-1 rounded-xl border border-gray-200 dark:border-zinc-800 shadow-sm">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUseAiTts(true);
+                            if (isSpeaking) handleStopSpeech();
+                          }}
+                          className={`flex-1 text-[10px] py-1.5 rounded-lg font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                            useAiTts 
+                              ? 'bg-[#7c8d7c] text-white shadow-sm' 
+                              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                          }`}
+                        >
+                          <Sparkles className="w-3 h-3" />
+                          Premium AI
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUseAiTts(false);
+                            if (isSpeaking) handleStopSpeech();
+                          }}
+                          className={`flex-1 text-[10px] py-1.5 rounded-lg font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                            !useAiTts 
+                              ? 'bg-[#5c3c35] text-white shadow-sm' 
+                              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                          }`}
+                        >
+                          <Cpu className="w-3 h-3" />
+                          Local Device
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <span className="text-[9px] uppercase font-black tracking-wider text-gray-400 dark:text-gray-500 block font-mono">Auto Language Detection</span>
+                      <div className="flex items-center justify-between bg-white dark:bg-[#111] px-3 py-2.5 rounded-xl border border-gray-200 dark:border-zinc-800 shadow-sm">
+                        <label htmlFor="auto-detect-voice-toggle" className="flex items-center gap-1.5 text-[10px] text-gray-600 dark:text-gray-300 font-bold font-mono cursor-pointer select-none">
+                          <input
+                            id="auto-detect-voice-toggle"
+                            type="checkbox"
+                            checked={autoDetectLanguage}
+                            onChange={(e) => setAutoDetectLanguage(e.target.checked)}
+                            className="rounded text-[#7c8d7c] focus:ring-[#7c8d7c] border-[#e2e2d0] dark:border-[#2d2d32] cursor-pointer"
+                          />
+                          Enable Detection
+                        </label>
+                        {isDetectingLanguage ? (
+                          <span className="text-[9px] text-[#7c8d7c] font-bold font-mono flex items-center gap-1 animate-pulse">
+                            <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                            Detecting...
+                          </span>
+                        ) : formedSentence.trim() ? (
+                          <div className="flex items-center gap-1" title={`Confidence: ${Math.round(detectedLanguageConfidence * 100)}%`}>
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase font-mono">{detectedLanguage}</span>
+                          </div>
+                        ) : (
+                          <span className="text-[9px] text-gray-400 dark:text-gray-500 italic font-mono">Awaiting text</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Voice selector option */}
                     <div className="space-y-1.5">
-                      <label htmlFor="tts-voice-select" className="text-[10px] uppercase font-bold tracking-wider text-[#7a7a6a] dark:text-[#a1a1aa]">Select Voice Option</label>
-                      <select
-                        id="tts-voice-select"
-                        value={selectedVoiceName}
-                        onChange={(e) => setSelectedVoiceName(e.target.value)}
-                        className="w-full text-xs font-sans text-[#2d2d28] dark:text-[#d4d4d8] bg-white dark:bg-[#151518] border border-[#e2e2d0] dark:border-[#2d2d32] rounded-xl px-3 py-2 focus:outline-none focus:border-[#7c8d7c] cursor-pointer"
-                      >
-                        {availableVoices.length > 0 ? (
-                          availableVoices.map((voice) => (
-                            <option key={voice.name} value={voice.name}>
-                              {voice.name} ({voice.lang})
-                            </option>
-                          ))
-                        ) : (
-                          <option value="">Default Native Voice</option>
-                        )}
-                      </select>
+                      <label htmlFor="tts-voice-select" className="text-[10px] uppercase font-bold tracking-wider text-[#7a7a6a] dark:text-[#a1a1aa] block">
+                        {useAiTts ? "Select AI Prebuilt Voice" : "Select Device Local Voice"}
+                      </label>
+                      
+                      {useAiTts ? (
+                        <select
+                          id="tts-voice-select"
+                          value={aiTtsVoice}
+                          onChange={(e) => setAiTtsVoice(e.target.value)}
+                          className="w-full text-xs font-sans text-[#2d2d28] dark:text-[#d4d4d8] bg-white dark:bg-[#151518] border border-[#e2e2d0] dark:border-[#2d2d32] rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#7c8d7c] cursor-pointer shadow-sm"
+                        >
+                          <option value="Kore">Kore (Warm, Professional)</option>
+                          <option value="Puck">Puck (Cheerful & Soft)</option>
+                          <option value="Charon">Charon (Deep & Direct)</option>
+                          <option value="Fenrir">Fenrir (Expressive)</option>
+                          <option value="Zephyr">Zephyr (Serene & Smooth)</option>
+                        </select>
+                      ) : (
+                        <select
+                          id="tts-voice-select"
+                          value={selectedVoiceName}
+                          onChange={(e) => setSelectedVoiceName(e.target.value)}
+                          className="w-full text-xs font-sans text-[#2d2d28] dark:text-[#d4d4d8] bg-white dark:bg-[#151518] border border-[#e2e2d0] dark:border-[#2d2d32] rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#7c8d7c] cursor-pointer shadow-sm"
+                        >
+                          {availableVoices.length > 0 ? (
+                            availableVoices.map((voice) => (
+                              <option key={voice.name} value={voice.name}>
+                                {voice.name} ({voice.lang})
+                              </option>
+                            ))
+                          ) : (
+                            <option value="">Default Native Voice</option>
+                          )}
+                        </select>
+                      )}
                     </div>
 
                     {/* Speed/Rate & Pitch Controls */}
@@ -2610,7 +2791,7 @@ export default function App() {
                     <button
                       onClick={() => handleSpeak(formedSentence)}
                       disabled={!formedSentence.trim()}
-                      className={`flex-1 text-xs font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-all duration-200 border shadow-sm ${
+                      className={`flex-1 text-xs font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-all duration-200 border shadow-sm cursor-pointer ${
                         formedSentence.trim()
                           ? 'bg-[#5c3c35] dark:bg-[#83564c] hover:bg-[#4d322c] text-white border-[#5c3c35] dark:border-[#83564c]'
                           : 'bg-gray-50 dark:bg-[#151518]/40 text-gray-300 dark:text-[#424249] border-gray-100 dark:border-[#202024]/40 cursor-not-allowed'
@@ -2618,13 +2799,13 @@ export default function App() {
                       id="tts-play-btn"
                     >
                       <Play className="w-3.5 h-3.5 fill-current" />
-                      Read Aloud
+                      Read Aloud ({formedSentence.trim() ? (autoDetectLanguage ? detectedLanguage : "Detect Off") : "Empty"})
                     </button>
 
                     <button
                       onClick={handleStopSpeech}
                       disabled={!isSpeaking}
-                      className={`text-xs font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-all duration-200 border shadow-sm ${
+                      className={`text-xs font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-all duration-200 border shadow-sm cursor-pointer ${
                         isSpeaking
                           ? 'bg-rose-50 dark:bg-[#3b171a] hover:bg-rose-100 dark:hover:bg-[#4d1f22] text-rose-600 dark:text-rose-400 border-rose-100 dark:border-rose-950'
                           : 'bg-gray-50 dark:bg-[#151518]/40 text-gray-300 dark:text-[#424249] border-gray-100 dark:border-[#202024]/40 cursor-not-allowed'

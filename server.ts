@@ -596,6 +596,140 @@ Translated ${targetLanguage} text:`;
   }
 });
 
+// 9. POST generate speech output (text-to-speech using gemini-3.1-flash-tts-preview)
+app.post("/api/tts", async (req, res): Promise<any> => {
+  try {
+    const { text, voiceName } = req.body;
+    if (!text) {
+      return res.status(400).json({ error: "Missing text to speak" });
+    }
+
+    const ai = getAiClient();
+    if (!ai) {
+      return res.json({
+        simulated: true,
+        message: "Offline fallback: Browser Speech Synthesis will be used."
+      });
+    }
+
+    // Supported prebuilt voices: 'Puck', 'Charon', 'Kore', 'Fenrir', 'Zephyr'
+    const allowedVoices = ['Puck', 'Charon', 'Kore', 'Fenrir', 'Zephyr'];
+    const chosenVoice = allowedVoices.includes(voiceName) ? voiceName : 'Kore';
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.1-flash-tts-preview",
+      contents: [{ parts: [{ text: text }] }],
+      config: {
+        responseModalities: ["AUDIO"],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: chosenVoice },
+          },
+        },
+      },
+    });
+
+    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    if (!base64Audio) {
+      throw new Error("No audio content returned from model");
+    }
+
+    res.json({
+      base64Audio: base64Audio,
+      simulated: false,
+      voiceName: chosenVoice
+    });
+
+  } catch (error: any) {
+    console.error("TTS error:", error);
+    res.status(500).json({ error: "Speech generation failed", details: error.message });
+  }
+});
+
+// 10. POST detect text language using gemini-3.5-flash
+app.post("/api/detect-language", async (req, res): Promise<any> => {
+  const { text } = req.body;
+  try {
+    if (!text || !text.trim()) {
+      return res.json({ language: "English", confidence: 1.0 });
+    }
+
+    const ai = getAiClient();
+    if (!ai) {
+      // Local regex/simple heuristic detection for offline simulation
+      const textTrim = text.trim();
+      let detected = "English";
+      if (/[\u0900-\u097F]/.test(textTrim)) {
+        detected = "Hindi";
+      } else if (/[\u0C80-\u0CFF]/.test(textTrim)) {
+        detected = "Kannada";
+      } else if (/[\u0D00-\u0D7F]/.test(textTrim)) {
+        detected = "Malayalam";
+      }
+      return res.json({
+        language: detected,
+        confidence: 0.9,
+        simulated: true
+      });
+    }
+
+    const promptText = `Analyze the language of the following text and return the detected language.
+The detected language MUST be exactly one of these: "English", "Hindi", "Kannada", "Malayalam".
+If you are unsure or if the text contains multiple languages, prioritize the most dominant script. If the text is purely Latin/English or spelling is ambiguous, return "English".
+
+Text: "${text}"`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: promptText,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            language: { 
+              type: Type.STRING, 
+              description: 'The detected language, must be exactly one of "English", "Hindi", "Kannada", "Malayalam"' 
+            },
+            confidence: { 
+              type: Type.NUMBER, 
+              description: 'Confidence score from 0.0 to 1.0' 
+            }
+          },
+          required: ["language"]
+        }
+      }
+    });
+
+    const data = JSON.parse((response.text || "{}").trim());
+    const validLanguages = ["English", "Hindi", "Kannada", "Malayalam"];
+    let detectedLang = data.language || "English";
+    if (!validLanguages.includes(detectedLang)) {
+      detectedLang = "English";
+    }
+
+    res.json({
+      language: detectedLang,
+      confidence: data.confidence ?? 1.0,
+      simulated: false
+    });
+
+  } catch (error: any) {
+    console.error("Language detection error:", error);
+    // Safe heuristic fallback
+    const textTrim = text.trim();
+    let detected = "English";
+    if (/[\u0900-\u097F]/.test(textTrim)) {
+      detected = "Hindi";
+    } else if (/[\u0C80-\u0CFF]/.test(textTrim)) {
+      detected = "Kannada";
+    } else if (/[\u0D00-\u0D7F]/.test(textTrim)) {
+      detected = "Malayalam";
+    }
+    res.json({ language: detected, confidence: 0.5, error: error.message });
+  }
+});
+
 // Configure Vite integration or static file rendering
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
