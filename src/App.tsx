@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ASLGesture, TranslationResult, SessionHistoryItem, CollectedSample } from './types';
+import { ASLGesture, TranslationResult, SessionHistoryItem, CollectedSample, TranslationLogItem } from './types';
 import { motion } from 'motion/react';
 import TimelineRoadmap from './components/TimelineRoadmap';
 import SignDictionary from './components/SignDictionary';
@@ -7,6 +7,7 @@ import DatasetManagement from './components/DatasetManagement';
 import ModelTrainer from './components/ModelTrainer';
 import UserAuth from './components/UserAuth';
 import UserProfile from './components/UserProfile';
+import AnalyticsDashboard from './components/AnalyticsDashboard';
 import { auth, db } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
@@ -86,9 +87,37 @@ export default function App() {
     localStorage.setItem('dark_mode_preference', String(darkMode));
   }, [darkMode]);
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'dictionary' | 'roadmap' | 'collector' | 'datasets' | 'trainer' | 'files' | 'profile'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'dictionary' | 'roadmap' | 'collector' | 'datasets' | 'trainer' | 'files' | 'profile' | 'analytics'>('dashboard');
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
+
+  // Translation logs state for Analytics Dashboard
+  const [translations, setTranslations] = useState<TranslationLogItem[]>(() => {
+    try {
+      const stored = localStorage.getItem('asl_translations');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const logTranslationEvent = (inputText: string, translatedText: string, targetLanguage: string) => {
+    if (!inputText.trim() || !translatedText.trim()) return;
+    
+    setTranslations(prev => {
+      const newItem: TranslationLogItem = {
+        id: `trans-${Date.now()}`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " Today",
+        inputText,
+        translatedText,
+        targetLanguage
+      };
+      const updated = [newItem, ...prev].slice(0, 50); // Keep last 50 translations
+      localStorage.setItem('asl_translations', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (usr) => {
@@ -824,6 +853,7 @@ export default function App() {
       const data = await res.json();
       if (data && data.translated) {
         setTranslatedText(data.translated);
+        logTranslationEvent(text, data.translated, target);
       } else {
         throw new Error("Invalid response schema");
       }
@@ -1698,6 +1728,16 @@ export default function App() {
             }`}
           >
             Practice Dashboard
+          </button>
+          <button
+            onClick={() => setActiveTab('analytics')}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
+              activeTab === 'analytics'
+                ? "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white shadow-sm"
+                : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
+            }`}
+          >
+            Analytics Dashboard
           </button>
           <button
             onClick={() => setActiveTab('dictionary')}
@@ -3853,6 +3893,41 @@ export default function App() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* Analytics Dashboard Tab View */}
+        {activeTab === 'analytics' && (
+          <AnalyticsDashboard 
+            sessions={sessions}
+            translations={translations}
+            onClearHistory={() => {
+              if (window.confirm("Are you sure you want to clear your local translations and practice logs?")) {
+                setTranslations([]);
+                setSessions([]);
+                localStorage.removeItem('asl_translations');
+                localStorage.removeItem('asl_sessions');
+              }
+            }}
+            onExportJSON={() => {
+              const reportData = {
+                exportedAt: new Date().toISOString(),
+                totalTranslations: translations.length,
+                totalGesturesPracticed: sessions.length,
+                averageConfidence: sessions.length > 0 ? Number((sessions.reduce((a, b) => a + b.confidence, 0) / sessions.length).toFixed(1)) : 0,
+                translations: translations,
+                gesturePractices: sessions
+              };
+              const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = `SignSense_Analytics_Report_${Date.now()}.json`;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              URL.revokeObjectURL(url);
+            }}
+          />
         )}
 
         {/* User Profile Tab View */}

@@ -39,3 +39,11 @@ export interface CollectedSample {
   landmarks: Array<{x: number, y: number, z: number}>;
   handType?: string;
 }
+
+export interface TranslationLogItem {
+  id: string;
+  timestamp: string;
+  inputText: string;
+  translatedText: string;
+  targetLanguage: string;
+}
