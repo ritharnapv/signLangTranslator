@@ -5,6 +5,11 @@ export interface ASLGesture {
   description: string;
   category: 'alphabet' | 'greeting' | 'common' | 'custom' | string;
   visualTip: string;
+  meaning?: string;
+  synonyms?: string[];
+  difficulty?: 'easy' | 'medium' | 'hard';
+  steps?: string[];
+  grammaticalRole?: string;
 }
 
 export interface TranslationResult {
