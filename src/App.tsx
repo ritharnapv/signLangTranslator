@@ -3,6 +3,7 @@ import { ASLGesture, TranslationResult, SessionHistoryItem, CollectedSample, Tra
 import { motion } from 'motion/react';
 import TimelineRoadmap from './components/TimelineRoadmap';
 import SignDictionary from './components/SignDictionary';
+import GestureLearning from './components/GestureLearning';
 import DatasetManagement from './components/DatasetManagement';
 import ModelTrainer from './components/ModelTrainer';
 import UserAuth from './components/UserAuth';
@@ -87,7 +88,7 @@ export default function App() {
     localStorage.setItem('dark_mode_preference', String(darkMode));
   }, [darkMode]);
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'dictionary' | 'roadmap' | 'collector' | 'datasets' | 'trainer' | 'files' | 'profile' | 'analytics'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'learning' | 'dictionary' | 'roadmap' | 'collector' | 'datasets' | 'trainer' | 'files' | 'profile' | 'analytics'>('dashboard');
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
 
@@ -1665,6 +1666,22 @@ export default function App() {
     });
   };
 
+  const addLearningPracticeLog = (predictedChar: string, confidence: number) => {
+    setSessions(prev => {
+      const isWord = ["Hello", "Thank You", "Yes", "No", "Help", "Love", "Please", "Sorry", "HI", "SOS"].includes(predictedChar);
+      const label = isWord ? 'Sign' : 'Letter';
+      const newItem: SessionHistoryItem = {
+        id: `session-learn-${Date.now()}`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " Today",
+        caption: `Practice Arena: ${label} '${predictedChar}'`,
+        confidence: Number(confidence.toFixed(1))
+      };
+      const updated = [newItem, ...prev].slice(0, 10);
+      localStorage.setItem('asl_sessions', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   const getSandboxImagePlaceholder = (char: string) => {
     // Standard mock base64 payloads to feed the simulated API route with authentic gestures
     return "data:image/jpeg;base64,/9j/2wCEAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=";
@@ -1748,6 +1765,16 @@ export default function App() {
             }`}
           >
             ASL Dictionary
+          </button>
+          <button
+            onClick={() => setActiveTab('learning')}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
+              activeTab === 'learning'
+                ? "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white shadow-sm"
+                : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
+            }`}
+          >
+            Practice Arena
           </button>
           <button
             onClick={() => setActiveTab('roadmap')}
@@ -3235,6 +3262,19 @@ export default function App() {
             </div>
 
           </div>
+        )}
+
+        {/* Practice Arena & Interactive Learning Tab view */}
+        {activeTab === 'learning' && (
+          <GestureLearning
+            localSessions={sessions}
+            onAddSessionLog={addLearningPracticeLog}
+            cameraActive={cameraActive}
+            onToggleCamera={toggleCamera}
+            videoRef={videoRef}
+            landmarkCanvasRef={landmarkCanvasRef}
+            customGestures={customGestures}
+          />
         )}
 
         {/* ASL Reference Tab view separately */}
