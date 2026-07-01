@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Cpu, BrainCircuit, Play, Square, Save, Download, Sliders, Database, 
   AlertTriangle, BookOpen, Award, Check, RefreshCw, BarChart2, Info,
-  Upload, FileJson, FileCode
+  Upload, FileJson, FileCode, Zap, Gauge, TrendingUp, SlidersHorizontal, Activity, Clock
 } from 'lucide-react';
 import * as tf from '@tensorflow/tfjs';
 import { CollectedSample } from '../types';
@@ -36,6 +36,49 @@ export default function ModelTrainer({
   collectedSamples, 
   onRegisterTrainedModel 
 }: ModelTrainerProps) {
+  // Sub-navigation: Workspace vs Performance Benchmarking
+  const [activeSubTab, setActiveSubTab] = useState<'workspace' | 'performance'>('workspace');
+
+  // Performance Optimization States
+  const [quantizationLevel, setQuantizationLevel] = useState<'none' | 'fp16' | 'int8'>(() => {
+    return (localStorage.getItem('asl_quantization_level') as any) || 'none';
+  });
+  const [throttleMs, setThrottleMs] = useState<number>(() => {
+    return Number(localStorage.getItem('asl_prediction_throttle_ms') || '40');
+  });
+
+  const [benchmarkIsRunning, setBenchmarkIsRunning] = useState<boolean>(false);
+  const [benchmarkProgress, setBenchmarkProgress] = useState<number>(0);
+  const [benchmarkResult, setBenchmarkResult] = useState<{
+    latencyAvg: number;
+    latencyMin: number;
+    latencyMax: number;
+    latencyP95: number;
+    throughput: number;
+    parameterCount: number;
+    estimatedSizeKb: number;
+    jitter: number;
+    precision: string;
+    runs: number;
+  } | null>(null);
+
+  const [pastBenchmarks, setPastBenchmarks] = useState<Array<{
+    id: string;
+    timestamp: string;
+    precision: string;
+    latencyAvg: number;
+    throughput: number;
+    estimatedSizeKb: number;
+    throttleMs: number;
+  }>>(() => {
+    try {
+      const saved = localStorage.getItem('asl_past_benchmarks');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
   // Hosted datasets list from API
   const [datasets, setDatasets] = useState<DatasetItem[]>([]);
   const [selectedSource, setSelectedSource] = useState<'server' | 'browser'>('browser');
@@ -125,6 +168,23 @@ export default function ModelTrainer({
 
   useEffect(() => {
     fetchDatasetsList();
+    
+    // Auto load existing trained model from IndexedDB
+    const loadExistingModel = async () => {
+      try {
+        const classesStored = localStorage.getItem('asl_trained_classes');
+        if (classesStored) {
+          const classes = JSON.parse(classesStored);
+          const loaded = await tf.loadLayersModel('indexeddb://asl_trained_mlp_model');
+          setActiveModel(loaded);
+          setTrainedClasses(classes);
+          console.log("ModelTrainer auto-loaded existing model from IndexedDB");
+        }
+      } catch (e) {
+        console.log("No custom TF.js model found or configured in IndexedDB yet in trainer.");
+      }
+    };
+    loadExistingModel();
   }, []);
 
   // Update chosen specimens when selected source or server ID updates
@@ -354,6 +414,170 @@ export default function ModelTrainer({
     }
   };
 
+  // Run real-time performance benchmark
+  const handleRunBenchmark = async () => {
+    if (!activeModel) {
+      setErrorMsg("No active model loaded to benchmark! Please train or import a model first.");
+      return;
+    }
+
+    setBenchmarkIsRunning(true);
+    setBenchmarkProgress(0);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    try {
+      // Warm up model
+      const warmUpFeatures = new Array(63).fill(0);
+      tf.tidy(() => {
+        const tensor = tf.tensor2d([warmUpFeatures], [1, 63]);
+        activeModel.predict(tensor);
+      });
+
+      const totalRuns = 500;
+      const latencies: number[] = [];
+      const batchChunk = 25; // process in chunks of 25 to allow UI updates and prevent tab freezes!
+
+      for (let i = 0; i < totalRuns; i += batchChunk) {
+        // Yield to browser UI
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        tf.tidy(() => {
+          for (let j = 0; j < batchChunk; j++) {
+            const mockFeatures = Array.from({ length: 63 }, () => Math.random() * 2 - 1);
+            const inputTensor = tf.tensor2d([mockFeatures], [1, 63]);
+            
+            const start = performance.now();
+            const prediction = activeModel.predict(inputTensor) as tf.Tensor;
+            prediction.dataSync(); // force evaluation
+            const end = performance.now();
+            
+            latencies.push(end - start);
+          }
+        });
+
+        const progress = Math.round(((i + batchChunk) / totalRuns) * 100);
+        setBenchmarkProgress(progress);
+      }
+
+      // Calculate statistics
+      const latencySum = latencies.reduce((a, b) => a + b, 0);
+      const latencyAvg = latencySum / totalRuns;
+      const latencyMin = Math.min(...latencies);
+      const latencyMax = Math.max(...latencies);
+
+      // Sort to find P95
+      const sortedLatencies = [...latencies].sort((a, b) => a - b);
+      const p95Index = Math.floor(totalRuns * 0.95);
+      const latencyP95 = sortedLatencies[p95Index];
+
+      // Compute standard deviation (jitter)
+      const squareDiffs = latencies.map(l => Math.pow(l - latencyAvg, 2));
+      const jitter = Math.sqrt(squareDiffs.reduce((a, b) => a + b, 0) / totalRuns);
+
+      const throughput = 1000 / latencyAvg;
+
+      // Extract parameter count and size
+      let parameterCount = 0;
+      activeModel.weights.forEach(w => {
+        parameterCount += w.shape.reduce((a, b) => a * b, 1);
+      });
+
+      const bytesPerParam = quantizationLevel === 'int8' ? 1 : quantizationLevel === 'fp16' ? 2 : 4;
+      const estimatedSizeKb = (parameterCount * bytesPerParam) / 1024;
+
+      const report = {
+        latencyAvg: Number(latencyAvg.toFixed(3)),
+        latencyMin: Number(latencyMin.toFixed(3)),
+        latencyMax: Number(latencyMax.toFixed(3)),
+        latencyP95: Number(latencyP95.toFixed(3)),
+        throughput: Math.round(throughput),
+        parameterCount,
+        estimatedSizeKb: Number(estimatedSizeKb.toFixed(2)),
+        jitter: Number(jitter.toFixed(3)),
+        precision: quantizationLevel === 'int8' ? 'INT8' : quantizationLevel === 'fp16' ? 'FP16' : 'FP32',
+        runs: totalRuns
+      };
+
+      setBenchmarkResult(report);
+
+      // Save to history
+      const newBenchmarkLog = {
+        id: `bench-${Date.now()}`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        precision: report.precision,
+        latencyAvg: report.latencyAvg,
+        throughput: report.throughput,
+        estimatedSizeKb: report.estimatedSizeKb,
+        throttleMs
+      };
+
+      setPastBenchmarks(prev => {
+        const updated = [newBenchmarkLog, ...prev].slice(0, 5); // Keep last 5
+        localStorage.setItem('asl_past_benchmarks', JSON.stringify(updated));
+        return updated;
+      });
+
+      setSuccessMsg("Benchmark test completed successfully over 500 real-time iterations!");
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(`Benchmark run exception failure: ${err.message}`);
+    } finally {
+      setBenchmarkIsRunning(false);
+    }
+  };
+
+  // Save the model to IndexedDB using selected quantization level
+  const handleApplyQuantization = async (level: 'none' | 'fp16' | 'int8') => {
+    if (!activeModel) {
+      setErrorMsg("No active model loaded to quantize! Please train or import a model first.");
+      return;
+    }
+
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    try {
+      const saveOptions: any = {};
+      if (level === 'fp16') {
+        saveOptions.quantizationBytes = 2; // FP16 Float16 weight quant
+      } else if (level === 'int8') {
+        saveOptions.quantizationBytes = 1; // INT8 8-bit int weight quant
+      }
+
+      // Save to IndexedDB persistently with chosen quantization Bytes
+      await activeModel.save('indexeddb://asl_trained_mlp_model', saveOptions);
+      
+      localStorage.setItem('asl_quantization_level', level);
+      setQuantizationLevel(level);
+
+      // Reload model from IndexedDB to verify it compiles and loads correctly
+      const reloadedModel = await tf.loadLayersModel('indexeddb://asl_trained_mlp_model');
+      setActiveModel(reloadedModel);
+
+      // Notify parent app
+      if (onRegisterTrainedModel) {
+        onRegisterTrainedModel(reloadedModel, trainedClasses);
+      }
+
+      setSuccessMsg(`Success! Saved the model to IndexedDB using ${level.toUpperCase()} quantization. The active neural classifier has been optimized!`);
+    } catch (err: any) {
+      console.error("Quantization exception:", err);
+      setErrorMsg(`Quantization failed: ${err.message}. Please try another level or ensure browser storage is unlocked.`);
+    }
+  };
+
+  const handleClearBenchmarks = () => {
+    setPastBenchmarks([]);
+    localStorage.removeItem('asl_past_benchmarks');
+    setBenchmarkResult(null);
+    setSuccessMsg("Cleared benchmark history log.");
+  };
+
+  const handleUpdateThrottle = (val: number) => {
+    setThrottleMs(val);
+    localStorage.setItem('asl_prediction_throttle_ms', String(val));
+  };
+
   // Render SVG Charts manually for Accuracy and Loss graphs to handle responsive canvas beautifully
   const renderSVGGraph = (type: 'accuracy' | 'loss') => {
     if (trainingHistory.length === 0) {
@@ -514,552 +738,935 @@ export default function ModelTrainer({
         )}
       </AnimatePresence>
 
-      {/* Main Grid: Settings & Distribution + Live Controller */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8" id="trainer-parent-grid">
-        
-        {/* COLUMN 1: Dataset Loader, Configuration, Parameters (SPAN 5) */}
-        <div className="lg:col-span-5 space-y-6" id="training-settings-col">
-          
-          {/* Section: Select Dataset Source */}
-          <div className="bg-white border border-[#ecece0] rounded-3xl p-6 shadow-sm space-y-5" id="dataset-picker-panel">
-            <div className="flex items-center gap-2 text-xs font-bold text-[#7c8d7c] uppercase tracking-widest font-mono">
-              <Database className="w-4 h-4" />
-              1. Select Training Data
-            </div>
+      {/* Tab bar switcher for Workspace vs Performance */}
+      <div className="flex border-b border-[#ecece0] dark:border-[#2d2d32] pb-1 gap-6" id="trainer-sub-tabs">
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('workspace')}
+          className={`pb-3 text-xs font-bold uppercase tracking-wider flex items-center gap-2 border-b-2 transition-all ${
+            activeSubTab === 'workspace'
+              ? 'border-[#7c8d7c] text-[#2d2d28] dark:text-[#f4f4f5]'
+              : 'border-transparent text-[#7a7a6a] hover:text-[#2d2d28] dark:hover:text-[#cbd5e1]'
+          }`}
+        >
+          <BrainCircuit className="w-4 h-4" />
+          Neural Workspace
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('performance')}
+          className={`pb-3 text-xs font-bold uppercase tracking-wider flex items-center gap-2 border-b-2 transition-all ${
+            activeSubTab === 'performance'
+              ? 'border-[#7c8d7c] text-[#2d2d28] dark:text-[#f4f4f5]'
+              : 'border-transparent text-[#7a7a6a] hover:text-[#2d2d28] dark:hover:text-[#cbd5e1]'
+          }`}
+        >
+          <Zap className="w-4 h-4 text-amber-500 animate-pulse" />
+          Benchmarking & Quantization
+        </button>
+      </div>
 
-            <div className="flex bg-[#f0f2ee] p-1 border border-[#e0e4db] rounded-xl text-xs font-sans" id="data-source-selector">
-              <button 
-                type="button"
-                onClick={() => setSelectedSource('browser')}
-                className={`flex-1 py-1.5 rounded-lg font-bold text-center transition ${
-                  selectedSource === 'browser' ? 'bg-[#7c8d7c] text-white shadow-xs' : 'text-[#5a6b5a] hover:text-[#2d2d28]'
-                }`}
-                id="source-active-buffer"
-              >
-                Active Browser Buffer ({collectedSamples.length})
-              </button>
-              <button 
-                type="button"
-                onClick={() => setSelectedSource('server')}
-                className={`flex-1 py-1.5 rounded-lg font-bold text-center transition ${
-                  selectedSource === 'server' ? 'bg-[#7c8d7c] text-white shadow-xs' : 'text-[#5a6b5a] hover:text-[#2d2d28]'
-                }`}
-                id="source-host-datasets"
-              >
-                Hosted Repos ({datasets.length})
-              </button>
-            </div>
-
-            {selectedSource === 'server' && (
-              <div className="space-y-1.5" id="server-dataset-select-container">
-                <label className="text-[10px] text-[#7a7a6a] uppercase tracking-wider font-bold block font-mono">Choose Master JSON File</label>
-                {isLoadingDatasets ? (
-                  <div className="text-xs text-stone-400 py-2">Syncing hosted repository registries...</div>
-                ) : datasets.length === 0 ? (
-                  <div className="text-xs text-amber-600 bg-amber-50 p-2.5 rounded-xl border border-amber-100 flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 shrink-0" />
-                    <span>No hosted files located on server. Please use standard webcam recorder and save a dataset.</span>
-                  </div>
-                ) : (
-                  <select 
-                    value={selectedServerDatasetId}
-                    onChange={(e) => setSelectedServerDatasetId(e.target.value)}
-                    className="w-full text-xs font-sans px-3 py-2 rounded-lg border border-[#ecece0] focus:border-[#7c8d7c] focus:ring-1 focus:ring-[#7c8d7c] outline-none bg-[#fcfcf9]"
-                    id="dataset-server-dropdown"
-                  >
-                    {datasets.map(d => (
-                      <option key={d.id} value={d.id}>
-                        {d.name} ({d.samples.length} items)
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </div>
-            )}
-
-            {/* Display Target Sample Data Distribution Statistics */}
-            <div className="space-y-3" id="sample-distribution-analysis">
-              <div className="flex justify-between items-center text-xs">
-                <span className="font-bold text-[#2d2d28]">Specimen Data Distribution</span>
-                <span className="font-mono text-[11px] text-[#7a7a6a] font-bold">{activeDatasetSamples.length} total items</span>
-              </div>
-
-              {activeDatasetSamples.length === 0 ? (
-                <div className="text-center py-6 bg-[#fafaf9] rounded-2xl border border-dashed border-[#ecece0] text-xs text-stone-400 font-medium">
-                  Selected data source buffer is currently empty.
-                </div>
-              ) : (
-                <div className="bg-[#fafaf9] p-3.5 rounded-2xl border border-[#ecece0] max-h-48 overflow-y-auto space-y-2.5" id="distribution-progress-bars">
-                  {sortedLabels.map(label => {
-                    const count = labelCounts[label] || 0;
-                    const pct = Math.round((count / activeDatasetSamples.length) * 100);
-                    return (
-                      <div key={label} className="space-y-1" id={`label-bar-${label}`}>
-                        <div className="flex justify-between text-[11px] font-sans">
-                          <span className="font-bold text-[#3d3d38]">Sign "{label}"</span>
-                          <span className="font-mono text-stone-500">{count} frames ({pct}%)</span>
-                        </div>
-                        <div className="w-full h-1.5 bg-[#ecece0] rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-emerald-600 rounded-full" 
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Section: Import/Load Saved Model */}
-          <div className="bg-white border border-[#ecece0] rounded-3xl p-6 shadow-sm space-y-5 animate-fade-in" id="model-importer-panel">
-            <div className="flex items-center gap-2 text-xs font-bold text-[#7c8d7c] uppercase tracking-widest font-mono">
-              <Upload className="w-4 h-4" />
-              Import Saved Model
-            </div>
-            <p className="text-[11px] text-[#7a7a6a] leading-relaxed">
-              Upload your previously downloaded model JSON structure and binary weights file to restore your classifier directly.
-            </p>
-            <div className="space-y-3" id="import-controls">
-              <div className="space-y-1.5">
-                <span className="text-[9px] uppercase tracking-widest text-[#7a7a6a] font-bold block font-mono">Model Classes (comma-separated labels)</span>
-                <input
-                  type="text"
-                  placeholder="e.g. A, B, C, HI, LOVE, SOS"
-                  value={importedClassesText}
-                  onChange={(e) => setImportedClassesText(e.target.value)}
-                  className="w-full text-xs font-mono px-3 py-2 rounded-lg border border-[#ecece0] focus:border-[#7c8d7c] focus:ring-1 focus:ring-[#7c8d7c] outline-none bg-[#fcfcf9]"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1 relative">
-                  <span className="text-[9px] uppercase tracking-widest text-[#7a7a6a] font-bold block font-mono">Structure (.json)</span>
-                  <label className="flex flex-col items-center justify-center border border-dashed border-[#ecece0] rounded-xl py-2 px-1 text-center cursor-pointer hover:bg-[#fafaf9] transition-all bg-[#fcfcf9] min-h-[56px] justify-center">
-                    <FileJson className="w-4 h-4 text-[#7c8d7c]" />
-                    <span className="text-[8px] truncate font-sans font-semibold max-w-full block px-1 text-[#7a7a6a] mt-1">
-                      {imJsonFile ? imJsonFile.name : "Select JSON"}
-                    </span>
-                    <input
-                      type="file"
-                      accept=".json"
-                      onChange={(e) => setImJsonFile(e.target.files?.[0] || null)}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
-                <div className="space-y-1 relative">
-                  <span className="text-[9px] uppercase tracking-widest text-[#7a7a6a] font-bold block font-mono">Weights (.bin)</span>
-                  <label className="flex flex-col items-center justify-center border border-dashed border-[#ecece0] rounded-xl py-2 px-1 text-center cursor-pointer hover:bg-[#fafaf9] transition-all bg-[#fcfcf9] min-h-[56px] justify-center">
-                    <FileCode className="w-4 h-4 text-[#a36b5e]" />
-                    <span className="text-[8px] truncate font-sans font-semibold max-w-full block px-1 text-[#7a7a6a] mt-1">
-                      {imBinFile ? imBinFile.name : "Select Bin"}
-                    </span>
-                    <input
-                      type="file"
-                      accept=".bin"
-                      onChange={(e) => setImBinFile(e.target.files?.[0] || null)}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
-              </div>
-              <button
-                type="button"
-                disabled={!imJsonFile || !imBinFile || !importedClassesText.trim()}
-                onClick={handleImportModelFromFiles}
-                className="w-full py-2 bg-[#7c8d7c] hover:bg-[#6c7d6c] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs uppercase tracking-wider rounded-xl transition duration-150 shadow-xs"
-              >
-                Restore Uploaded Model
-              </button>
-            </div>
-          </div>
-
-          {/* Section: Neural Network Parameters */}
-          <div className="bg-white border border-[#ecece0] rounded-3xl p-6 shadow-sm space-y-5" id="hyperparameters-config-panel">
-            <div className="flex items-center gap-2 text-xs font-bold text-[#7c8d7c] uppercase tracking-widest font-mono">
-              <Sliders className="w-4 h-4" />
-              2. Hyperparameters configuration
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 text-xs font-sans" id="params-form-grid">
-              
-              <div className="space-y-1">
-                <label className="text-[10px] text-[#7a7a6a] uppercase tracking-wider font-bold block" title="Hidden layers compute density">
-                  Dense Hidden Nodes #1
-                </label>
-                <select 
-                  value={hiddenNodes1} 
-                  onChange={(e) => setHiddenNodes1(Number(e.target.value))}
-                  className="w-full px-2.5 py-1.5 border border-[#ecece0] rounded-lg outline-none bg-[#fcfcf9]"
-                  id="param-nodes1"
-                >
-                  <option value={32}>32 units</option>
-                  <option value={64}>64 units (Standard)</option>
-                  <option value={128}>128 units (Dense)</option>
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] text-[#7a7a6a] uppercase tracking-wider font-bold block">
-                  Dense Hidden Nodes #2
-                </label>
-                <select 
-                  value={hiddenNodes2} 
-                  onChange={(e) => setHiddenNodes2(Number(e.target.value))}
-                  className="w-full px-2.5 py-1.5 border border-[#ecece0] rounded-lg outline-none bg-[#fcfcf9]"
-                  id="param-nodes2"
-                >
-                  <option value={16}>16 units</option>
-                  <option value={32}>32 units (Standard)</option>
-                  <option value={64}>64 units (Dense)</option>
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] text-[#7a7a6a] uppercase tracking-wider font-bold block">
-                  Epoch Iterations
-                </label>
-                <input 
-                  type="number" 
-                  min={5} 
-                  max={500}
-                  value={epochs} 
-                  onChange={(e) => setEpochs(Math.max(5, Number(e.target.value)))}
-                  className="w-full px-2.5 py-1.5 border border-[#ecece0] rounded-lg outline-none bg-[#fcfcf9] font-mono"
-                  id="param-epochs"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] text-[#7a7a6a] uppercase tracking-wider font-bold block">
-                  Batch Train Size
-                </label>
-                <select 
-                  value={batchSize} 
-                  onChange={(e) => setBatchSize(Number(e.target.value))}
-                  className="w-full px-2.5 py-1.5 border border-[#ecece0] rounded-lg outline-none bg-[#fcfcf9]"
-                  id="param-batch"
-                >
-                  <option value={4}>4 (High loss variance)</option>
-                  <option value={8}>8 (Standard)</option>
-                  <option value={16}>16 (Stable gradients)</option>
-                  <option value={32}>32 (Coarse steps)</option>
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] text-[#7a7a6a] uppercase tracking-wider font-bold block">
-                  Adam Learning Rate
-                </label>
-                <select 
-                  value={learningRate} 
-                  onChange={(e) => setLearningRate(Number(e.target.value))}
-                  className="w-full px-2.5 py-1.5 border border-[#ecece0] rounded-lg outline-none bg-[#fcfcf9] font-mono"
-                  id="param-lr"
-                >
-                  <option value={0.05}>0.05 (Fast/Rough)</option>
-                  <option value={0.01}>0.01 (Standard)</option>
-                  <option value={0.005}>0.005 (Refined)</option>
-                  <option value={0.001}>0.001 (Gradual convergence)</option>
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] text-[#7a7a6a] uppercase tracking-wider font-bold block">
-                  Validation Holdout %
-                </label>
-                <select 
-                  value={valSplit} 
-                  onChange={(e) => setValSplit(Number(e.target.value))}
-                  className="w-full px-2.5 py-1.5 border border-[#ecece0] rounded-lg outline-none bg-[#fcfcf9]"
-                  id="param-valsplit"
-                >
-                  <option value={0.1}>10% validation split</option>
-                  <option value={0.2}>20% validation split</option>
-                  <option value={0.3}>30% validation split</option>
-                </select>
-              </div>
-
-            </div>
-          </div>
-
-        </div>
-
-        {/* COLUMN 2: Neural Training, SVG Graphs, and Saving Model (SPAN 7) */}
-        <div className="lg:col-span-7 space-y-6" id="training-telemetry-col">
-          
-          <div className="bg-white border border-[#ecece0] rounded-3xl p-6 md:p-8 shadow-sm space-y-6" id="backprop-control-panel">
+      {activeSubTab === 'workspace' ? (
+        <>
+          {/* Main Grid: Settings & Distribution + Live Controller */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8" id="trainer-parent-grid">
             
-            {/* Header Title with animated nodes */}
-            <div className="flex items-center justify-between border-b border-[#f0f2ee] pb-4" id="backprop-header flex">
-              <div className="flex items-center gap-3">
-                <div className={`p-2.5 rounded-xl ${isTraining ? 'bg-emerald-600 text-white animate-pulse' : 'bg-[#eef1ed] text-[#5c6d5c]'}`}>
-                  <BrainCircuit className="w-5 h-5 animate-spin duration-3000" />
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-[#2d2d28] uppercase tracking-wide">TensorFlow Backpropagation Network</h4>
-                  <p className="text-[11px] text-[#7a7a6a] font-mono mt-0.5">Active Class scale: {sortedLabels.length} unique nodes</p>
-                </div>
-              </div>
-
-              {isTraining ? (
-                <button 
-                  onClick={stopTraining}
-                  className="flex items-center gap-2 text-xs font-bold px-4 py-2 text-white bg-rose-600 hover:bg-rose-500 rounded-xl transition duration-150 animate-pulse shadow-md uppercase tracking-wide"
-                  id="btn-training-interlock"
-                >
-                  <Square className="w-4 h-4" />
-                  Terminate [Esc]
-                </button>
-              ) : (
-                <button 
-                  onClick={startTensorflowTraining}
-                  className="flex items-center gap-2 text-xs font-bold px-5 py-2 text-white bg-[#7c8d7c] hover:bg-[#6c7d6c] rounded-xl transition duration-150 shadow-md uppercase tracking-wide"
-                  id="btn-training-initialize"
-                >
-                  <Play className="w-4 h-4 fill-white" />
-                  Initialize neural net
-                </button>
-              )}
-            </div>
-
-            {/* Run Progress Telemetry Panel */}
-            {isTraining && (
-              <div className="bg-[#f0f2ee]/50 border border-[#e0e4db] rounded-2xl p-5 space-y-3.5" id="running-telemetry">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="font-bold text-[#3d3d38] flex items-center gap-2 font-mono">
-                    <RefreshCw className="w-4 h-4 animate-spin text-[#7c8d7c]" />
-                    Optimizing weights: Epoch {currentEpoch} of {epochs}
-                  </span>
-                  <span className="font-mono text-[11px] bg-white border border-[#e0e4db] px-2.5 py-0.5 rounded font-extrabold text-[#7c8d7c]">
-                    {Math.round((currentEpoch / epochs) * 100)}% COMPLETE
-                  </span>
-                </div>
-
-                {/* Progress bar tracking */}
-                <div className="w-full h-2.5 bg-[#e2e6dd] rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-[#7c8d7c] rounded-full transition-all duration-300" 
-                    style={{ width: `${(currentEpoch / epochs) * 100}%` }}
-                  />
-                </div>
-
-                {/* Metrics detail grids */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-1.5" id="live-metrics-grids">
-                  <div className="bg-white p-3 rounded-xl border border-[#e2e6dd]" id="live-acc">
-                    <p className="text-[9px] uppercase font-bold tracking-widest text-[#7a7a6a] font-mono">Accuracy</p>
-                    <p className="text-sm font-extrabold text-emerald-600 font-mono mt-0.5">{(currentMetrics.accuracy * 100).toFixed(1)}%</p>
-                  </div>
-                  <div className="bg-white p-3 rounded-xl border border-[#e2e6dd]" id="live-val-acc">
-                    <p className="text-[9px] uppercase font-bold tracking-widest text-[#7a7a6a] font-mono">Val Accuracy</p>
-                    <p className="text-sm font-extrabold text-blue-600 font-mono mt-0.5">{(currentMetrics.valAccuracy * 100).toFixed(1)}%</p>
-                  </div>
-                  <div className="bg-white p-3 rounded-xl border border-[#e2e6dd]" id="live-loss">
-                    <p className="text-[9px] uppercase font-bold tracking-widest text-[#7a7a6a] font-mono">Training Loss</p>
-                    <p className="text-sm font-extrabold text-rose-500 font-mono mt-0.5">{currentMetrics.loss.toFixed(4)}</p>
-                  </div>
-                  <div className="bg-white p-3 rounded-xl border border-[#e2e6dd]" id="live-val-loss">
-                    <p className="text-[9px] uppercase font-bold tracking-widest text-[#7a7a6a] font-mono">Validation Loss</p>
-                    <p className="text-sm font-extrabold text-amber-500 font-mono mt-0.5">{currentMetrics.valLoss.toFixed(4)}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* CHARTS CONTAINER GRID */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6" id="telemetry-charts-grid">
+            {/* COLUMN 1: Dataset Loader, Configuration, Parameters (SPAN 5) */}
+            <div className="lg:col-span-5 space-y-6" id="training-settings-col">
               
-              {/* Plot 1: Accuracy Curve */}
-              <div className="bg-[#fafaf9] border border-[#ecece0] rounded-2xl p-4.5 space-y-3" id="plot-accuracy-container">
-                <div className="flex justify-between items-center border-b border-[#f0f2ee] pb-2 text-xs">
-                  <span className="font-bold text-[#2d2d28] font-sans">Accuracy Convergence Curve</span>
-                  <div className="flex items-center gap-3 text-[10px] font-mono">
-                    <span className="flex items-center gap-1"><span className="w-2.5 h-1 bg-[#10b981] rounded" /> Train</span>
-                    <span className="flex items-center gap-1"><span className="w-2.5 h-1 border border-[#3b82f6] border-dashed rounded" /> Val</span>
-                  </div>
-                </div>
-                <div className="h-44" id="accuracy-plot-wrapper">
-                  {renderSVGGraph('accuracy')}
-                </div>
-              </div>
-
-              {/* Plot 2: Loss Curve */}
-              <div className="bg-[#fafaf9] border border-[#ecece0] rounded-2xl p-4.5 space-y-3" id="plot-loss-container">
-                <div className="flex justify-between items-center border-b border-[#f0f2ee] pb-2 text-xs">
-                  <span className="font-bold text-[#2d2d28] font-sans">Loss Convergence Curve</span>
-                  <div className="flex items-center gap-3 text-[10px] font-mono">
-                    <span className="flex items-center gap-1"><span className="w-2.5 h-1 bg-[#f43f5e] rounded" /> Train</span>
-                    <span className="flex items-center gap-1"><span className="w-2.5 h-1 border border-[#f59e0b] border-dashed rounded" /> Val</span>
-                  </div>
-                </div>
-                <div className="h-44" id="loss-plot-wrapper">
-                  {renderSVGGraph('loss')}
-                </div>
-              </div>
-
-            </div>
-
-            {/* Export & Registration controls */}
-            {activeModel && (
-              <div className="bg-[#ebf5eb]/40 border border-[#d2edd2] rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4" id="model-save-section animate-fade-in">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800">
-                    <Award className="w-4.5 h-4.5 text-[#428042]" />
-                    Model Compiled & Registered!
-                  </div>
-                  <p className="text-xs text-[#527052]">
-                    The local machine learning instance is actively connected to your practicing cameras viewpoint. Live inferences will use client-side neural metrics immediately.
-                  </p>
+              {/* Section: Select Dataset Source */}
+              <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-6 shadow-sm space-y-5" id="dataset-picker-panel">
+                <div className="flex items-center gap-2 text-xs font-bold text-[#7c8d7c] uppercase tracking-widest font-mono">
+                  <Database className="w-4 h-4" />
+                  1. Select Training Data
                 </div>
 
-                <div className="flex items-center gap-3 self-end md:self-auto" id="model-export-controls">
+                <div className="flex bg-[#f0f2ee] dark:bg-[#2d2d32] p-1 border border-[#e0e4db] dark:border-[#3d3d42] rounded-xl text-xs font-sans" id="data-source-selector">
                   <button 
-                    onClick={handleModelArtifactDownload}
-                    className="flex items-center gap-1.5 text-xs text-white font-bold bg-[#7c8d7c] hover:bg-[#6c7d6c] px-4.5 py-2.5 rounded-xl border border-[#7c8d7c] transition shadow-xs uppercase tracking-wide"
-                    id="btn-model-artifact-download"
+                    type="button"
+                    onClick={() => setSelectedSource('browser')}
+                    className={`flex-1 py-1.5 rounded-lg font-bold text-center transition ${
+                      selectedSource === 'browser' ? 'bg-[#7c8d7c] text-white shadow-xs' : 'text-[#5a6b5a] dark:text-[#cbd5e1] hover:text-[#2d2d28] dark:hover:text-white'
+                    }`}
+                    id="source-active-buffer"
                   >
-                    <Download className="w-4 h-4" />
-                    Download JSON artifacts
+                    Active Browser Buffer ({collectedSamples.length})
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => setSelectedSource('server')}
+                    className={`flex-1 py-1.5 rounded-lg font-bold text-center transition ${
+                      selectedSource === 'server' ? 'bg-[#7c8d7c] text-white shadow-xs' : 'text-[#5a6b5a] dark:text-[#cbd5e1] hover:text-[#2d2d28] dark:hover:text-white'
+                    }`}
+                    id="source-host-datasets"
+                  >
+                    Hosted Repos ({datasets.length})
+                  </button>
+                </div>
+
+                {selectedSource === 'server' && (
+                  <div className="space-y-1.5" id="server-dataset-select-container">
+                    <label className="text-[10px] text-[#7a7a6a] uppercase tracking-wider font-bold block font-mono">Choose Master JSON File</label>
+                    {isLoadingDatasets ? (
+                      <div className="text-xs text-stone-400 py-2">Syncing hosted repository registries...</div>
+                    ) : datasets.length === 0 ? (
+                      <div className="text-xs text-amber-600 bg-amber-50 dark:bg-[#2d2218] p-2.5 rounded-xl border border-amber-100 dark:border-amber-900 flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 shrink-0" />
+                        <span>No hosted files located on server. Please use standard webcam recorder and save a dataset.</span>
+                      </div>
+                    ) : (
+                      <select 
+                        value={selectedServerDatasetId}
+                        onChange={(e) => setSelectedServerDatasetId(e.target.value)}
+                        className="w-full text-xs font-sans px-3 py-2 rounded-lg border border-[#ecece0] dark:border-[#2d2d32] focus:border-[#7c8d7c] focus:ring-1 focus:ring-[#7c8d7c] outline-none bg-[#fcfcf9] dark:bg-[#151518] text-[#2d2d28] dark:text-white"
+                        id="dataset-server-dropdown"
+                      >
+                        {datasets.map(d => (
+                          <option key={d.id} value={d.id}>
+                            {d.name} ({d.samples.length} items)
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                )}
+
+                {/* Display Target Sample Data Distribution Statistics */}
+                <div className="space-y-3" id="sample-distribution-analysis">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="font-bold text-[#2d2d28] dark:text-white">Specimen Data Distribution</span>
+                    <span className="font-mono text-[11px] text-[#7a7a6a] font-bold">{activeDatasetSamples.length} total items</span>
+                  </div>
+
+                  {activeDatasetSamples.length === 0 ? (
+                    <div className="text-center py-6 bg-[#fafaf9] dark:bg-[#151518] rounded-2xl border border-dashed border-[#ecece0] dark:border-[#2d2d32] text-xs text-stone-400 font-medium">
+                      Selected data source buffer is currently empty.
+                    </div>
+                  ) : (
+                    <div className="bg-[#fafaf9] dark:bg-[#151518] p-3.5 rounded-2xl border border-[#ecece0] dark:border-[#2d2d32] max-h-48 overflow-y-auto space-y-2.5" id="distribution-progress-bars">
+                      {sortedLabels.map(label => {
+                        const count = labelCounts[label] || 0;
+                        const pct = Math.round((count / activeDatasetSamples.length) * 100);
+                        return (
+                          <div key={label} className="space-y-1" id={`label-bar-${label}`}>
+                            <div className="flex justify-between text-[11px] font-sans text-[#2d2d28] dark:text-[#cbd5e1]">
+                              <span className="font-bold">Sign "{label}"</span>
+                              <span className="font-mono text-stone-500">{count} frames ({pct}%)</span>
+                            </div>
+                            <div className="w-full h-1.5 bg-[#ecece0] dark:bg-[#2d2d32] rounded-full overflow-hidden">
+                              <div 
+                                className="h-full bg-emerald-600 rounded-full" 
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Section: Import/Load Saved Model */}
+              <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-6 shadow-sm space-y-5 animate-fade-in" id="model-importer-panel">
+                <div className="flex items-center gap-2 text-xs font-bold text-[#7c8d7c] uppercase tracking-widest font-mono">
+                  <Upload className="w-4 h-4" />
+                  Import Saved Model
+                </div>
+                <p className="text-[11px] text-[#7a7a6a] dark:text-[#a1a1aa] leading-relaxed">
+                  Upload your previously downloaded model JSON structure and binary weights file to restore your classifier directly.
+                </p>
+                <div className="space-y-3" id="import-controls">
+                  <div className="space-y-1.5">
+                    <span className="text-[9px] uppercase tracking-widest text-[#7a7a6a] font-bold block font-mono">Model Classes (comma-separated labels)</span>
+                    <input
+                      type="text"
+                      placeholder="e.g. A, B, C, HI, LOVE, SOS"
+                      value={importedClassesText}
+                      onChange={(e) => setImportedClassesText(e.target.value)}
+                      className="w-full text-xs font-mono px-3 py-2 rounded-lg border border-[#ecece0] dark:border-[#2d2d32] focus:border-[#7c8d7c] focus:ring-1 focus:ring-[#7c8d7c] outline-none bg-[#fcfcf9] dark:bg-[#151518] text-[#2d2d28] dark:text-white"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1 relative">
+                      <span className="text-[9px] uppercase tracking-widest text-[#7a7a6a] font-bold block font-mono">Structure (.json)</span>
+                      <label className="flex flex-col items-center justify-center border border-dashed border-[#ecece0] dark:border-[#2d2d32] rounded-xl py-2 px-1 text-center cursor-pointer hover:bg-[#fafaf9] dark:hover:bg-[#252528] transition-all bg-[#fcfcf9] dark:bg-[#151518] min-h-[56px] justify-center">
+                        <FileJson className="w-4 h-4 text-[#7c8d7c]" />
+                        <span className="text-[8px] truncate font-sans font-semibold max-w-full block px-1 text-[#7a7a6a] mt-1">
+                          {imJsonFile ? imJsonFile.name : "Select JSON"}
+                        </span>
+                        <input
+                          type="file"
+                          accept=".json"
+                          onChange={(e) => setImJsonFile(e.target.files?.[0] || null)}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                    <div className="space-y-1 relative">
+                      <span className="text-[9px] uppercase tracking-widest text-[#7a7a6a] font-bold block font-mono">Weights (.bin)</span>
+                      <label className="flex flex-col items-center justify-center border border-dashed border-[#ecece0] dark:border-[#2d2d32] rounded-xl py-2 px-1 text-center cursor-pointer hover:bg-[#fafaf9] dark:hover:bg-[#252528] transition-all bg-[#fcfcf9] dark:bg-[#151518] min-h-[56px] justify-center">
+                        <FileCode className="w-4 h-4 text-[#a36b5e]" />
+                        <span className="text-[8px] truncate font-sans font-semibold max-w-full block px-1 text-[#7a7a6a] mt-1">
+                          {imBinFile ? imBinFile.name : "Select Bin"}
+                        </span>
+                        <input
+                          type="file"
+                          accept=".bin"
+                          onChange={(e) => setImBinFile(e.target.files?.[0] || null)}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!imJsonFile || !imBinFile || !importedClassesText.trim()}
+                    onClick={handleImportModelFromFiles}
+                    className="w-full py-2 bg-[#7c8d7c] hover:bg-[#6c7d6c] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs uppercase tracking-wider rounded-xl transition duration-150 shadow-xs"
+                  >
+                    Restore Uploaded Model
                   </button>
                 </div>
               </div>
-            )}
+
+              {/* Section: Neural Network Parameters */}
+              <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-6 shadow-sm space-y-5" id="hyperparameters-config-panel">
+                <div className="flex items-center gap-2 text-xs font-bold text-[#7c8d7c] uppercase tracking-widest font-mono">
+                  <Sliders className="w-4 h-4" />
+                  2. Hyperparameters configuration
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 text-xs font-sans" id="params-form-grid">
+                  
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-[#7a7a6a] uppercase tracking-wider font-bold block" title="Hidden layers compute density">
+                      Dense Hidden Nodes #1
+                    </label>
+                    <select 
+                      value={hiddenNodes1} 
+                      onChange={(e) => setHiddenNodes1(Number(e.target.value))}
+                      className="w-full px-2.5 py-1.5 border border-[#ecece0] dark:border-[#2d2d32] rounded-lg outline-none bg-[#fcfcf9] dark:bg-[#151518] text-[#2d2d28] dark:text-white font-semibold"
+                      id="param-nodes1"
+                    >
+                      <option value={32}>32 units</option>
+                      <option value={64}>64 units (Standard)</option>
+                      <option value={128}>128 units (Dense)</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-[#7a7a6a] uppercase tracking-wider font-bold block">
+                      Dense Hidden Nodes #2
+                    </label>
+                    <select 
+                      value={hiddenNodes2} 
+                      onChange={(e) => setHiddenNodes2(Number(e.target.value))}
+                      className="w-full px-2.5 py-1.5 border border-[#ecece0] dark:border-[#2d2d32] rounded-lg outline-none bg-[#fcfcf9] dark:bg-[#151518] text-[#2d2d28] dark:text-white font-semibold"
+                      id="param-nodes2"
+                    >
+                      <option value={16}>16 units</option>
+                      <option value={32}>32 units (Standard)</option>
+                      <option value={64}>64 units (Dense)</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-[#7a7a6a] uppercase tracking-wider font-bold block">
+                      Epoch Iterations
+                    </label>
+                    <input 
+                      type="number" 
+                      min={5} 
+                      max={500}
+                      value={epochs} 
+                      onChange={(e) => setEpochs(Math.max(5, Number(e.target.value)))}
+                      className="w-full px-2.5 py-1.5 border border-[#ecece0] dark:border-[#2d2d32] rounded-lg outline-none bg-[#fcfcf9] dark:bg-[#151518] text-[#2d2d28] dark:text-white font-mono font-bold"
+                      id="param-epochs"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-[#7a7a6a] uppercase tracking-wider font-bold block">
+                      Batch Train Size
+                    </label>
+                    <select 
+                      value={batchSize} 
+                      onChange={(e) => setBatchSize(Number(e.target.value))}
+                      className="w-full px-2.5 py-1.5 border border-[#ecece0] dark:border-[#2d2d32] rounded-lg outline-none bg-[#fcfcf9] dark:bg-[#151518] text-[#2d2d28] dark:text-white font-semibold"
+                      id="param-batch"
+                    >
+                      <option value={4}>4 (High loss variance)</option>
+                      <option value={8}>8 (Standard)</option>
+                      <option value={16}>16 (Stable gradients)</option>
+                      <option value={32}>32 (Coarse steps)</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-[#7a7a6a] uppercase tracking-wider font-bold block">
+                      Adam Learning Rate
+                    </label>
+                    <select 
+                      value={learningRate} 
+                      onChange={(e) => setLearningRate(Number(e.target.value))}
+                      className="w-full px-2.5 py-1.5 border border-[#ecece0] dark:border-[#2d2d32] rounded-lg outline-none bg-[#fcfcf9] dark:bg-[#151518] text-[#2d2d28] dark:text-white font-mono font-semibold"
+                      id="param-lr"
+                    >
+                      <option value={0.05}>0.05 (Fast/Rough)</option>
+                      <option value={0.01}>0.01 (Standard)</option>
+                      <option value={0.005}>0.005 (Refined)</option>
+                      <option value={0.001}>0.001 (Gradual)</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-[#7a7a6a] uppercase tracking-wider font-bold block">
+                      Validation Holdout %
+                    </label>
+                    <select 
+                      value={valSplit} 
+                      onChange={(e) => setValSplit(Number(e.target.value))}
+                      className="w-full px-2.5 py-1.5 border border-[#ecece0] dark:border-[#2d2d32] rounded-lg outline-none bg-[#fcfcf9] dark:bg-[#151518] text-[#2d2d28] dark:text-white font-semibold"
+                      id="param-valsplit"
+                    >
+                      <option value={0.1}>10% validation split</option>
+                      <option value={0.2}>20% validation split</option>
+                      <option value={0.3}>30% validation split</option>
+                    </select>
+                  </div>
+
+                </div>
+              </div>
+
+            </div>
+
+            {/* COLUMN 2: Neural Training, SVG Graphs, and Saving Model (SPAN 7) */}
+            <div className="lg:col-span-7 space-y-6" id="training-telemetry-col">
+              
+              <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-6 md:p-8 shadow-sm space-y-6" id="backprop-control-panel">
+                
+                {/* Header Title with animated nodes */}
+                <div className="flex items-center justify-between border-b border-[#f0f2ee] dark:border-[#2d2d32] pb-4" id="backprop-header flex">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2.5 rounded-xl ${isTraining ? 'bg-emerald-600 text-white animate-pulse' : 'bg-[#eef1ed] dark:bg-[#2d2d32] text-[#5c6d5c] dark:text-[#a1a1aa]'}`}>
+                      <BrainCircuit className="w-5 h-5 animate-spin duration-3000" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-[#2d2d28] dark:text-[#cbd5e1] uppercase tracking-wide">TensorFlow Backpropagation Network</h4>
+                      <p className="text-[11px] text-[#7a7a6a] dark:text-[#a1a1aa] font-mono mt-0.5">Active Class scale: {sortedLabels.length} unique nodes</p>
+                    </div>
+                  </div>
+
+                  {isTraining ? (
+                    <button 
+                      type="button"
+                      onClick={stopTraining}
+                      className="flex items-center gap-2 text-xs font-bold px-4 py-2 text-white bg-rose-600 hover:bg-rose-500 rounded-xl transition duration-150 animate-pulse shadow-md uppercase tracking-wide"
+                      id="btn-training-interlock"
+                    >
+                      <Square className="w-4 h-4" />
+                      Terminate [Esc]
+                    </button>
+                  ) : (
+                    <button 
+                      type="button"
+                      onClick={startTensorflowTraining}
+                      className="flex items-center gap-2 text-xs font-bold px-5 py-2 text-white bg-[#7c8d7c] hover:bg-[#6c7d6c] rounded-xl transition duration-150 shadow-md uppercase tracking-wide"
+                      id="btn-training-initialize"
+                    >
+                      <Play className="w-4 h-4 fill-white" />
+                      Initialize neural net
+                    </button>
+                  )}
+                </div>
+
+                {/* Run Progress Telemetry Panel */}
+                {isTraining && (
+                  <div className="bg-[#f0f2ee]/50 dark:bg-[#25252b] border border-[#e0e4db] dark:border-[#3d3d42] rounded-2xl p-5 space-y-3.5" id="running-telemetry">
+                    <div className="flex justify-between items-center text-xs text-[#2d2d28] dark:text-white">
+                      <span className="font-bold flex items-center gap-2 font-mono">
+                        <RefreshCw className="w-4 h-4 animate-spin text-[#7c8d7c]" />
+                        Optimizing weights: Epoch {currentEpoch} of {epochs}
+                      </span>
+                      <span className="font-mono text-[11px] bg-white dark:bg-[#151518] border border-[#e0e4db] dark:border-[#3d3d42] px-2.5 py-0.5 rounded font-extrabold text-[#7c8d7c]">
+                        {Math.round((currentEpoch / epochs) * 100)}% COMPLETE
+                      </span>
+                    </div>
+
+                    {/* Progress bar tracking */}
+                    <div className="w-full h-2.5 bg-[#e2e6dd] dark:bg-[#151518] rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-[#7c8d7c] rounded-full transition-all duration-300" 
+                        style={{ width: `${(currentEpoch / epochs) * 100}%` }}
+                      />
+                    </div>
+
+                    {/* Metrics detail grids */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-1.5" id="live-metrics-grids">
+                      <div className="bg-white dark:bg-[#151518] p-3 rounded-xl border border-[#e2e6dd] dark:border-[#2d2d32]" id="live-acc">
+                        <p className="text-[9px] uppercase font-bold tracking-widest text-[#7a7a6a] font-mono">Accuracy</p>
+                        <p className="text-sm font-extrabold text-emerald-600 font-mono mt-0.5">{(currentMetrics.accuracy * 100).toFixed(1)}%</p>
+                      </div>
+                      <div className="bg-white dark:bg-[#151518] p-3 rounded-xl border border-[#e2e6dd] dark:border-[#2d2d32]" id="live-val-acc">
+                        <p className="text-[9px] uppercase font-bold tracking-widest text-[#7a7a6a] font-mono">Val Accuracy</p>
+                        <p className="text-sm font-extrabold text-blue-600 font-mono mt-0.5">{(currentMetrics.valAccuracy * 100).toFixed(1)}%</p>
+                      </div>
+                      <div className="bg-white dark:bg-[#151518] p-3 rounded-xl border border-[#e2e6dd] dark:border-[#2d2d32]" id="live-loss">
+                        <p className="text-[9px] uppercase font-bold tracking-widest text-[#7a7a6a] font-mono">Training Loss</p>
+                        <p className="text-sm font-extrabold text-rose-500 font-mono mt-0.5">{currentMetrics.loss.toFixed(4)}</p>
+                      </div>
+                      <div className="bg-white dark:bg-[#151518] p-3 rounded-xl border border-[#e2e6dd] dark:border-[#2d2d32]" id="live-val-loss">
+                        <p className="text-[9px] uppercase font-bold tracking-widest text-[#7a7a6a] font-mono">Validation Loss</p>
+                        <p className="text-sm font-extrabold text-amber-500 font-mono mt-0.5">{currentMetrics.valLoss.toFixed(4)}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* CHARTS CONTAINER GRID */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6" id="telemetry-charts-grid">
+                  
+                  {/* Plot 1: Accuracy Curve */}
+                  <div className="bg-[#fafaf9] dark:bg-[#151518] border border-[#ecece0] dark:border-[#2d2d32] rounded-2xl p-4.5 space-y-3" id="plot-accuracy-container">
+                    <div className="flex justify-between items-center border-b border-[#f0f2ee] dark:border-[#2d2d32] pb-2 text-xs">
+                      <span className="font-bold text-[#2d2d28] dark:text-white font-sans">Accuracy Convergence</span>
+                      <div className="flex items-center gap-3 text-[10px] font-mono">
+                        <span className="flex items-center gap-1"><span className="w-2.5 h-1 bg-[#10b981] rounded" /> Train</span>
+                        <span className="flex items-center gap-1"><span className="w-2.5 h-1 border border-[#3b82f6] border-dashed rounded font-semibold text-blue-500" /> Val</span>
+                      </div>
+                    </div>
+                    <div className="h-44" id="accuracy-plot-wrapper">
+                      {renderSVGGraph('accuracy')}
+                    </div>
+                  </div>
+
+                  {/* Plot 2: Loss Curve */}
+                  <div className="bg-[#fafaf9] dark:bg-[#151518] border border-[#ecece0] dark:border-[#2d2d32] rounded-2xl p-4.5 space-y-3" id="plot-loss-container">
+                    <div className="flex justify-between items-center border-b border-[#f0f2ee] dark:border-[#2d2d32] pb-2 text-xs">
+                      <span className="font-bold text-[#2d2d28] dark:text-white font-sans">Loss Convergence</span>
+                      <div className="flex items-center gap-3 text-[10px] font-mono">
+                        <span className="flex items-center gap-1"><span className="w-2.5 h-1 bg-[#f43f5e] rounded" /> Train</span>
+                        <span className="flex items-center gap-1"><span className="w-2.5 h-1 border border-[#f59e0b] border-dashed rounded font-semibold text-amber-500" /> Val</span>
+                      </div>
+                    </div>
+                    <div className="h-44" id="loss-plot-wrapper">
+                      {renderSVGGraph('loss')}
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Export & Registration controls */}
+                {activeModel && (
+                  <div className="bg-[#ebf5eb]/40 dark:bg-[#152b1b] border border-[#d2edd2] dark:border-[#2d5231] rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4" id="model-save-section animate-fade-in">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-300">
+                        <Award className="w-4.5 h-4.5 text-[#428042]" />
+                        Model Compiled & Saved!
+                      </div>
+                      <p className="text-xs text-[#527052] dark:text-emerald-400">
+                        The local machine learning instance is actively connected to your practicing cameras viewpoint. Live inferences will use client-side neural metrics immediately.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-3 self-end md:self-auto" id="model-export-controls">
+                      <button 
+                        type="button"
+                        onClick={handleModelArtifactDownload}
+                        className="flex items-center gap-1.5 text-xs text-white font-bold bg-[#7c8d7c] hover:bg-[#6c7d6c] px-4.5 py-2.5 rounded-xl border border-[#7c8d7c] transition shadow-xs uppercase tracking-wide"
+                        id="btn-model-artifact-download"
+                      >
+                        <Download className="w-4 h-4" />
+                        Download JSON artifacts
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+              </div>
+
+            </div>
 
           </div>
 
-        </div>
+          {/* CORE PIPELINE EXPLANATORY DOCUMENTATION SECTION */}
+          <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-6 md:p-8 shadow-sm space-y-6" id="learning-pipeline-explanation">
+            
+            <div className="flex items-center gap-3 border-b border-[#f0f2ee] dark:border-[#2d2d32] pb-4" id="docs-header">
+              <BookOpen className="w-5.5 h-5.5 text-[#7c8d7c]" />
+              <div>
+                <h4 className="text-base font-bold text-[#2d2d28] dark:text-white">TensorFlow Multi-Layer Perceptron (MLP) Pipeline Explained</h4>
+                <p className="text-xs text-[#7a7a6a] dark:text-[#cbd5e1]">Interactive guide to dynamic sign posture coordinate classification</p>
+              </div>
+            </div>
 
-      </div>
+            {/* Steps menu row */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 border-b border-[#f5f5f0] dark:border-[#2d2d32] pb-2" id="docs-step-pills">
+              {[
+                { tag: "01. Preprocessing", label: "Rotation Invariance" },
+                { tag: "02. Topology", label: "Layer Nodes" },
+                { tag: "03. Optimization", label: "Adam Descent" },
+                { tag: "04. Inference", label: "Softmax Weights" }
+              ].map((item, idx) => (
+                <button 
+                  type="button"
+                  key={idx}
+                  onClick={() => setExplainStep(idx)}
+                  className={`p-3.5 text-left rounded-xl transition-all border ${
+                    explainStep === idx 
+                      ? "bg-[#7c8d7c] text-white border-[#7c8d7c] shadow-xs" 
+                      : "bg-transparent text-[#5a5a4a] dark:text-[#cbd5e1] border-transparent hover:bg-[#fafaf9] dark:hover:bg-[#151518]"
+                  }`}
+                  id={`step-doc-btn-${idx}`}
+                >
+                  <p className="text-[10px] font-mono font-bold uppercase tracking-wider">{item.tag}</p>
+                  <p className="text-xs font-bold leading-none mt-1">{item.label}</p>
+                </button>
+              ))}
+            </div>
 
-      {/* CORE PIPELINE EXPLANATORY DOCUMENTATION SECTION */}
-      <div className="bg-white border border-[#ecece0] rounded-3xl p-6 md:p-8 shadow-sm space-y-6" id="learning-pipeline-explanation">
-        
-        <div className="flex items-center gap-3 border-b border-[#f0f2ee] pb-4" id="docs-header">
-          <BookOpen className="w-5.5 h-5.5 text-[#7c8d7c]" />
-          <div>
-            <h4 className="text-base font-bold text-[#2d2d28]">TensorFlow Multi-Layer Perceptron (MLP) Pipeline Explained</h4>
-            <p className="text-xs text-[#7a7a6a]">Interactive guide to dynamic sign posture coordinate classification</p>
+            {/* Explained Details */}
+            <div className="bg-[#fafaf9] dark:bg-[#151518] p-5 rounded-2xl border border-[#ecece0] dark:border-[#2d2d32] text-xs leading-relaxed text-[#5a5a40] dark:text-[#a1a1aa]" id="docs-details-box">
+              
+              {explainStep === 0 && (
+                <div className="space-y-4" id="explain-step-0">
+                  <h5 className="text-sm font-bold text-[#2d2d28] dark:text-white">Converting Skeletal Joints to Relative Coordinate Vectors</h5>
+                  <p>
+                    To make our neural network invariant to how far the user stands from their camera or where their hand travels in the bounding camera box coordinates, we run an essential coordinate offset transformation step before feed-forwarding.
+                  </p>
+                  <div className="bg-white dark:bg-[#25252a] p-4 rounded-xl border border-[#ecece0] dark:border-[#2d2d32] font-mono space-y-2 text-[11.5px] text-[#4d5c4d] dark:text-emerald-400">
+                    <p className="font-bold">// Math Translation step inside preprocessLandmarks():</p>
+                    <p>const wristCoordinate = landmarks[0]; // Joint index 0 serves as offset origin (0, 0, 0)</p>
+                    <p>landmarks.forEach(joint =&gt; &#123;</p>
+                    <p className="pl-4">features.push(joint.x - wristCoordinate.x); // X displacement relative to wrist</p>
+                    <p className="pl-4">features.push(joint.y - wristCoordinate.y); // Y displacement relative to wrist</p>
+                    <p className="pl-4">features.push(joint.z - wristCoordinate.z); // Z displacement relative to wrist</p>
+                    <p>&#125;); // Generates exactly 63 independent relative normalized coordinate vectors</p>
+                  </div>
+                  <p>
+                    By grounding each finger joint's placement strictly against the wrist position, we isolate the biological posture shape from its frame coordinates.
+                  </p>
+                </div>
+              )}
+
+              {explainStep === 1 && (
+                <div className="space-y-4" id="explain-step-1">
+                  <h5 className="text-sm font-bold text-[#2d2d28] dark:text-white">Linear Layer Configuration & Network Structure</h5>
+                  <p>
+                    The Multi-Layer Perceptron (MLP) contains exactly 63 input feature nodes mapping into sequential fully-connected (dense) layers.
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4" id="explain-topology-grid">
+                    <div className="bg-white dark:bg-[#25252a] p-3.5 rounded-xl border border-[#ecece0] dark:border-[#2d2d32]">
+                      <span className="text-[10px] uppercase font-bold tracking-widest text-[#7a7a6a] font-mono">Layer 1: Input</span>
+                      <p className="font-bold text-[#2d2d28] dark:text-white mt-1">63 Floating Point values</p>
+                      <p className="text-[11px] text-[#7a7a6a] dark:text-[#a1a1aa] mt-1">Standard 21 landmarks hand joints times 3 coordinate vectors (X, Y, Z).</p>
+                    </div>
+                    <div className="bg-white dark:bg-[#25252a] p-3.5 rounded-xl border border-[#ecece0] dark:border-[#2d2d32]">
+                      <span className="text-[10px] uppercase font-bold tracking-widest text-[#7a7a6a] font-mono">Layer 2: Dense Hidden</span>
+                      <p className="font-bold text-emerald-600 dark:text-emerald-400 mt-1">Dense Rectified Linear (ReLU)</p>
+                      <p className="text-[11px] text-[#7a7a6a] dark:text-[#a1a1aa] mt-1">Deep weights learn complex spatial patterns like curls, knuckle angles, indices crossing, or fist cohesion.</p>
+                    </div>
+                    <div className="bg-white dark:bg-[#25252a] p-3.5 rounded-xl border border-[#ecece0] dark:border-[#2d2d32]">
+                      <span className="text-[10px] uppercase font-bold tracking-widest text-[#7a7a6a] font-mono">Layer 3: Output Classification</span>
+                      <p className="font-bold text-blue-600 dark:text-blue-400 mt-1">Softmax Distribution</p>
+                      <p className="text-[11px] text-[#7a7a6a] dark:text-[#a1a1aa] mt-1">Compiles the multi-class parameters into a probability sum matching exactly 100%.</p>
+                    </div>
+                  </div>
+                  <p>
+                    We inject an optional 10% dropout buffer block between hidden groups. This periodically restricts neurons from adapting to single camera ratios, promoting generalizable pattern recognition.
+                  </p>
+                </div>
+              )}
+
+              {explainStep === 2 && (
+                <div className="space-y-4" id="explain-step-2">
+                  <h5 className="text-sm font-bold text-[#2d2d28] dark:text-white">Adam Optimizer & Backpropagation Dynamics</h5>
+                  <p>
+                    During each forward pass, the model makes gesture guesses from its random initial weights. It compares those guesses against true one-hot indices of your collection (e.g. `[1.0, 0.0, 0.0]` for Category A) to quantify categorical cross-entropy loss.
+                  </p>
+                  <p>
+                    Backpropagation calculates gradients of this loss relative to all dense weights. The <strong>Adam Optimizer</strong> uses these gradients alongside first and second momentum estimates (exponential moving averages of gradients) to fine-tune the dense weights!
+                  </p>
+                  <div className="bg-white dark:bg-[#25252a] p-4.5 rounded-xl border border-[#ecece0] dark:border-[#2d2d32] text-[11.5px] font-mono text-[#5a5a4a] dark:text-[#cbd5e1] space-y-1">
+                    <span className="text-[10px] uppercase font-bold text-[#7a7a6a] tracking-widest block">Optimization Hyperparameters:</span>
+                    <div>- Learning Rate: governs step-size increments during backprop weights revision.</div>
+                    <div>- Categorical Cross-Entropy: penalizes mismatching class predictions exponentially.</div>
+                    <div>- Batches: updates weights in segments to ensure smooth training updates.</div>
+                  </div>
+                </div>
+              )}
+
+              {explainStep === 3 && (
+                <div className="space-y-4" id="explain-step-3">
+                  <h5 className="text-sm font-bold text-[#2d2d28] dark:text-white">Real-Time Inference using Browser GPU Tensors</h5>
+                  <p>
+                    When training is completed, our model uses TensorFlow.js compilation to perform lightning-fast client-side neural prediction directly on the interactive video thread.
+                  </p>
+                  <p>
+                    Our webcam thread feeds the preprocessed joint arrays into the compiled model, executing the model inside a non-blocking `tf.tidy` block. The index with the highest probability value is translated as the active sign gesture.
+                  </p>
+                  <div className="bg-white dark:bg-[#25252a] p-4 rounded-xl border border-[#ecece0] dark:border-[#2d2d32] text-[11.5px] font-mono text-stone-500 dark:text-[#cbd5e1] space-y-1">
+                    <strong>// Realtime Translation block inside predictedGestureCallback():</strong>
+                    <div>const prediction = activeModel.predict(preprocessedFeaturesTensor);</div>
+                    <div>const predictedIndex = prediction.argMax(1).dataSync()[0];</div>
+                    <div>const targetLabel = trainedClasses[predictedIndex];</div>
+                  </div>
+                </div>
+              )}
+
+            </div>
+
           </div>
-        </div>
-
-        {/* Steps menu row */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 border-b border-[#f5f5f0] pb-2" id="docs-step-pills">
-          {[
-            { tag: "01. Preprocessing", label: "Rotation Invariance" },
-            { tag: "02. Topology", label: "Layer Nodes" },
-            { tag: "03. Optimization", label: "Adam Descent" },
-            { tag: "04. Inference", label: "Softmax Weights" }
-          ].map((item, idx) => (
-            <button 
-              key={idx}
-              onClick={() => setExplainStep(idx)}
-              className={`p-3.5 text-left rounded-xl transition-all border ${
-                explainStep === idx 
-                  ? "bg-[#7c8d7c] text-white border-[#7c8d7c] shadow-xs" 
-                  : "bg-transparent text-[#5a5a4a] border-transparent hover:bg-[#fafaf9]"
-              }`}
-              id={`step-doc-btn-${idx}`}
-            >
-              <p className="text-[10px] font-mono font-bold uppercase tracking-wider">{item.tag}</p>
-              <p className="text-xs font-bold leading-none mt-1">{item.label}</p>
-            </button>
-          ))}
-        </div>
-
-        {/* Explained Details */}
-        <div className="bg-[#fafaf9] p-5 rounded-2xl border border-[#ecece0] text-xs leading-relaxed text-[#5a5a40]" id="docs-details-box">
+        </>
+      ) : (
+        /* BENCHMARKING & QUANTIZATION DASHBOARD VIEW */
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-fade-in" id="performance-dashboard-container">
           
-          {explainStep === 0 && (
-            <div className="space-y-4" id="explain-step-0">
-              <h5 className="text-sm font-bold text-[#2d2d28]">Converting Skeletal Joints to Relative Coordinate Vectors</h5>
-              <p>
-                To make our neural network invariant to how far the user stands from their camera or where their hand travels in the bounding camera box coordinates, we run an essential coordinate offset transformation step before feed-forwarding.
-              </p>
-              <div className="bg-white p-4 rounded-xl border border-[#ecece0] font-mono space-y-2 text-[11.5px] text-[#4d5c4d]">
-                <p className="font-bold">// Math Translation step inside preprocessLandmarks():</p>
-                <p>const wristCoordinate = landmarks[0]; // Joint index 0 serves as offset origin (0, 0, 0)</p>
-                <p>landmarks.forEach(joint =&gt; &#123;</p>
-                <p className="pl-4">features.push(joint.x - wristCoordinate.x); // X displacement relative to wrist</p>
-                <p className="pl-4">features.push(joint.y - wristCoordinate.y); // Y displacement relative to wrist</p>
-                <p className="pl-4">features.push(joint.z - wristCoordinate.z); // Z displacement relative to wrist</p>
-                <p>&#125;); // Generates exactly 63 independent relative normalized coordinate vectors</p>
+          {/* LEFT PANEL (SPAN 4) - Profiles & Configuration */}
+          <div className="lg:col-span-4 space-y-6" id="perf-left-column">
+            
+            {/* CARD 1: ACTIVE CLASSIFIER SPECIFICATIONS */}
+            <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-6 shadow-sm space-y-5" id="spec-profile-card">
+              <div className="flex items-center gap-2 text-xs font-bold text-[#7c8d7c] uppercase tracking-widest font-mono">
+                <SlidersHorizontal className="w-4 h-4 text-[#7c8d7c]" />
+                Classifier Profile
               </div>
-              <p>
-                By grounding each finger joint's placement strictly against the wrist position, we isolate the biological posture shape from its frame coordinates.
-              </p>
-            </div>
-          )}
 
-          {explainStep === 1 && (
-            <div className="space-y-4" id="explain-step-1">
-              <h5 className="text-sm font-bold text-[#2d2d28]">Linear Layer Configuration & Network Structure</h5>
-              <p>
-                The Multi-Layer Perceptron (MLP) contains exactly 63 input feature nodes mapping into sequential fully-connected (dense) layers.
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4" id="explain-topology-grid">
-                <div className="bg-white p-3.5 rounded-xl border border-[#ecece0]">
-                  <span className="text-[10px] uppercase font-bold tracking-widest text-[#7a7a6a] font-mono">Layer 1: Input</span>
-                  <p className="font-bold text-[#2d2d28] mt-1">63 Floating Point values</p>
-                  <p className="text-[11px] text-[#7a7a6a] mt-1">Standard 21 landmarks hand joints times 3 coordinate vectors (X, Y, Z).</p>
-                </div>
-                <div className="bg-white p-3.5 rounded-xl border border-[#ecece0]">
-                  <span className="text-[10px] uppercase font-bold tracking-widest text-[#7a7a6a] font-mono">Layer 2: Dense Hidden</span>
-                  <p className="font-bold text-emerald-600 mt-1">Dense Rectified Linear (ReLU)</p>
-                  <p className="text-[11px] text-[#7a7a6a] mt-1">Deep weights learn complex spatial patterns like curls, knuckle angles, indices crossing, or fist cohesion.</p>
-                </div>
-                <div className="bg-white p-3.5 rounded-xl border border-[#ecece0]">
-                  <span className="text-[10px] uppercase font-bold tracking-widest text-[#7a7a6a] font-mono">Layer 3: Output Classification</span>
-                  <p className="font-bold text-blue-600 mt-1">Softmax Distribution</p>
-                  <p className="text-[11px] text-[#7a7a6a] mt-1">Compiles the multi-class parameters into a probability sum matching exactly 100%.</p>
-                </div>
-              </div>
-              <p>
-                We inject an optional 10% dropout buffer block between hidden groups. This periodically restricts neurons from adapting to single camera ratios, promoting generalizable pattern recognition.
-              </p>
-            </div>
-          )}
+              {activeModel ? (
+                <div className="space-y-4.5" id="profile-details">
+                  <div className="flex items-center justify-between" id="status-row">
+                    <span className="text-xs text-[#7a7a6a]">Engine Status</span>
+                    <span className="text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-[#152e1c] text-emerald-800 dark:text-emerald-300 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400 animate-pulse" />
+                      ACTIVE MODEL
+                    </span>
+                  </div>
 
-          {explainStep === 2 && (
-            <div className="space-y-4" id="explain-step-2">
-              <h5 className="text-sm font-bold text-[#2d2d28]">Adam Optimizer & Backpropagation Dynamics</h5>
-              <p>
-                During each forward pass, the model makes gesture guesses from its random initial weights. It compares those guesses against true one-hot indices of your collection (e.g. `[1.0, 0.0, 0.0]` for Category A) to quantify categorical cross-entropy loss.
-              </p>
-              <p>
-                Backpropagation calculates gradients of this loss relative to all dense weights. The <strong>Adam Optimizer</strong> uses these gradients alongside first and second momentum estimates (exponential moving averages of gradients) to fine-tune the dense weights!
-              </p>
-              <div className="bg-white p-4.5 rounded-xl border border-[#ecece0] text-[11.5px] font-mono text-[#5a5a4a] space-y-1">
-                <span className="text-[10px] uppercase font-bold text-[#7a7a6a] tracking-widest block">Optimization Hyperparameters:</span>
-                <div>- Learning Rate: governs step-size increments during backprop weights revision.</div>
-                <div>- Categorical Cross-Entropy: penalizes mismatching class predictions exponentially.</div>
-                <div>- Batches: updates weights in segments to ensure smooth training updates.</div>
-              </div>
-            </div>
-          )}
+                  <div className="h-px bg-[#f0f2ee] dark:bg-[#2d2d32]" />
 
-          {explainStep === 3 && (
-            <div className="space-y-4" id="explain-step-3">
-              <h5 className="text-sm font-bold text-[#2d2d28]">Real-Time Inference using Browser GPU Tensors</h5>
-              <p>
-                When training is completed, our model uses TensorFlow.js compilation to perform lightning-fast client-side neural prediction directly on the interactive video thread.
-              </p>
-              <p>
-                Our webcam thread feeds the preprocessed joint arrays into the compiled model, executing the model inside a non-blocking `tf.tidy` block. The index with the highest probability value is translated as the active sign gesture.
-              </p>
-              <div className="bg-white p-4 rounded-xl border border-[#ecece0] text-[11.5px] font-mono text-stone-500 space-y-1">
-                <strong>// Realtime Translation block inside predictedGestureCallback():</strong>
-                <div>const prediction = activeModel.predict(preprocessedFeaturesTensor);</div>
-                <div>const predictedIndex = prediction.argMax(1).dataSync()[0];</div>
-                <div>const targetLabel = trainedClasses[predictedIndex];</div>
+                  <div className="grid grid-cols-2 gap-4" id="stats-grid">
+                    <div>
+                      <p className="text-[10px] text-[#7a7a6a] uppercase font-mono tracking-wider">Weight Precision</p>
+                      <p className="text-sm font-extrabold text-[#2d2d28] dark:text-white font-mono mt-0.5 uppercase">
+                        {quantizationLevel === 'none' ? 'Float32' : quantizationLevel === 'fp16' ? 'Float16' : 'Int8'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-[#7a7a6a] uppercase font-mono tracking-wider">Storage Footprint</p>
+                      <p className="text-sm font-extrabold text-[#2d2d28] dark:text-white font-mono mt-0.5">
+                        {(() => {
+                          let params = 0;
+                          activeModel.weights.forEach(w => {
+                            params += w.shape.reduce((a, b) => a * b, 1);
+                          });
+                          const bpp = quantizationLevel === 'int8' ? 1 : quantizationLevel === 'fp16' ? 2 : 4;
+                          return `${((params * bpp) / 1024).toFixed(2)} KB`;
+                        })()}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="h-px bg-[#f0f2ee] dark:bg-[#2d2d32]" />
+
+                  <div className="space-y-1.5" id="layers-breakdown">
+                    <span className="text-[10px] uppercase font-bold text-[#7a7a6a] tracking-widest block font-mono">Synaptic Topology</span>
+                    <div className="space-y-1 text-xs">
+                      <div className="flex justify-between font-mono bg-[#fafaf9] dark:bg-[#151518] p-1.5 rounded">
+                        <span className="text-[#7a7a6a]">Total Parameters</span>
+                        <span className="font-bold text-[#2d2d28] dark:text-white">
+                          {(() => {
+                            let params = 0;
+                            activeModel.weights.forEach(w => {
+                              params += w.shape.reduce((a, b) => a * b, 1);
+                            });
+                            return params.toLocaleString();
+                          })()}
+                        </span>
+                      </div>
+                      <div className="flex justify-between font-mono bg-[#fafaf9] dark:bg-[#151518] p-1.5 rounded">
+                        <span className="text-[#7a7a6a]">Classification Outputs</span>
+                        <span className="font-bold text-[#2d2d28] dark:text-white">{trainedClasses.length} labels</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-6 text-xs text-stone-400 space-y-3">
+                  <p>No client-trained classifier currently loaded in browser memory.</p>
+                  <button 
+                    type="button"
+                    onClick={() => setActiveSubTab('workspace')}
+                    className="px-4 py-2 bg-[#7c8d7c] text-white font-bold rounded-xl text-[11px] uppercase hover:bg-[#6c7d6c]"
+                  >
+                    Go Train Classifier First
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* CARD 2: REAL-TIME FRAME DEBOUNCE / THROWBACK CONTROL */}
+            <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-6 shadow-sm space-y-5" id="latency-controller-card">
+              <div className="flex items-center gap-2 text-xs font-bold text-[#7c8d7c] uppercase tracking-widest font-mono">
+                <Clock className="w-4 h-4 text-emerald-600 animate-pulse" />
+                Inference Throttle
+              </div>
+
+              <div className="space-y-4 text-xs">
+                <p className="text-[11px] text-[#7a7a6a] leading-relaxed">
+                  Adjust the millisecond delay between model predictions. Throttling reduces CPU workloads on lower-end devices to maintain a fluid <strong>60 FPS</strong> camera rendering stream.
+                </p>
+
+                <div className="bg-[#fafaf9] dark:bg-[#151518] p-3.5 rounded-2xl border border-[#ecece0] dark:border-[#2d2d32] space-y-3">
+                  <div className="flex justify-between items-center font-semibold text-xs">
+                    <span className="text-[#2d2d28] dark:text-white">Prediction Throttle</span>
+                    <span className="font-mono text-emerald-600 font-bold bg-white dark:bg-[#202025] px-2 py-0.5 rounded-md border border-[#ecece0] dark:border-[#2d2d32]">
+                      {throttleMs === 0 ? 'No Throttle (FP)' : `${throttleMs} ms`}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1">
+                    <input 
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={10}
+                      value={throttleMs}
+                      onChange={(e) => handleUpdateThrottle(Number(e.target.value))}
+                      className="w-full accent-[#7c8d7c] h-1 bg-[#ecece0] dark:bg-[#2d2d32] rounded-lg cursor-pointer"
+                    />
+                    <div className="flex justify-between text-[9px] text-[#7a7a6a] font-mono font-bold uppercase pt-1">
+                      <span>Max Stress</span>
+                      <span>Balanced</span>
+                      <span>Battery Saver</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-amber-50 dark:bg-[#2a241b] rounded-xl border border-amber-100 dark:border-amber-950 flex items-start gap-2.5">
+                  <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <p className="text-[10px] text-amber-800 dark:text-amber-300 leading-relaxed">
+                    A <strong>40ms delay</strong> runs 25 inferences/sec. This is completely real-time to human eyes while cutting CPU workloads by more than 50% compared to non-throttled runs!
+                  </p>
+                </div>
               </div>
             </div>
-          )}
+
+          </div>
+
+          {/* RIGHT PANEL (SPAN 8) - Quantitative Tuning & Benchmarks */}
+          <div className="lg:col-span-8 space-y-6" id="perf-right-column">
+            
+            {/* PANEL 1: WEIGHT PRECISION QUANTIZER */}
+            <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-6 md:p-8 shadow-sm space-y-6" id="quantization-precision-panel">
+              <div>
+                <h4 className="text-sm font-bold text-[#2d2d28] dark:text-white uppercase tracking-wider">Weight Precision Quantizer</h4>
+                <p className="text-xs text-[#7a7a6a] dark:text-[#cbd5e1] mt-0.5">Compress network weights binary arrays to decrease memory size and enhance CPU speeds</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4" id="quant-precision-cards">
+                
+                {/* Precision Option 1: None */}
+                <button
+                  type="button"
+                  onClick={() => handleApplyQuantization('none')}
+                  className={`p-4 rounded-2xl border text-left flex flex-col justify-between h-32 transition ${
+                    quantizationLevel === 'none'
+                      ? 'border-[#7c8d7c] bg-[#ebf5eb]/20 dark:bg-[#182a1e]'
+                      : 'border-[#ecece0] dark:border-[#2d2d32] bg-[#fcfcf9] dark:bg-[#151518] hover:bg-[#fafaf9]'
+                  }`}
+                  id="quant-none-btn"
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 bg-gray-200 dark:bg-[#202025] rounded text-[#4a4a40] dark:text-[#a1a1aa]">FP32</span>
+                    {quantizationLevel === 'none' && <Check className="w-4.5 h-4.5 text-[#7c8d7c]" />}
+                  </div>
+                  <div>
+                    <h5 className="font-bold text-xs text-[#2d2d28] dark:text-white">Full Precision</h5>
+                    <p className="text-[10.5px] text-[#7a7a6a] leading-tight mt-0.5">Standard 32-bit floating values. Zero compression.</p>
+                  </div>
+                </button>
+
+                {/* Precision Option 2: FP16 */}
+                <button
+                  type="button"
+                  onClick={() => handleApplyQuantization('fp16')}
+                  className={`p-4 rounded-2xl border text-left flex flex-col justify-between h-32 transition ${
+                    quantizationLevel === 'fp16'
+                      ? 'border-[#7c8d7c] bg-[#ebf5eb]/20 dark:bg-[#182a1e]'
+                      : 'border-[#ecece0] dark:border-[#2d2d32] bg-[#fcfcf9] dark:bg-[#151518] hover:bg-[#fafaf9]'
+                  }`}
+                  id="quant-fp16-btn"
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 bg-emerald-100 dark:bg-[#103010] rounded text-emerald-800 dark:text-emerald-400">FP16</span>
+                    {quantizationLevel === 'fp16' && <Check className="w-4.5 h-4.5 text-[#7c8d7c]" />}
+                  </div>
+                  <div>
+                    <h5 className="font-bold text-xs text-[#2d2d28] dark:text-white">Float16 Quantization</h5>
+                    <p className="text-[10.5px] text-[#7a7a6a] leading-tight mt-0.5">Casts parameters to half-precision floats. Compresses weights by 50%.</p>
+                  </div>
+                </button>
+
+                {/* Precision Option 3: INT8 */}
+                <button
+                  type="button"
+                  onClick={() => handleApplyQuantization('int8')}
+                  className={`p-4 rounded-2xl border text-left flex flex-col justify-between h-32 transition ${
+                    quantizationLevel === 'int8'
+                      ? 'border-[#7c8d7c] bg-[#ebf5eb]/20 dark:bg-[#182a1e]'
+                      : 'border-[#ecece0] dark:border-[#2d2d32] bg-[#fcfcf9] dark:bg-[#151518] hover:bg-[#fafaf9]'
+                  }`}
+                  id="quant-int8-btn"
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 bg-amber-100 dark:bg-[#3d2a10] rounded text-amber-800 dark:text-amber-400">INT8</span>
+                    {quantizationLevel === 'int8' && <Check className="w-4.5 h-4.5 text-[#7c8d7c]" />}
+                  </div>
+                  <div>
+                    <h5 className="font-bold text-xs text-[#2d2d28] dark:text-white">Int8 Quantization</h5>
+                    <p className="text-[10.5px] text-[#7a7a6a] leading-tight mt-0.5">Scales parameters to 8-bit integers. 75% file compression. Fastest operations.</p>
+                  </div>
+                </button>
+
+              </div>
+            </div>
+
+            {/* PANEL 2: SPEED RUN LATENCY BENCHMARKING */}
+            <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-6 md:p-8 shadow-sm space-y-6" id="benchmark-runner-panel">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h4 className="text-sm font-bold text-[#2d2d28] dark:text-white uppercase tracking-wider">Hardware Performance Benchmark</h4>
+                  <p className="text-xs text-[#7a7a6a] dark:text-[#cbd5e1] mt-0.5">Runs 500 mock predictions through the active GPU compiler inside a live speed trial</p>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={!activeModel || benchmarkIsRunning}
+                  onClick={handleRunBenchmark}
+                  className="flex items-center justify-center gap-2 text-xs font-bold px-6 py-3 text-white bg-[#7c8d7c] hover:bg-[#6c7d6c] disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition duration-150 shadow-md uppercase tracking-wider shrink-0"
+                  id="trigger-benchmark-btn"
+                >
+                  {benchmarkIsRunning ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                      Benchmarking ({benchmarkProgress}%)
+                    </>
+                  ) : (
+                    <>
+                      <Activity className="w-4 h-4 text-white" />
+                      Run Inference Speed Test
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Progress bar when running */}
+              {benchmarkIsRunning && (
+                <div className="space-y-2 animate-fade-in" id="benchmark-progress-box">
+                  <div className="w-full h-2 bg-[#ecece0] dark:bg-[#2d2d32] rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-[#7c8d7c] rounded-full transition-all duration-150"
+                      style={{ width: `${benchmarkProgress}%` }}
+                    />
+                  </div>
+                  <p className="text-[10px] text-right font-mono font-semibold text-[#7a7a6a]">FEEDING GPU PIPELINE OVER 500 ITERATIONS...</p>
+                </div>
+              )}
+
+              {/* Benchmark Results Display */}
+              {benchmarkResult && (
+                <div className="bg-[#fafaf9] dark:bg-[#151518] border border-[#ecece0] dark:border-[#2d2d32] rounded-2xl p-5 space-y-6 animate-fade-in" id="benchmark-results-view">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4" id="results-kpi-grid">
+                    <div className="bg-white dark:bg-[#1e1e22] p-4 rounded-xl border border-[#ecece0] dark:border-[#2d2d32]" id="kpi-latency">
+                      <span className="text-[9px] uppercase font-bold tracking-widest text-[#7a7a6a] font-mono block">Avg Latency</span>
+                      <span className="text-xl font-extrabold text-[#2d2d28] dark:text-white font-mono block mt-1">{benchmarkResult.latencyAvg} ms</span>
+                      <span className="text-[9px] text-[#7a7a6a] font-mono block mt-1">±{benchmarkResult.jitter} ms jitter</span>
+                    </div>
+
+                    <div className="bg-white dark:bg-[#1e1e22] p-4 rounded-xl border border-[#ecece0] dark:border-[#2d2d32]" id="kpi-throughput">
+                      <span className="text-[9px] uppercase font-bold tracking-widest text-[#7a7a6a] font-mono block">Throughput</span>
+                      <span className="text-xl font-extrabold text-[#7c8d7c] font-mono block mt-1">{benchmarkResult.throughput.toLocaleString()}</span>
+                      <span className="text-[9px] text-[#7a7a6a] font-mono block mt-1">inferences / sec</span>
+                    </div>
+
+                    <div className="bg-white dark:bg-[#1e1e22] p-4 rounded-xl border border-[#ecece0] dark:border-[#2d2d32]" id="kpi-p95">
+                      <span className="text-[9px] uppercase font-bold tracking-widest text-[#7a7a6a] font-mono block">P95 Threshold</span>
+                      <span className="text-xl font-extrabold text-amber-500 font-mono block mt-1">{benchmarkResult.latencyP95} ms</span>
+                      <span className="text-[9px] text-[#7a7a6a] font-mono block mt-1">95% complete below</span>
+                    </div>
+
+                    <div className="bg-white dark:bg-[#1e1e22] p-4 rounded-xl border border-[#ecece0] dark:border-[#2d2d32]" id="kpi-footprint">
+                      <span className="text-[9px] uppercase font-bold tracking-widest text-[#7a7a6a] font-mono block">Weight Footprint</span>
+                      <span className="text-xl font-extrabold text-[#2d2d28] dark:text-white font-mono block mt-1">{benchmarkResult.estimatedSizeKb} KB</span>
+                      <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-mono font-bold block mt-1">{benchmarkResult.precision} PRECISION</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4" id="range-details-grid">
+                    <div className="flex justify-between items-center bg-white dark:bg-[#1e1e22] p-3 rounded-xl border border-[#ecece0] dark:border-[#2d2d32] text-xs font-mono">
+                      <span className="text-[#7a7a6a]">Inference Min Floor:</span>
+                      <span className="font-extrabold text-[#2d2d28] dark:text-white">{benchmarkResult.latencyMin} ms</span>
+                    </div>
+                    <div className="flex justify-between items-center bg-white dark:bg-[#1e1e22] p-3 rounded-xl border border-[#ecece0] dark:border-[#2d2d32] text-xs font-mono">
+                      <span className="text-[#7a7a6a]">Inference Max Peak:</span>
+                      <span className="font-extrabold text-rose-500">{benchmarkResult.latencyMax} ms</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* PAST BENCHMARKS LOG */}
+              <div className="space-y-3.5" id="past-benchmarks-list">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] uppercase font-bold tracking-widest text-[#7a7a6a] font-mono">Performance Trial History</span>
+                  {pastBenchmarks.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleClearBenchmarks}
+                      className="text-[10px] font-bold text-rose-600 hover:underline hover:text-rose-500 bg-transparent border-0 cursor-pointer uppercase font-mono"
+                    >
+                      Reset Bench Logs
+                    </button>
+                  )}
+                </div>
+
+                {pastBenchmarks.length === 0 ? (
+                  <div className="text-center py-6 bg-[#fafaf9] dark:bg-[#151518] rounded-2xl border border-dashed border-[#ecece0] dark:border-[#2d2d32] text-xs text-stone-400 font-medium font-mono">
+                    No benchmarking trials executed on this session yet.
+                  </div>
+                ) : (
+                  <div className="bg-[#fafaf9] dark:bg-[#151518] border border-[#ecece0] dark:border-[#2d2d32] rounded-2xl overflow-hidden text-xs" id="history-log-table">
+                    <div className="grid grid-cols-6 gap-2 bg-[#f0f2ee] dark:bg-[#25252b] px-4 py-2 font-mono font-bold text-[#7a7a6a] text-[10px] border-b border-[#ecece0] dark:border-[#2d2d32]">
+                      <span>Timestamp</span>
+                      <span>Precision</span>
+                      <span>Avg Latency</span>
+                      <span>Throughput</span>
+                      <span>Model Size</span>
+                      <span>Throttle</span>
+                    </div>
+
+                    <div className="divide-y divide-[#ecece0] dark:divide-[#2d2d32]">
+                      {pastBenchmarks.map((b) => (
+                        <div key={b.id} className="grid grid-cols-6 gap-2 px-4 py-2.5 font-mono text-stone-600 dark:text-[#cbd5e1] hover:bg-white dark:hover:bg-[#1c1c20] transition items-center">
+                          <span className="font-sans font-semibold">{b.timestamp}</span>
+                          <span className="font-bold uppercase tracking-wider">{b.precision}</span>
+                          <span className="font-extrabold text-[#2d2d28] dark:text-white">{b.latencyAvg} ms</span>
+                          <span className="text-emerald-600 font-bold">{b.throughput} inf/s</span>
+                          <span>{b.estimatedSizeKb} KB</span>
+                          <span>{b.throttleMs === 0 ? "None" : `${b.throttleMs}ms`}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+          </div>
 
         </div>
-
-      </div>
+      )}
 
     </div>
   );
