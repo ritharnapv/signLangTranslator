@@ -305,6 +305,7 @@ export default function App() {
   const trainedClassesRef = useRef<string[]>([]);
   const predictionSourceRef = useRef<'simulated' | 'tensorflow'>('simulated');
   const confidenceThresholdRef = useRef<number>(70);
+  const lastPredictionTimeRef = useRef<number>(0);
 
   // Prediction smoothing and stabilization engine state/refs
   const [smoothingWindow, setSmoothingWindow] = useState<number>(8);
@@ -1035,68 +1036,73 @@ export default function App() {
 
       // REAL-TIME LOCAL TENSORFLOW INFERENCE
       if (predictionSourceRef.current === 'tensorflow' && trainedClientModelRef.current && landmarks && landmarks.length === 21) {
-        try {
-          const wrist = landmarks[0];
-          const features: number[] = [];
-          landmarks.forEach((joint: any) => {
-            features.push(joint.x - wrist.x);
-            features.push(joint.y - wrist.y);
-            features.push(joint.z - (wrist.z || 0));
-          });
+        const throttleVal = Number(localStorage.getItem('asl_prediction_throttle_ms') || '40');
+        const nowMs = performance.now();
+        if (nowMs - lastPredictionTimeRef.current >= throttleVal) {
+          lastPredictionTimeRef.current = nowMs;
+          try {
+            const wrist = landmarks[0];
+            const features: number[] = [];
+            landmarks.forEach((joint: any) => {
+              features.push(joint.x - wrist.x);
+              features.push(joint.y - wrist.y);
+              features.push(joint.z - (wrist.z || 0));
+            });
 
-          const model = trainedClientModelRef.current;
-          const classes = trainedClassesRef.current;
+            const model = trainedClientModelRef.current;
+            const classes = trainedClassesRef.current;
 
-          const result = tf.tidy(() => {
-            const inputTensor = tf.tensor2d([features], [1, 63]);
-            const prediction = model.predict(inputTensor) as tf.Tensor;
-            const probs = Array.from(prediction.dataSync());
-            const maxProb = Math.max(...probs);
-            const maxIndex = probs.indexOf(maxProb);
+            const result = tf.tidy(() => {
+              const inputTensor = tf.tensor2d([features], [1, 63]);
+              const prediction = model.predict(inputTensor) as tf.Tensor;
+              const probs = Array.from(prediction.dataSync());
+              const maxProb = Math.max(...probs);
+              const maxIndex = probs.indexOf(maxProb);
+              
+              const layer1Units = (model.layers[0] as any).units || 64;
+              const layer2Units = (model.layers[2] as any).units || 32;
+
+              return { maxIndex, confidence: maxProb * 100, layer1Units, layer2Units };
+            });
+
+            const charResult = classes[result.maxIndex] || "?";
+            const rawConf = Number(result.confidence.toFixed(1));
+
+            const matchingCustom = customGestures.find(cg => cg.char.toUpperCase() === charResult.toUpperCase());
+            const explanation = matchingCustom 
+              ? `Successfully recognized your custom-trained gesture "${matchingCustom.char}"! Posture description: ${matchingCustom.description}`
+              : `Inferred live in real time using your browser-compiled Multi-Layer Perceptron (MLP) Artificial Neural Network. Your 3D landmarks coordinates offset relative to wrist joint 0 and fed forward inside TF.js.`;
             
-            const layer1Units = (model.layers[0] as any).units || 64;
-            const layer2Units = (model.layers[2] as any).units || 32;
+            const tips = matchingCustom
+              ? [
+                  `Visual Practice Cue: ${matchingCustom.visualTip}`,
+                  `Model classes catalogued: ${classes.join(', ')}`,
+                  `Model topology: [63] -> Dense (${result.layer1Units}) -> Dense (${result.layer2Units}) -> Softmax (${classes.length})`
+                ]
+              : [
+                  `Model classes catalogued: ${classes.join(', ')}`,
+                  `Categorical cross-entropy probability: ${rawConf}%`,
+                  `Model topology: [63] -> Dense (${result.layer1Units}) -> Dense (${result.layer2Units}) -> Softmax (${classes.length})`
+                ];
 
-            return { maxIndex, confidence: maxProb * 100, layer1Units, layer2Units };
-          });
+            setLatestResult({
+              predictedChar: charResult,
+              confidence: rawConf,
+              explanation,
+              tips,
+              grammarMatches: [`TF.js live local prediction`, ...(matchingCustom ? [`Custom Gesture: ${matchingCustom.char}`] : [])]
+            });
 
-          const charResult = classes[result.maxIndex] || "?";
-          const rawConf = Number(result.confidence.toFixed(1));
+            // Process and output smoothed prediction values
+            stabilizeAndLogPrediction(charResult, rawConf);
 
-          const matchingCustom = customGestures.find(cg => cg.char.toUpperCase() === charResult.toUpperCase());
-          const explanation = matchingCustom 
-            ? `Successfully recognized your custom-trained gesture "${matchingCustom.char}"! Posture description: ${matchingCustom.description}`
-            : `Inferred live in real time using your browser-compiled Multi-Layer Perceptron (MLP) Artificial Neural Network. Your 3D landmarks coordinates offset relative to wrist joint 0 and fed forward inside TF.js.`;
-          
-          const tips = matchingCustom
-            ? [
-                `Visual Practice Cue: ${matchingCustom.visualTip}`,
-                `Model classes catalogued: ${classes.join(', ')}`,
-                `Model topology: [63] -> Dense (${result.layer1Units}) -> Dense (${result.layer2Units}) -> Softmax (${classes.length})`
-              ]
-            : [
-                `Model classes catalogued: ${classes.join(', ')}`,
-                `Categorical cross-entropy probability: ${rawConf}%`,
-                `Model topology: [63] -> Dense (${result.layer1Units}) -> Dense (${result.layer2Units}) -> Softmax (${classes.length})`
-              ];
-
-          setLatestResult({
-            predictedChar: charResult,
-            confidence: rawConf,
-            explanation,
-            tips,
-            grammarMatches: [`TF.js live local prediction`, ...(matchingCustom ? [`Custom Gesture: ${matchingCustom.char}`] : [])]
-          });
-
-          // Process and output smoothed prediction values
-          stabilizeAndLogPrediction(charResult, rawConf);
-
-          // Live log to prediction history if above minimum confidence threshold guardrail
-          if (rawConf >= confidenceThresholdRef.current) {
-            addPredictionToHistory(charResult, rawConf);
+            // Live log to prediction history if above minimum confidence threshold guardrail
+            if (rawConf >= confidenceThresholdRef.current) {
+              addPredictionToHistory(charResult, rawConf);
+            }
+          } catch (predErr) {
+            console.error("Real-time live prediction error:", predErr);
           }
-        } catch (predErr) {
-          console.error("Real-time live prediction error:", predErr);
         }
       }
     } else {
