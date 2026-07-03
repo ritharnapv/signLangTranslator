@@ -47,7 +47,12 @@ import {
   Eraser,
   Sun,
   Moon,
-  Languages
+  Languages,
+  Menu,
+  X,
+  FlipHorizontal,
+  Smartphone,
+  Laptop
 } from 'lucide-react';
 
 const INITIAL_SESSIONS: SessionHistoryItem[] = [
@@ -242,6 +247,8 @@ export default function App() {
     grammarMatches: ["Symbol for Letter 'A'", "First entry of ASL Alphabet"]
   });
   const [sessions, setSessions] = useState<SessionHistoryItem[]>(INITIAL_SESSIONS);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
   
   // Dev checklist & server health state
   const [health, setHealth] = useState<{status: string; apiConnected: boolean; mode: string}>({
@@ -1370,6 +1377,20 @@ export default function App() {
         setSessions(JSON.parse(saved));
       } catch (e) {}
     }
+
+    // PWA Install prompt listener
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+      if (navigator.mediaDevices && navigator.mediaDevices.removeEventListener) {
+        navigator.mediaDevices.removeEventListener('devicechange', updateAvailableDevices);
+      }
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
   }, []);
 
   const checkBackendHealth = async () => {
@@ -1427,6 +1448,31 @@ export default function App() {
         setCameraActive(false);
         setIsSandboxMode(true); // fall back seamlessly to mock image scanner helper
       }
+    }
+  };
+
+  // Trigger PWA application installation programmatically
+  const handleInstallApp = async () => {
+    if (!installPrompt) return;
+    try {
+      await installPrompt.prompt();
+      const { outcome } = await installPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setInstallPrompt(null);
+      }
+    } catch (e) {
+      console.warn("PWA install prompt deferred or failed:", e);
+    }
+  };
+
+  // Flip or cycle active cameras for mobile-friendly stream switching
+  const handleFlipCamera = async () => {
+    if (videoDevices.length <= 1) return;
+    const currentIndex = videoDevices.findIndex(d => d.deviceId === selectedDeviceId);
+    const nextIndex = (currentIndex + 1) % videoDevices.length;
+    const nextDevice = videoDevices[nextIndex];
+    if (nextDevice) {
+      await handleDeviceChange({ target: { value: nextDevice.deviceId } } as any);
     }
   };
 
@@ -1729,21 +1775,23 @@ export default function App() {
       </div>
 
       {/* Main Navigation Bar */}
-      <nav className="min-h-20 border-b border-[#ecece0] dark:border-[#2a2a2f] px-6 sm:px-8 py-4 sm:py-0 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white/60 dark:bg-[#18181b]/60 backdrop-blur-md sticky top-0 z-30" id="top-nav">
+      <nav className="min-h-20 border-b border-[#ecece0] dark:border-[#2a2a2f] px-4 sm:px-8 py-3 sm:py-0 flex items-center justify-between gap-4 bg-white/60 dark:bg-[#18181b]/60 backdrop-blur-md sticky top-0 z-30" id="top-nav">
+        
+        {/* Logo and Brand Title Group */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-[#7c8d7c] dark:bg-[#4a5c4e] rounded-xl flex items-center justify-center text-white" id="nav-brand-logo">
+          <div className="w-10 h-10 bg-[#7c8d7c] dark:bg-[#4a5c4e] rounded-xl flex items-center justify-center text-white shrink-0" id="nav-brand-logo">
             <Cpu className="w-5 h-5" />
           </div>
-          <div>
-            <h1 className="text-lg font-bold tracking-tight text-[#2d2d28] dark:text-[#f4f4f5] font-sans">SignSense AI</h1>
-            <p className="text-[10px] text-[#7a7a6a] dark:text-[#a1a1aa] uppercase font-bold tracking-widest font-mono">30-Day ASL Framework</p>
+          <div className="text-left">
+            <h1 className="text-sm sm:text-lg font-bold tracking-tight text-[#2d2d28] dark:text-[#f4f4f5] font-sans">SignSense AI</h1>
+            <p className="text-[9px] sm:text-[10px] text-[#7a7a6a] dark:text-[#a1a1aa] uppercase font-bold tracking-widest font-mono">30-Day ASL Framework</p>
           </div>
         </div>
 
-        {/* Desktop Tabs */}
+        {/* Desktop Navigation Tabs (Hidden on mobile/tablet screen sizes) */}
         <div className="hidden lg:flex items-center gap-1.5 bg-[#f0f2ee] dark:bg-[#1f1f22] p-1 rounded-xl border border-[#e0e4db] dark:border-[#2d2d32]" id="nav-tabs">
           <button
-            onClick={() => setActiveTab('dashboard')}
+            onClick={() => { setActiveTab('dashboard'); setMobileMenuOpen(false); }}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
               activeTab === 'dashboard'
                 ? "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white shadow-sm"
@@ -1753,7 +1801,7 @@ export default function App() {
             Practice Dashboard
           </button>
           <button
-            onClick={() => setActiveTab('analytics')}
+            onClick={() => { setActiveTab('analytics'); setMobileMenuOpen(false); }}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
               activeTab === 'analytics'
                 ? "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white shadow-sm"
@@ -1763,7 +1811,7 @@ export default function App() {
             Analytics Dashboard
           </button>
           <button
-            onClick={() => setActiveTab('dictionary')}
+            onClick={() => { setActiveTab('dictionary'); setMobileMenuOpen(false); }}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
               activeTab === 'dictionary'
                 ? "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white shadow-sm"
@@ -1773,7 +1821,7 @@ export default function App() {
             ASL Dictionary
           </button>
           <button
-            onClick={() => setActiveTab('learning')}
+            onClick={() => { setActiveTab('learning'); setMobileMenuOpen(false); }}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
               activeTab === 'learning'
                 ? "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white shadow-sm"
@@ -1783,7 +1831,7 @@ export default function App() {
             Practice Arena
           </button>
           <button
-            onClick={() => setActiveTab('roadmap')}
+            onClick={() => { setActiveTab('roadmap'); setMobileMenuOpen(false); }}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
               activeTab === 'roadmap'
                 ? "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white shadow-sm"
@@ -1793,7 +1841,7 @@ export default function App() {
             30-Day Roadmap Plan
           </button>
           <button
-            onClick={() => setActiveTab('collector')}
+            onClick={() => { setActiveTab('collector'); setMobileMenuOpen(false); }}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
               activeTab === 'collector'
                 ? "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white shadow-sm"
@@ -1803,7 +1851,7 @@ export default function App() {
             Recording Dashboard
           </button>
           <button
-            onClick={() => setActiveTab('datasets')}
+            onClick={() => { setActiveTab('datasets'); setMobileMenuOpen(false); }}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
               activeTab === 'datasets'
                 ? "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white shadow-sm"
@@ -1813,7 +1861,7 @@ export default function App() {
             Datasets Hub
           </button>
           <button
-            onClick={() => setActiveTab('trainer')}
+            onClick={() => { setActiveTab('trainer'); setMobileMenuOpen(false); }}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
               activeTab === 'trainer'
                 ? "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white shadow-sm"
@@ -1823,7 +1871,7 @@ export default function App() {
             Gesture AI Trainer
           </button>
           <button
-            onClick={() => setActiveTab('files')}
+            onClick={() => { setActiveTab('files'); setMobileMenuOpen(false); }}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
               activeTab === 'files'
                 ? "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white shadow-sm"
@@ -1833,7 +1881,7 @@ export default function App() {
             Sandbox File System
           </button>
           <button
-            onClick={() => setActiveTab('profile')}
+            onClick={() => { setActiveTab('profile'); setMobileMenuOpen(false); }}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
               activeTab === 'profile'
                 ? "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white shadow-sm"
@@ -1845,19 +1893,34 @@ export default function App() {
           </button>
         </div>
 
-        {/* Right Nav-bar: Dark mode switcher & health tags */}
-        <div className="flex items-center gap-3">
+        {/* Right Nav-bar: Dark mode switcher & status indicators & Mobile Menu Burger Button */}
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          {/* PWA Install Button (Displays on any screen when ready) */}
+          {installPrompt && (
+            <button
+              onClick={handleInstallApp}
+              className="flex items-center gap-1.5 px-3 py-2 bg-[#ebdcd1] dark:bg-[#453730] text-[#a36b5e] dark:text-[#ebdcd1] rounded-xl text-xs font-bold border border-[#ebdcd1] dark:border-[#523d32] hover:scale-105 active:scale-95 transition-all shadow-sm animate-pulse"
+              title="Install to Home Screen"
+              style={{ minHeight: '40px' }}
+            >
+              <Smartphone className="w-4 h-4 text-[#a36b5e]" />
+              <span className="hidden sm:inline">Install App</span>
+            </button>
+          )}
+
           {/* Light/Dark Toggle Button */}
           <button
             onClick={() => setDarkMode(!darkMode)}
             className="w-10 h-10 rounded-xl bg-[#f0f2ee] dark:bg-[#1f1f22] border border-[#e0e4db] dark:border-[#2d2d32] flex items-center justify-center text-[#7c8d7c] dark:text-[#a1a1aa] hover:text-[#5c3c35] dark:hover:text-[#ffffff] hover:scale-105 active:scale-95 transition-all shadow-sm"
             title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
             id="dark-mode-toggle"
+            style={{ minHeight: '40px', minWidth: '40px' }}
           >
             {darkMode ? <Sun className="w-5 h-5 text-amber-500" /> : <Moon className="w-5 h-5 text-[#ebdcd1]" />}
           </button>
 
-          <div className={`flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-bold leading-none ${
+          {/* Connection status badge (Hidden on ultra-small mobile, shown elsewhere) */}
+          <div className={`hidden md:flex items-center gap-2 px-3 py-2.5 rounded-full border text-xs font-bold leading-none ${
             health.status === "connected"
               ? "bg-[#f0f2ee] dark:bg-[#1f1f22] text-[#52a447] border-[#e0e4db] dark:border-[#2d2d32]"
               : health.status === "connecting"
@@ -1867,24 +1930,98 @@ export default function App() {
             <span className={`w-2 h-2 rounded-full ${
               health.status === "connected" ? "bg-[#52a447]" : health.status === "connecting" ? "bg-amber-400" : "bg-[#a36b5e]"
             } animate-pulse`}></span>
-            <span className="hidden sm:inline">{health.status === "connected" ? "API CONNECTED" : "SANDBOX LOCAL"}</span>
+            <span>{health.status === "connected" ? "API CONNECTED" : "SANDBOX LOCAL"}</span>
           </div>
+
           <button 
-            onClick={() => setActiveTab('profile')}
-            className={`w-9 h-9 rounded-full px-1 border flex items-center justify-center text-xs font-bold tracking-wider relative uppercase transition-all duration-300 cursor-pointer ${
+            onClick={() => { setActiveTab('profile'); setMobileMenuOpen(false); }}
+            className={`w-10 h-10 rounded-full px-1 border flex items-center justify-center text-xs font-bold tracking-wider relative uppercase transition-all duration-300 cursor-pointer ${
               activeTab === 'profile'
                 ? "bg-[#7c8d7c] text-white border-[#7c8d7c]"
                 : "bg-[#f0f2ee] dark:bg-[#1f1f22] border-[#e0e4db] dark:border-[#2d2d32] text-[#7c8d7c] dark:text-[#a1a1aa] hover:border-[#7c8d7c]"
             }`}
             title="User Settings Coordinates"
             id="nav-profile-avatar"
+            style={{ minHeight: '40px', minWidth: '40px' }}
           >
             {currentUser?.displayName 
               ? currentUser.displayName.substring(0, 2) 
               : currentUser?.email?.substring(0, 2) || "OP"}
           </button>
+
+          {/* Mobile Menu Toggle Burger Button */}
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="flex lg:hidden w-10 h-10 rounded-xl bg-[#f0f2ee] dark:bg-[#1f1f22] border border-[#e0e4db] dark:border-[#2d2d32] items-center justify-center text-[#7c8d7c] dark:text-[#a1a1aa] hover:scale-105 active:scale-95 transition-all shadow-sm"
+            aria-label="Toggle Navigation Menu"
+            style={{ minHeight: '40px', minWidth: '40px' }}
+          >
+            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
         </div>
       </nav>
+
+      {/* Mobile Navigation Drawer Dropdown */}
+      {mobileMenuOpen && (
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          className="lg:hidden border-b border-[#ecece0] dark:border-[#2a2a2f] bg-[#fdfcf9] dark:bg-[#121214] p-4 flex flex-col gap-2 shadow-inner z-25 sticky top-20 max-h-[calc(100vh-5rem)] overflow-y-auto"
+          id="mobile-nav-drawer"
+        >
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { id: 'dashboard', label: 'Practice Dashboard', icon: Camera },
+              { id: 'analytics', label: 'Analytics Dashboard', icon: Activity },
+              { id: 'dictionary', label: 'ASL Dictionary', icon: BookOpen },
+              { id: 'learning', label: 'Practice Arena', icon: Sparkles },
+              { id: 'roadmap', label: '30-Day Roadmap', icon: FileText },
+              { id: 'collector', label: 'Recording Desk', icon: Video },
+              { id: 'datasets', label: 'Datasets Hub', icon: Database },
+              { id: 'trainer', label: 'Gesture AI Trainer', icon: Cpu },
+              { id: 'files', label: 'Sandbox Files', icon: FileCode },
+              { id: 'profile', label: 'Account Settings', icon: Settings },
+            ].map((tab) => {
+              const Icon = tab.icon;
+              const isSelected = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setActiveTab(tab.id as any);
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`flex items-center gap-2.5 p-3 rounded-xl text-xs font-bold transition-all ${
+                    isSelected
+                      ? "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white shadow-sm"
+                      : "bg-white dark:bg-[#1c1c1f] text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white border border-[#ecece0]/60 dark:border-white/5"
+                  }`}
+                  style={{ minHeight: '48px' }}
+                >
+                  <Icon className={`w-4 h-4 ${isSelected ? "text-white" : "text-[#7c8d7c] dark:text-[#a1a1aa]"}`} />
+                  <span className="truncate">{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Inline Install Button for Mobile Drawer */}
+          {installPrompt && (
+            <button
+              onClick={() => {
+                handleInstallApp();
+                setMobileMenuOpen(false);
+              }}
+              className="mt-3 w-full flex items-center justify-center gap-2 p-3 bg-[#ebdcd1] dark:bg-[#453730] text-[#a36b5e] dark:text-[#ebdcd1] rounded-xl text-xs font-bold uppercase tracking-wider border border-[#ebdcd1] dark:border-[#523d32] shadow-sm animate-pulse"
+              style={{ minHeight: '48px' }}
+            >
+              <Smartphone className="w-4 h-4 animate-bounce" />
+              Install SignSense App (Offline Enabled)
+            </button>
+          )}
+        </motion.div>
+      )}
 
       {/* Main Responsive Grid Layout */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-8" id="viewport-workspace">
@@ -2062,6 +2199,18 @@ export default function App() {
                         </option>
                       ))}
                     </select>
+                  )}
+
+                  {videoDevices.length > 1 && (
+                    <button
+                      onClick={handleFlipCamera}
+                      className="flex md:hidden items-center justify-center w-10 h-10 bg-[#f0f2ee] dark:bg-[#1f1f22] border border-[#e0e4db] dark:border-[#2d2d32] text-[#7c8d7c] dark:text-[#a1a1aa] hover:bg-[#e0e4db]/30 dark:hover:bg-white/5 rounded-2xl transition-all shadow-sm shrink-0"
+                      title="Flip Camera Input"
+                      aria-label="Flip Camera Input"
+                      style={{ minHeight: '40px', minWidth: '40px' }}
+                    >
+                      <FlipHorizontal className="w-5 h-5 text-[#7c8d7c]" />
+                    </button>
                   )}
 
                   <button
