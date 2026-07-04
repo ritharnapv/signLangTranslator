@@ -4,6 +4,9 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import fs from "fs";
+import http from "http";
+import { WebSocketServer, WebSocket as NodeWebSocket } from "ws";
+import { spawn } from "child_process";
 
 // Load environment variables
 dotenv.config();
@@ -732,6 +735,107 @@ Text: "${text}"`;
 
 // Configure Vite integration or static file rendering
 async function startServer() {
+  // 1. Create standard HTTP server
+  const server = http.createServer(app);
+
+  // 2. Spawn the FastAPI backend on port 8000
+  console.log("Spawning FastAPI WebSocket neural backend on port 8000...");
+  const fastapiProcess = spawn("python3", [
+    "-m",
+    "uvicorn",
+    "main:app",
+    "--port",
+    "8000",
+    "--host",
+    "127.0.0.1"
+  ]);
+
+  fastapiProcess.stdout.on("data", (data) => {
+    console.log(`[FastAPI] ${data.toString().trim()}`);
+  });
+
+  fastapiProcess.stderr.on("data", (data) => {
+    console.error(`[FastAPI Error] ${data.toString().trim()}`);
+  });
+
+  process.on("exit", () => {
+    fastapiProcess.kill();
+  });
+
+  // 3. Create the WebSocket server for proxying
+  const wss = new WebSocketServer({ noServer: true });
+
+  wss.on("connection", (clientWs) => {
+    console.log("[WS Proxy] Browser client connected. Initiating connection to FastAPI on port 8000...");
+    
+    // Connect to the local FastAPI WebSocket server
+    const fastapiWs = new NodeWebSocket("ws://127.0.0.1:8000/ws");
+    
+    // Safe message queue in case messages are sent before FastAPI connection is open
+    const messageQueue: string[] = [];
+    let fastapiConnected = false;
+
+    fastapiWs.on("open", () => {
+      console.log("[WS Proxy] Connected to FastAPI backend successfully.");
+      fastapiConnected = true;
+      // Flush queued messages
+      while (messageQueue.length > 0) {
+        const msg = messageQueue.shift();
+        if (msg) fastapiWs.send(msg);
+      }
+    });
+    
+    fastapiWs.on("message", (data) => {
+      if (clientWs.readyState === NodeWebSocket.OPEN) {
+        clientWs.send(data.toString());
+      }
+    });
+    
+    fastapiWs.on("close", (code, reason) => {
+      console.log(`[WS Proxy] FastAPI backend disconnected with code ${code}. Reason: ${reason}`);
+      clientWs.close();
+    });
+    
+    fastapiWs.on("error", (error) => {
+      console.error("[WS Proxy] FastAPI error:", error);
+      if (clientWs.readyState === NodeWebSocket.OPEN) {
+        clientWs.send(JSON.stringify({
+          type: "error",
+          message: "Real-time Neural backend connectivity issue."
+        }));
+      }
+      clientWs.close();
+    });
+    
+    clientWs.on("message", (data) => {
+      if (fastapiConnected && fastapiWs.readyState === NodeWebSocket.OPEN) {
+        fastapiWs.send(data.toString());
+      } else {
+        messageQueue.push(data.toString());
+      }
+    });
+    
+    clientWs.on("close", () => {
+      console.log("[WS Proxy] Browser client disconnected.");
+      fastapiWs.close();
+    });
+    
+    clientWs.on("error", (error) => {
+      console.error("[WS Proxy] Browser client socket error:", error);
+      fastapiWs.close();
+    });
+  });
+
+  // Handle upgrade requests
+  server.on("upgrade", (request, socket, head) => {
+    const url = request.url || "";
+    if (url.includes("/api/ws")) {
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit("connection", ws, request);
+      });
+    }
+  });
+
   if (process.env.NODE_ENV !== "production") {
     console.log("Starting development mode with live Vite server middleware...");
     const vite = await createViteServer({
@@ -748,11 +852,13 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  // Use server.listen instead of app.listen to support WebSockets on Port 3000
+  server.listen(PORT, "0.0.0.0", () => {
     console.log(`========================================`);
     console.log(`🚀 SIGN TRANSLATOR SERVER IS LIVE`);
     console.log(`🌐 Local UI available at http://localhost:${PORT}`);
     console.log(`⚙️  API endpoints mapped under http://localhost:${PORT}/api`);
+    console.log(`⚙️  WebSocket pipeline listening on ws://localhost:${PORT}/api/ws`);
     console.log(`========================================`);
   });
 }

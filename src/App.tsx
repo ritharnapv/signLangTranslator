@@ -262,6 +262,13 @@ export default function App() {
   const [isSandboxMode, setIsSandboxMode] = useState<boolean>(false);
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
+  
+  // Real-time WebSocket streaming states
+  const [wsStreaming, setWsStreaming] = useState<boolean>(false);
+  const [wsConnected, setWsConnected] = useState<boolean>(false);
+  const [wsError, setWsError] = useState<string | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const wsIntervalRef = useRef<any>(null);
 
   // MediaPipe Hands states and refs
   const [detectedHandsCount, setDetectedHandsCount] = useState<number>(0);
@@ -1501,6 +1508,160 @@ export default function App() {
     }
   };
 
+  const startWsStreaming = () => {
+    if (wsRef.current) {
+      stopWsStreaming();
+    }
+
+    setWsError(null);
+    setWsConnected(false);
+
+    try {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsUrl = `${protocol}//${window.location.host}/api/ws`;
+      console.log("[WS Client] Connecting to:", wsUrl);
+      
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        console.log("[WS Client] Connection opened successfully.");
+        setWsConnected(true);
+        setWsError(null);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = jsonParseSafely(event.data);
+          if (data && data.type === "prediction") {
+            setLatestResult({
+              predictedChar: data.predictedChar,
+              confidence: data.confidence,
+              explanation: data.explanation,
+              tips: data.tips,
+              grammarMatches: data.grammarMatches
+            });
+            stabilizeAndLogPrediction(data.predictedChar, data.confidence);
+            if (data.confidence >= confidenceThreshold) {
+              addPredictionToHistory(data.predictedChar, data.confidence);
+            }
+          } else if (data && data.type === "error") {
+            setWsError(data.message);
+          }
+        } catch (e) {
+          console.error("[WS Client] Message parse error:", e);
+        }
+      };
+
+      ws.onerror = (err) => {
+        console.error("[WS Client] WebSocket error:", err);
+        setWsError("Failed to maintain secure real-time pipeline stream.");
+      };
+
+      ws.onclose = (event) => {
+        console.log("[WS Client] Connection closed:", event.code, event.reason);
+        setWsConnected(false);
+        wsRef.current = null;
+        if (event.code !== 1000) {
+          setWsError("Disconnected from Real-time prediction engine.");
+        }
+      };
+
+    } catch (err: any) {
+      console.error("[WS Client] Initialization failed:", err);
+      setWsError(err.message || "Failed to initialize WebSocket client.");
+    }
+  };
+
+  const stopWsStreaming = () => {
+    if (wsIntervalRef.current) {
+      clearInterval(wsIntervalRef.current);
+      wsIntervalRef.current = null;
+    }
+    if (wsRef.current) {
+      wsRef.current.close(1000, "User turned off streaming mode.");
+      wsRef.current = null;
+    }
+    setWsConnected(false);
+  };
+
+  // Helper helper to handle json parses in websockets cleanly
+  const jsonParseSafely = (str: string) => {
+    try {
+      return JSON.parse(str);
+    } catch (e) {
+      return null;
+    }
+  };
+
+  // WebSocket stream state trigger effect
+  useEffect(() => {
+    if (wsStreaming) {
+      startWsStreaming();
+    } else {
+      stopWsStreaming();
+    }
+    return () => {
+      stopWsStreaming();
+    };
+  }, [wsStreaming]);
+
+  // Real-time camera capture loop for WebSockets
+  useEffect(() => {
+    if (wsStreaming && wsConnected && cameraActive) {
+      console.log("[WS Client] Launching live frame stream scheduler...");
+      
+      const streamFrame = () => {
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+        
+        let base64Image = "";
+        
+        // Capture frame from canvas
+        if (cameraActive && videoRef.current && canvasRef.current) {
+          const video = videoRef.current;
+          const canvas = canvasRef.current;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            canvas.width = video.videoWidth || 640;
+            canvas.height = video.videoHeight || 480;
+            ctx.translate(canvas.width, 0);
+            ctx.scale(-1, 1);
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            
+            base64Image = canvas.toDataURL('image/jpeg', 0.85);
+          }
+        } else {
+          base64Image = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/";
+        }
+
+        const imageToSend = base64Image === "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/" 
+          ? getSandboxImagePlaceholder(selectedGesture?.char || "A") 
+          : base64Image;
+
+        wsRef.current.send(JSON.stringify({
+          type: "frame",
+          image: imageToSend,
+          targetGesture: selectedGesture?.char || ""
+        }));
+      };
+
+      wsIntervalRef.current = setInterval(streamFrame, 750);
+    } else {
+      if (wsIntervalRef.current) {
+        clearInterval(wsIntervalRef.current);
+        wsIntervalRef.current = null;
+      }
+    }
+
+    return () => {
+      if (wsIntervalRef.current) {
+        clearInterval(wsIntervalRef.current);
+        wsIntervalRef.current = null;
+      }
+    };
+  }, [wsStreaming, wsConnected, cameraActive, selectedGesture?.char]);
+
   const stopCamera = () => {
     if (stream) {
       stream.getTracks().forEach(track => track.stop());
@@ -2224,13 +2385,42 @@ export default function App() {
                   </button>
                 </div>
 
-                <div className="flex items-center gap-4 border-t sm:border-t-0 pt-3 sm:pt-0 w-full sm:w-auto justify-end border-[#ecece0] dark:border-[#2d2d32]">
+                <div className="flex flex-wrap items-center gap-4 border-t sm:border-t-0 pt-3 sm:pt-0 w-full sm:w-auto justify-end border-[#ecece0] dark:border-[#2d2d32]">
+                  {/* Real-time WebSockets pipeline switch */}
+                  <label className={`flex items-center gap-2 cursor-pointer text-xs font-semibold select-none transition-all px-2.5 py-1.5 rounded-xl border ${
+                    wsStreaming 
+                      ? "bg-emerald-500/5 dark:bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400" 
+                      : "text-[#5a5a4a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white border-transparent"
+                  }`}>
+                    <input 
+                      type="checkbox"
+                      checked={wsStreaming}
+                      disabled={!cameraActive}
+                      onChange={(e) => {
+                        setWsStreaming(e.target.checked);
+                        if (e.target.checked) {
+                          setAutoScan(false); // Exclusive with slow poll auto scan
+                        }
+                      }}
+                      className="rounded border-[#e0e4db] dark:border-[#2d2d32] text-emerald-600 focus:ring-emerald-500 dark:bg-[#121214]"
+                    />
+                    <span className="flex items-center gap-1.5">
+                      <span className={`w-1.5 h-1.5 rounded-full ${wsConnected ? "bg-emerald-500 animate-pulse" : "bg-neutral-400"}`} />
+                      Real-time WS Stream
+                    </span>
+                  </label>
+
                   <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-[#5a5a4a] dark:text-[#a1a1aa] select-none">
                     <input 
                       type="checkbox"
                       checked={autoScan}
                       disabled={!cameraActive}
-                      onChange={(e) => setAutoScan(e.target.checked)}
+                      onChange={(e) => {
+                        setAutoScan(e.target.checked);
+                        if (e.target.checked) {
+                          setWsStreaming(false); // Exclusive with fast WebSocket stream
+                        }
+                      }}
                       className="rounded border-[#e0e4db] dark:border-[#2d2d32] text-[#7c8d7c] focus:ring-[#7c8d7c] dark:bg-[#121214]"
                     />
                     <span>Looped Auto Scan (Every 4s)</span>
@@ -2241,6 +2431,22 @@ export default function App() {
                   </span>
                 </div>
               </div>
+
+              {wsError && (
+                <div className="bg-rose-500/10 border border-rose-500/20 rounded-3xl p-4 text-rose-700 dark:text-rose-400 text-xs flex items-center gap-3" id="ws-error-alert">
+                  <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse shrink-0" />
+                  <p className="font-semibold flex-1">WebSocket Engine: {wsError}</p>
+                  <button 
+                    onClick={() => {
+                      setWsError(null);
+                      startWsStreaming();
+                    }} 
+                    className="underline hover:no-underline font-bold font-mono text-[10px] uppercase cursor-pointer"
+                  >
+                    Retry Connection
+                  </button>
+                </div>
+              )}
 
               {/* Confidence Guardrails & Threshold Settings */}
               <div className="bg-[#fcfdfa] dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-5 flex flex-col md:flex-row items-center justify-between gap-5 shadow-sm" id="confidence-guardrails-card">
