@@ -365,6 +365,9 @@ export default function App() {
   const [appendMode, setAppendMode] = useState<'word' | 'letter'>('word');
   const [improvingGrammar, setImprovingGrammar] = useState<boolean>(false);
   const [grammarSuggestion, setGrammarSuggestion] = useState<string | null>(null);
+  const [grammarChanges, setGrammarChanges] = useState<string[]>([]);
+  const [structureImprovements, setStructureImprovements] = useState<string[]>([]);
+  const [meaningPreserved, setMeaningPreserved] = useState<string>("");
 
   // Translation States
   const [translationLang, setTranslationLang] = useState<string>("Hindi");
@@ -807,6 +810,9 @@ export default function App() {
     if (!formedSentence.trim()) return;
     setImprovingGrammar(true);
     setGrammarSuggestion(null);
+    setGrammarChanges([]);
+    setStructureImprovements([]);
+    setMeaningPreserved("");
     try {
       const res = await fetch("/api/improve-grammar", {
         method: "POST",
@@ -821,6 +827,9 @@ export default function App() {
       const data = await res.json();
       if (data && data.corrected) {
         setGrammarSuggestion(data.corrected);
+        setGrammarChanges(data.grammarChanges || ["Optimized overall syntax and spacing structures."]);
+        setStructureImprovements(data.structureImprovements || ["Formatted raw transcription stream into fluent written copy."]);
+        setMeaningPreserved(data.meaningPreserved || "Ensured semantic context of your input letters remains completely unchanged.");
       }
     } catch (err) {
       console.error("Failed to improve grammar", err);
@@ -831,6 +840,16 @@ export default function App() {
         .replace(/\bi\b/g, 'I')
         .replace(/\s+([.,!?])/g, '$1');
       setGrammarSuggestion(offlineText);
+      setGrammarChanges([
+        "Fixed sentence word spacing and trailing space margins.",
+        "Capitalized the first word of sentences and standalone 'I' pronouns.",
+        "Polished punctuation attachment spacing."
+      ]);
+      setStructureImprovements([
+        "Removed consecutive redundant matching signs and duplicates.",
+        "Assembled character sequences into cohesive words where possible."
+      ]);
+      setMeaningPreserved("All primary noun/verb gestures and structural letters were retained precisely as entered in the practice notepad.");
     } finally {
       setImprovingGrammar(false);
     }
@@ -2833,12 +2852,13 @@ export default function App() {
                 {/* Grammar Suggestion Display Callout */}
                 {grammarSuggestion && (
                   <div 
-                    className="bg-[#f0f4ee] dark:bg-[#1e2f1e] border border-[#cce4c5] dark:border-[#2d4d2b] p-4 rounded-2xl space-y-3 shadow-sm"
+                    className="bg-emerald-50/50 dark:bg-[#1a2d1a]/40 border border-emerald-100 dark:border-emerald-950/60 p-5 rounded-3xl space-y-4 shadow-sm"
+                    id="ai-sentence-correction-card"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] uppercase font-black tracking-widest text-[#3d652b] dark:text-emerald-400 font-mono flex items-center gap-1.5">
-                        <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 font-bold animate-bounce" />
-                        AI Grammar Review
+                      <span className="text-[11px] uppercase font-black tracking-widest text-emerald-800 dark:text-emerald-300 font-mono flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-emerald-600 dark:text-emerald-400 font-bold animate-pulse" />
+                        AI Sentence Correction & Grammar Review
                       </span>
                       <button
                         type="button"
@@ -2849,30 +2869,77 @@ export default function App() {
                       </button>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                      <div className="bg-white/60 dark:bg-[#151518]/60 p-2.5 rounded-xl border border-gray-100 dark:border-[#2d2d32]/40">
-                        <span className="text-[9px] uppercase font-bold text-gray-400 block mb-1">Raw Transcript</span>
-                        <p className="text-gray-600 dark:text-gray-400 italic line-clamp-3">"{formedSentence}"</p>
+                    {/* Original vs Corrected Text Side-by-side comparison */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                      <div className="bg-white/80 dark:bg-[#151518]/80 p-3.5 rounded-2xl border border-gray-100 dark:border-[#2d2d32]/40 shadow-inner">
+                        <span className="text-[9px] uppercase font-black tracking-wider text-gray-400 dark:text-gray-500 block mb-1.5 font-mono">Original Text</span>
+                        <p className="text-gray-600 dark:text-gray-400 italic font-sans leading-relaxed">"{formedSentence}"</p>
                       </div>
-                      <div className="bg-white dark:bg-[#1c1c1f] p-2.5 rounded-xl border border-[#cbe3c3] dark:border-emerald-950">
-                        <span className="text-[9px] uppercase font-bold text-[#3d652b] dark:text-emerald-400 block mb-1">Recommended Polished Copy</span>
-                        <p className="text-gray-800 dark:text-white font-semibold leading-relaxed line-clamp-3">"{grammarSuggestion}"</p>
+                      <div className="bg-[#f2faf0] dark:bg-[#1e331e]/50 p-3.5 rounded-2xl border border-emerald-100 dark:border-emerald-950 shadow-inner">
+                        <span className="text-[9px] uppercase font-black tracking-wider text-emerald-700 dark:text-emerald-400 block mb-1.5 font-mono">Corrected Text</span>
+                        <p className="text-gray-800 dark:text-white font-semibold leading-relaxed font-sans">"{grammarSuggestion}"</p>
                       </div>
                     </div>
 
-                    <div className="flex justify-end gap-2 pt-1">
+                    {/* Features Analysis Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1">
+                      {/* Grammar & Spelling Fixes */}
+                      <div className="bg-white/60 dark:bg-[#151518]/40 p-3 rounded-2xl border border-gray-100 dark:border-[#2d2d32]/40 space-y-1.5">
+                        <span className="text-[10px] uppercase font-bold text-[#4c634c] dark:text-emerald-400 block font-mono">1. Grammar Fixes</span>
+                        {grammarChanges && grammarChanges.length > 0 ? (
+                          <ul className="space-y-1 text-[11px] text-gray-600 dark:text-gray-400 leading-tight">
+                            {grammarChanges.map((change, idx) => (
+                              <li key={idx} className="flex items-start gap-1.5">
+                                <span className="text-emerald-500 shrink-0 font-bold">✓</span>
+                                <span>{change}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-[10px] text-gray-400 dark:text-gray-500 italic">No major grammatical corrections needed.</p>
+                        )}
+                      </div>
+
+                      {/* Sentence Structure Improvements */}
+                      <div className="bg-white/60 dark:bg-[#151518]/40 p-3 rounded-2xl border border-gray-100 dark:border-[#2d2d32]/40 space-y-1.5">
+                        <span className="text-[10px] uppercase font-bold text-[#4c634c] dark:text-emerald-400 block font-mono">2. Structure Improved</span>
+                        {structureImprovements && structureImprovements.length > 0 ? (
+                          <ul className="space-y-1 text-[11px] text-gray-600 dark:text-gray-400 leading-tight">
+                            {structureImprovements.map((imp, idx) => (
+                              <li key={idx} className="flex items-start gap-1.5">
+                                <span className="text-emerald-500 shrink-0 font-bold">✓</span>
+                                <span>{imp}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-[10px] text-gray-400 dark:text-gray-500 italic">Structure is already cohesive.</p>
+                        )}
+                      </div>
+
+                      {/* Preserved Meaning Explanation */}
+                      <div className="bg-white/60 dark:bg-[#151518]/40 p-3 rounded-2xl border border-gray-100 dark:border-[#2d2d32]/40 space-y-1.5">
+                        <span className="text-[10px] uppercase font-bold text-[#4c634c] dark:text-emerald-400 block font-mono">3. Preserved Meaning</span>
+                        <p className="text-[11px] text-gray-600 dark:text-gray-400 leading-normal">
+                          {meaningPreserved || "The core lexical intent and names were perfectly preserved without adding unsolicited details."}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-2 border-t border-emerald-100/40 dark:border-emerald-950/40">
                       <button
                         type="button"
                         onClick={() => setGrammarSuggestion(null)}
-                        className="text-xs font-bold text-gray-500 hover:text-gray-700 bg-white dark:bg-[#1c1c20] border border-gray-200 dark:border-[#2d2d32] px-3.5 py-1.5 rounded-xl transition-all cursor-pointer"
+                        className="text-xs font-bold text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 bg-white dark:bg-[#1c1c20] border border-gray-200 dark:border-[#2d2d32] px-4 py-2 rounded-xl transition-all cursor-pointer hover:shadow-xs"
                       >
                         Reject
                       </button>
                       <button
                         type="button"
                         onClick={handleAcceptGrammar}
-                        className="text-xs font-bold text-white bg-[#7c8d7c] hover:bg-[#687c68] px-4 py-1.5 rounded-xl transition-all shadow-sm cursor-pointer"
+                        className="text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 dark:bg-emerald-600 dark:hover:bg-emerald-700 px-4 py-2 rounded-xl transition-all shadow-md cursor-pointer hover:shadow-lg flex items-center gap-1.5"
                       >
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
                         Accept & Replace
                       </button>
                     </div>

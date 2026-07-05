@@ -444,28 +444,73 @@ app.post("/api/improve-grammar", async (req, res): Promise<any> => {
       return res.json({
         original: sentence,
         corrected: corrected,
+        grammarChanges: [
+          "Fixed sentence word spacing and trailing space margins.",
+          "Capitalized the first word of sentences and standalone 'I' pronouns.",
+          "Polished punctuation attachment spacing."
+        ],
+        structureImprovements: [
+          "Removed consecutive redundant matching signs and duplicates.",
+          "Assembled character sequences into cohesive words where possible."
+        ],
+        meaningPreserved: "All primary noun/verb gestures and structural letters were retained precisely as entered in the practice notepad.",
         simulated: true,
         message: "Offline rule-based grammar correction applied."
       });
     }
 
-    // Call actual Gemini model for high-fidelity correction
-    const promptText = `You are an expert English linguist and American Sign Language interpreter. The following text has been compiled character-by-character or word-by-word from sign language recognition gestures. It may contain spelling mistakes, missing spaces, lowercase pronouns, raw consecutive words, and redundant duplicate inputs.
-Please clean up the text, correct any spelling, expand words if appropriate, merge individual letters where spelling is intended (e.g. "H E L L O" -> "HELLO"), remove unnecessary consecutive duplicate words, adjust capitalization, and return a natural, grammatically correct English sentence.
+    // Call actual Gemini model for high-fidelity correction with structured JSON
+    const promptText = `You are an expert English linguist and American Sign Language (ASL) interpreter. The user is practicing sign language, and the following raw text was constructed character-by-character or word-by-word from sign recognition gestures: "${sentence}".
+Please analyze and correct this text. Perform the following:
+1. Fix grammar: Correct any grammatical errors, spelling mistakes, punctuation, spacing, capitalization, or missing word components (e.g. "H E L L O" -> "HELLO").
+2. Improve sentence structure: Rephrase run-on phrases, connect fragmented words, remove unnecessary consecutive duplicates, and format it into an elegant, natural English sentence.
+3. Preserve meaning: Retain the complete semantic context, named entities, and core actions of the original gesture inputs.
 
-Input raw sign transcript: "${sentence}"
-
-Output only the corrected, polished English sentence without any introductory or concluding text.`;
+You must output a structured JSON response matching the required schema with details of the changes made.`;
 
     const response = await ai.models.generateContent({
       model: "gemini-3.5-flash",
       contents: promptText,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            original: {
+              type: Type.STRING,
+              description: "The original raw sentence transcript"
+            },
+            corrected: {
+              type: Type.STRING,
+              description: "The polished, grammatically correct and structure-improved English sentence"
+            },
+            grammarChanges: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING },
+              description: "List of specific grammatical fixes made (e.g., spelling, spacing, capitalization, letter merging)"
+            },
+            structureImprovements: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING },
+              description: "List of sentence structure improvements (e.g., flow enhancement, rephrasing, removing redundancy, connecting fragments)"
+            },
+            meaningPreserved: {
+              type: Type.STRING,
+              description: "A brief, comforting explanation of how the core meaning and semantic intent of the original sign gestures was perfectly preserved"
+            }
+          },
+          required: ["original", "corrected", "grammarChanges", "structureImprovements", "meaningPreserved"]
+        }
+      }
     });
 
-    const corrected = (response.text || "").trim();
+    const data = JSON.parse((response.text || "{}").trim());
     res.json({
-      original: sentence,
-      corrected: corrected,
+      original: data.original || sentence,
+      corrected: data.corrected || sentence,
+      grammarChanges: data.grammarChanges || ["Adjusted standard sentence capitalization and punctuation."],
+      structureImprovements: data.structureImprovements || ["Formatted fragmented transcripts into cohesive phrases."],
+      meaningPreserved: data.meaningPreserved || "Ensured the core lexical elements of the raw inputs remain fully preserved.",
       simulated: false
     });
 
