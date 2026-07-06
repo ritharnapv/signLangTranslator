@@ -55,6 +55,19 @@ import {
   Laptop
 } from 'lucide-react';
 
+// Production environment configuration helpers
+const API_BASE_URL = ((import.meta as any).env.VITE_API_URL as string) || "";
+const WS_BASE_URL = ((import.meta as any).env.VITE_WS_URL as string) || "";
+
+const getApiUrl = (path: string): string => {
+  if (API_BASE_URL) {
+    const base = API_BASE_URL.endsWith("/") ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+    const cleanPath = path.startsWith("/") ? path : `/${path}`;
+    return `${base}${cleanPath}`;
+  }
+  return path;
+};
+
 const INITIAL_SESSIONS: SessionHistoryItem[] = [
   {
     id: "session-1",
@@ -506,7 +519,7 @@ export default function App() {
     if (useAiTts) {
       setIsSpeaking(true);
       try {
-        const res = await fetch("/api/tts", {
+        const res = await fetch(getApiUrl("/api/tts"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text: textToSpeak, voiceName: aiTtsVoice })
@@ -560,7 +573,7 @@ export default function App() {
     if (!text.trim()) return;
     setIsDetectingLanguage(true);
     try {
-      const res = await fetch("/api/detect-language", {
+      const res = await fetch(getApiUrl("/api/detect-language"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text })
@@ -814,7 +827,7 @@ export default function App() {
     setStructureImprovements([]);
     setMeaningPreserved("");
     try {
-      const res = await fetch("/api/improve-grammar", {
+      const res = await fetch(getApiUrl("/api/improve-grammar"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -875,7 +888,7 @@ export default function App() {
     setIsTranslatingText(true);
     setTranslationError(null);
     try {
-      const res = await fetch("/api/translate", {
+      const res = await fetch(getApiUrl("/api/translate"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1421,7 +1434,7 @@ export default function App() {
 
   const checkBackendHealth = async () => {
     try {
-      const res = await fetch('/api/health');
+      const res = await fetch(getApiUrl("/api/health"));
       if (res.ok) {
         const data = await res.json();
         setHealth({
@@ -1537,7 +1550,7 @@ export default function App() {
 
     try {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const wsUrl = `${protocol}//${window.location.host}/api/ws`;
+      const wsUrl = WS_BASE_URL ? WS_BASE_URL : `${protocol}//${window.location.host}/api/ws`;
       console.log("[WS Client] Connecting to:", wsUrl);
       
       const ws = new WebSocket(wsUrl);
@@ -1791,7 +1804,7 @@ export default function App() {
       }
 
       // Send requests
-      const res = await fetch('/api/translate-frame', {
+      const res = await fetch(getApiUrl('/api/translate-frame'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

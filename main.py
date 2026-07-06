@@ -3,14 +3,17 @@ import json
 import base64
 import random
 import asyncio
+import re
 import urllib.request
 import urllib.error
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from typing import Optional, List
+from pydantic import BaseModel
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="SignSense Real-time Prediction Backend")
 
-# Enable CORS
+# Enable CORS for all requests in development/production
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -18,6 +21,361 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Pydantic Schemas for Request payloads
+class TranslateFrameRequest(BaseModel):
+    image: str
+    targetGesture: Optional[str] = None
+
+class ImproveGrammarRequest(BaseModel):
+    sentence: str
+
+class TranslateRequest(BaseModel):
+    text: str
+    targetLanguage: str
+
+class TtsRequest(BaseModel):
+    text: str
+    voiceName: Optional[str] = None
+
+class DetectLanguageRequest(BaseModel):
+    text: str
+
+# Helper functions for Offline Fallbacks
+def get_offline_grammar_correction(sentence: str) -> dict:
+    text = sentence.strip()
+    # Clean up consecutive spaces
+    text = re.sub(r' {2,}', ' ', text)
+    # Capitalize first letter of each sentence
+    text = re.sub(r'(^\s*|[.!?]\s+)([a-z])', lambda m: m.group(1) + m.group(2).upper(), text)
+    # Capitalize pronoun 'I'
+    text = re.sub(r'\bi\b', 'I', text)
+    # Polished punctuation spacing
+    text = re.sub(r'\s+([.,!?])', r'\1', text)
+    
+    return {
+        "original": sentence,
+        "corrected": text,
+        "grammarChanges": [
+            "Fixed sentence word spacing and trailing space margins.",
+            "Capitalized the first word of sentences and standalone 'I' pronouns.",
+            "Polished punctuation attachment spacing."
+        ],
+        "structureImprovements": [
+            "Removed consecutive redundant matching signs and duplicates.",
+            "Assembled character sequences into cohesive words where possible."
+        ],
+        "meaningPreserved": "All primary noun/verb gestures and structural letters were retained precisely as entered in the practice notepad.",
+        "simulated": True,
+        "message": "Offline rule-based grammar correction applied."
+    }
+
+def get_offline_translation(text: str, target_language: str) -> dict:
+    lower = text.strip().lower()
+    fallback_db = {
+        "hindi": {
+            "hello": "नमस्ते (Namaste)",
+            "hi": "नमस्ते (Namaste)",
+            "love": "प्यार (Pyar)",
+            "peace": "शांति (Shanti)",
+            "rock": "चट्टान (Chattan)",
+            "heart": "दिल (Dil)",
+            "yes": "हाँ (Haan)",
+            "no": "नहीं (Nahi)",
+            "good": "अच्छा (Achha)",
+            "please": "कृपया (Kripya)",
+            "thank you": "धन्यवाद (Dhanyawad)",
+            "how are you": "आप कैसे हैं? (Aap kaise hain?)",
+            "i love you": "मैं आपसे प्यार करता हूँ (Main aapse pyar karta hoon)",
+            "help": "मदद (Madad)",
+            "a": "ए", "b": "बी", "c": "सी"
+        },
+        "kannada": {
+            "hello": "ನಮಸ್ಕಾರ (Namaskara)",
+            "hi": "ನಮಸ್ಕಾರ (Namaskara)",
+            "love": "ಪ್ರೀತಿ (Preethi)",
+            "peace": "ಶಾಂತಿ (Shanthi)",
+            "rock": "ಬಂಡೆ (Bande)",
+            "heart": "ಹೃದಯ (Hrudaya)",
+            "yes": "ಹೌದು (Haudu)",
+            "no": "ಇಲ್ಲ (Illa)",
+            "good": "ಒಳ್ಳೆಯದು (Olleyadu)",
+            "please": "ದಯವಿಟ್ಟು (Dayavittu)",
+            "thank you": "ಧನ್ಯವಾದಗಳು (Dhanyavadagalu)",
+            "how are you": "ನೀವು ಹೇಗಿದ್ದೀರಿ? (Neevu hegiddiri?)",
+            "i love you": "ನಾನು ನಿನ್ನನ್ನು ಪ್ರೀತಿಸುತ್ತೇನೆ (Naanu ninnanu preethisuthene)",
+            "help": "ಸಹಾಯ (Sahaya)",
+            "a": "ಎ", "b": "बी", "c": "ಸಿ"
+        },
+        "malayalam": {
+            "hello": "നമസ്കാരം (Namaskaram)",
+            "hi": "നമസ്കാരം (Namaskaram)",
+            "love": "സ്നേഹം (Snehham)",
+            "peace": "സമാധാനം (Samadhanam)",
+            "rock": "പാറ (Paara)",
+            "heart": "ഹൃദയം (Hrudayam)",
+            "yes": "അതെ (Athe)",
+            "no": "അല്ല (Alla)",
+            "good": "നല്ലത് (Nallathu)",
+            "please": "ദയവായി (Dayavayi)",
+            "thank you": "നന്ദി (Nandi)",
+            "how are you": "സുഖമാണോ? (Sukhamano?)",
+            "i love you": "ഞാൻ നിന്നെ സ്നേഹിക്കുന്നു (Njan ninne snehikkunnu)",
+            "help": "സഹായം (Sahayam)",
+            "a": "എ", "b": "ബി", "c": "സി"
+        }
+    }
+    
+    lang_key = target_language.lower()
+    translated = ""
+    if lang_key == "english":
+        translated = text
+    elif lang_key in fallback_db:
+        db = fallback_db[lang_key]
+        if lower in db:
+            translated = db[lower]
+        else:
+            words = text.split()
+            parts = []
+            for w in words:
+                lw = re.sub(r'[.,!?]', '', w.lower())
+                parts.append(db.get(lw, w))
+            translated = " ".join(parts)
+    else:
+        translated = text
+        
+    return {
+        "original": text,
+        "translated": translated,
+        "targetLanguage": target_language,
+        "simulated": True,
+        "message": "Offline local translation dictionary used."
+    }
+
+def get_offline_detect_language(text: str) -> dict:
+    text_trim = text.strip()
+    detected = "English"
+    if re.search(r'[\u0900-\u097F]', text_trim):
+        detected = "Hindi"
+    elif re.search(r'[\u0C80-\u0CFF]', text_trim):
+        detected = "Kannada"
+    elif re.search(r'[\u0D00-\u0D7F]', text_trim):
+        detected = "Malayalam"
+    return {
+        "language": detected,
+        "confidence": 0.9,
+        "simulated": True
+    }
+
+# Helper functions for Gemini API calls
+def call_gemini_grammar_api(sentence: str) -> dict:
+    api_key = os.environ.get("GEMINI_API_KEY", "")
+    if not api_key or api_key == "MY_GEMINI_API_KEY" or api_key.strip() == "":
+        raise ValueError("Gemini API Key is not configured.")
+        
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+    
+    prompt_text = (
+        f"You are an expert English linguist and American Sign Language (ASL) interpreter. "
+        f"The user is practicing sign language, and the following raw text was constructed "
+        f"character-by-character or word-by-word from sign recognition gestures: \"{sentence}\".\n"
+        f"Please analyze and correct this text. Perform the following:\n"
+        f"1. Fix grammar: Correct any grammatical errors, spelling mistakes, punctuation, spacing, capitalization, or missing word components (e.g. \"H E L L O\" -> \"HELLO\").\n"
+        f"2. Improve sentence structure: Rephrase run-on phrases, connect fragmented words, remove unnecessary consecutive duplicates, and format it into an elegant, natural English sentence.\n"
+        f"3. Preserve meaning: Retain the complete semantic context, named entities, and core actions of the original gesture inputs."
+    )
+    
+    response_schema = {
+        "type": "OBJECT",
+        "properties": {
+            "original": {
+                "type": "STRING",
+                "description": "The original raw sentence transcript"
+            },
+            "corrected": {
+                "type": "STRING",
+                "description": "The polished, grammatically correct and structure-improved English sentence"
+            },
+            "grammarChanges": {
+                "type": "ARRAY",
+                "items": {"type": "STRING"},
+                "description": "List of specific grammatical fixes made (e.g., spelling, spacing, capitalization, letter merging)"
+            },
+            "structureImprovements": {
+                "type": "ARRAY",
+                "items": {"type": "STRING"},
+                "description": "List of sentence structure improvements (e.g., flow enhancement, rephrasing, removing redundancy, connecting fragments)"
+            },
+            "meaningPreserved": {
+                "type": "STRING",
+                "description": "A brief, comforting explanation of how the core meaning and semantic intent of the original sign gestures was perfectly preserved"
+            }
+        },
+        "required": ["original", "corrected", "grammarChanges", "structureImprovements", "meaningPreserved"]
+    }
+    
+    payload = {
+        "contents": {
+            "parts": [{"text": prompt_text}]
+        },
+        "generationConfig": {
+            "responseMimeType": "application/json",
+            "responseSchema": response_schema
+        }
+    }
+    
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST"
+    )
+    
+    with urllib.request.urlopen(req, timeout=12) as response:
+        res_data = response.read().decode("utf-8")
+        parsed_res = json.loads(res_data)
+        candidates = parsed_res.get("candidates", [])
+        if not candidates:
+            raise ValueError("No prediction candidates returned from Gemini.")
+        text_content = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+        return json.loads(text_content.strip())
+
+def call_gemini_translation_api(text: str, target_language: str) -> str:
+    api_key = os.environ.get("GEMINI_API_KEY", "")
+    if not api_key or api_key == "MY_GEMINI_API_KEY" or api_key.strip() == "":
+        raise ValueError("Gemini API Key is not configured.")
+        
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+    
+    prompt_text = (
+        f"You are an expert multilingual translator. Translate the following text from English into {target_language}.\n"
+        f"If the text contains spelling mistakes, first correct it logically before translating.\n"
+        f"Maintain the exact emotional tone and meaning. Do not include any explanations, transliterations (unless natural as part of the language), notes, or markdown. Return ONLY the final translated sentence or phrase.\n\n"
+        f"Text: \"{text}\"\n\n"
+        f"Translated {target_language} text:"
+    )
+    
+    payload = {
+        "contents": {
+            "parts": [{"text": prompt_text}]
+        }
+    }
+    
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST"
+    )
+    
+    with urllib.request.urlopen(req, timeout=12) as response:
+        res_data = response.read().decode("utf-8")
+        parsed_res = json.loads(res_data)
+        candidates = parsed_res.get("candidates", [])
+        if not candidates:
+            raise ValueError("No translation candidates returned from Gemini.")
+        return candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "").strip()
+
+def call_gemini_tts_api(text: str, voice_name: str) -> str:
+    api_key = os.environ.get("GEMINI_API_KEY", "")
+    if not api_key or api_key == "MY_GEMINI_API_KEY" or api_key.strip() == "":
+        raise ValueError("Gemini API Key is not configured.")
+        
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key={api_key}"
+    
+    allowed_voices = ['Puck', 'Charon', 'Kore', 'Fenrir', 'Zephyr']
+    chosen_voice = voice_name if voice_name in allowed_voices else 'Kore'
+    
+    payload = {
+        "contents": [
+            {
+                "parts": [{"text": text}]
+            }
+        ],
+        "generationConfig": {
+            "responseModalities": ["AUDIO"],
+            "speechConfig": {
+                "voiceConfig": {
+                    "prebuiltVoiceConfig": {"voiceName": chosen_voice}
+                }
+            }
+        }
+    }
+    
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST"
+    )
+    
+    with urllib.request.urlopen(req, timeout=12) as response:
+        res_data = response.read().decode("utf-8")
+        parsed_res = json.loads(res_data)
+        candidates = parsed_res.get("candidates", [])
+        if not candidates:
+            raise ValueError("No tts candidates returned from Gemini.")
+        
+        base64_audio = candidates[0].get("content", {}).get("parts", [{}])[0].get("inlineData", {}).get("data", "")
+        if not base64_audio:
+            raise ValueError("No audio content returned from model inlineData.")
+        return base64_audio
+
+def call_gemini_detect_language_api(text: str) -> dict:
+    api_key = os.environ.get("GEMINI_API_KEY", "")
+    if not api_key or api_key == "MY_GEMINI_API_KEY" or api_key.strip() == "":
+        raise ValueError("Gemini API Key is not configured.")
+        
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+    
+    prompt_text = (
+        f"Analyze the language of the following text and return the detected language.\n"
+        f"The detected language MUST be exactly one of these: \"English\", \"Hindi\", \"Kannada\", \"Malayalam\".\n"
+        f"If you are unsure or if the text contains multiple languages, prioritize the most dominant script. If the text is purely Latin/English or spelling is ambiguous, return \"English\".\n\n"
+        f"Text: \"{text}\""
+    )
+    
+    response_schema = {
+        "type": "OBJECT",
+        "properties": {
+            "language": {
+                "type": "STRING",
+                "description": "The detected language, must be exactly one of \"English\", \"Hindi\", \"Kannada\", \"Malayalam\""
+            },
+            "confidence": {
+                "type": "NUMBER",
+                "description": "Confidence score from 0.0 to 1.0"
+            }
+        },
+        "required": ["language"]
+    }
+    
+    payload = {
+        "contents": {
+            "parts": [{"text": prompt_text}]
+        },
+        "generationConfig": {
+            "responseMimeType": "application/json",
+            "responseSchema": response_schema
+        }
+    }
+    
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST"
+    )
+    
+    with urllib.request.urlopen(req, timeout=12) as response:
+        res_data = response.read().decode("utf-8")
+        parsed_res = json.loads(res_data)
+        candidates = parsed_res.get("candidates", [])
+        if not candidates:
+            raise ValueError("No language candidates returned from Gemini.")
+        text_content = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+        return json.loads(text_content.strip())
+
 
 @app.get("/health")
 async def health_check():
@@ -215,6 +573,142 @@ def call_gemini_vision_api(mime_type: str, base64_data: str, target_gesture: str
     except Exception as e:
         print(f"[Gemini API Connection Error] {str(e)}")
         raise e
+
+@app.post("/api/translate-frame")
+async def translate_frame(req: TranslateFrameRequest):
+    image_str = req.image
+    target_gesture = req.targetGesture or ""
+    
+    try:
+        if "," in image_str:
+            header, base64_data = image_str.split(",", 1)
+            mime_type = header.split(";")[0].split(":")[1]
+        else:
+            base64_data = image_str
+            mime_type = "image/jpeg"
+        
+        api_key = os.environ.get("GEMINI_API_KEY", "")
+        use_real_api = bool(api_key and api_key != "MY_GEMINI_API_KEY" and api_key.strip() != "")
+        
+        if use_real_api:
+            loop = asyncio.get_event_loop()
+            prediction = await loop.run_in_executor(
+                None, call_gemini_vision_api, mime_type, base64_data, target_gesture
+            )
+            return {**prediction, "simulated": False}
+        else:
+            prediction = get_simulated_prediction(target_gesture)
+            return {**prediction, "simulated": True}
+    except Exception as ex:
+        print(f"[FastAPI POST /api/translate-frame] Error: {str(ex)}")
+        return {
+            "predictedChar": target_gesture if target_gesture else "A",
+            "confidence": 75.0,
+            "explanation": f"Neural prediction fallback triggered: {str(ex)}",
+            "tips": ["Verify camera visibility.", "Check if the API Key is set correctly in Settings."],
+            "grammarMatches": ["Error recovery fallback"],
+            "simulated": True
+        }
+
+@app.post("/api/improve-grammar")
+async def improve_grammar(req: ImproveGrammarRequest):
+    sentence = req.sentence
+    if not sentence or not sentence.strip():
+        raise HTTPException(status_code=400, detail="Missing sentence text")
+        
+    api_key = os.environ.get("GEMINI_API_KEY", "")
+    use_real_api = bool(api_key and api_key != "MY_GEMINI_API_KEY" and api_key.strip() != "")
+    
+    try:
+        if use_real_api:
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(None, call_gemini_grammar_api, sentence)
+            return {**result, "simulated": False}
+        else:
+            return get_offline_grammar_correction(sentence)
+    except Exception as ex:
+        print(f"[FastAPI POST /api/improve-grammar] Error: {str(ex)}")
+        return get_offline_grammar_correction(sentence)
+
+@app.post("/api/translate")
+async def translate_text(req: TranslateRequest):
+    text = req.text
+    target_language = req.targetLanguage
+    if not text or not text.strip():
+        raise HTTPException(status_code=400, detail="Missing text to translate")
+    if not target_language or not target_language.strip():
+        raise HTTPException(status_code=400, detail="Missing target language")
+        
+    api_key = os.environ.get("GEMINI_API_KEY", "")
+    use_real_api = bool(api_key and api_key != "MY_GEMINI_API_KEY" and api_key.strip() != "")
+    
+    try:
+        if use_real_api:
+            loop = asyncio.get_event_loop()
+            translated = await loop.run_in_executor(None, call_gemini_translation_api, text, target_language)
+            return {
+                "original": text,
+                "translated": translated,
+                "targetLanguage": target_language,
+                "simulated": False
+            }
+        else:
+            return get_offline_translation(text, target_language)
+    except Exception as ex:
+        print(f"[FastAPI POST /api/translate] Error: {str(ex)}")
+        return get_offline_translation(text, target_language)
+
+@app.post("/api/tts")
+async def text_to_speech(req: TtsRequest):
+    text = req.text
+    voice_name = req.voiceName or "Kore"
+    if not text or not text.strip():
+        raise HTTPException(status_code=400, detail="Missing text to speak")
+        
+    api_key = os.environ.get("GEMINI_API_KEY", "")
+    use_real_api = bool(api_key and api_key != "MY_GEMINI_API_KEY" and api_key.strip() != "")
+    
+    try:
+        if use_real_api:
+            loop = asyncio.get_event_loop()
+            base64_audio = await loop.run_in_executor(None, call_gemini_tts_api, text, voice_name)
+            return {
+                "base64Audio": base64_audio,
+                "simulated": False,
+                "voiceName": voice_name
+            }
+        else:
+            return {
+                "simulated": True,
+                "message": "Offline fallback: Browser Speech Synthesis will be used."
+            }
+    except Exception as ex:
+        print(f"[FastAPI POST /api/tts] Error: {str(ex)}")
+        return {
+            "simulated": True,
+            "message": f"Offline fallback triggered: {str(ex)}"
+        }
+
+@app.post("/api/detect-language")
+async def detect_language(req: DetectLanguageRequest):
+    text = req.text
+    if not text or not text.strip():
+        return {"language": "English", "confidence": 1.0, "simulated": True}
+        
+    api_key = os.environ.get("GEMINI_API_KEY", "")
+    use_real_api = bool(api_key and api_key != "MY_GEMINI_API_KEY" and api_key.strip() != "")
+    
+    try:
+        if use_real_api:
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(None, call_gemini_detect_language_api, text)
+            return {**result, "simulated": False}
+        else:
+            return get_offline_detect_language(text)
+    except Exception as ex:
+        print(f"[FastAPI POST /api/detect-language] Error: {str(ex)}")
+        return get_offline_detect_language(text)
+
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):

@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: signsense-backend
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    plan: free
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+        placeholder: "Your Google Gemini API Key"
+      - key: PYTHON_VERSION
+        value: 3.10.12
