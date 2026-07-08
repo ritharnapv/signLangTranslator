@@ -1088,12 +1088,20 @@ export default function App() {
           lastPredictionTimeRef.current = nowMs;
           try {
             const wrist = landmarks[0];
-            const features: number[] = [];
+            const rawOffsets: number[] = [];
+            let maxDistance = 0;
             landmarks.forEach((joint: any) => {
-              features.push(joint.x - wrist.x);
-              features.push(joint.y - wrist.y);
-              features.push(joint.z - (wrist.z || 0));
+              const dx = joint.x - wrist.x;
+              const dy = joint.y - wrist.y;
+              const dz = joint.z - (wrist.z || 0);
+              rawOffsets.push(dx, dy, dz);
+              const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+              if (dist > maxDistance) {
+                maxDistance = dist;
+              }
             });
+            const scale = maxDistance > 1e-6 ? maxDistance : 1.0;
+            const features = rawOffsets.map(val => val / scale);
 
             const model = trainedClientModelRef.current;
             const classes = trainedClassesRef.current;
@@ -1717,12 +1725,20 @@ export default function App() {
         }
 
         const wrist = landmarks[0];
-        const features: number[] = [];
+        const rawOffsets: number[] = [];
+        let maxDistance = 0;
         landmarks.forEach((joint: any) => {
-          features.push(joint.x - wrist.x);
-          features.push(joint.y - wrist.y);
-          features.push(joint.z - wrist.z);
+          const dx = joint.x - wrist.x;
+          const dy = joint.y - wrist.y;
+          const dz = joint.z - (wrist.z || 0);
+          rawOffsets.push(dx, dy, dz);
+          const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+          if (dist > maxDistance) {
+            maxDistance = dist;
+          }
         });
+        const scale = maxDistance > 1e-6 ? maxDistance : 1.0;
+        const features = rawOffsets.map(val => val / scale);
 
         // Run client inference
         const result = tf.tidy(() => {
