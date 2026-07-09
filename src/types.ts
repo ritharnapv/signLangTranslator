@@ -42,6 +42,7 @@ export interface CollectedSample {
   label: string;
   timestamp: string;
   landmarks: Array<{x: number, y: number, z: number}>;
+  sequenceOfLandmarks?: Array<Array<{x: number, y: number, z: number}>>;
   handType?: string;
 }
 

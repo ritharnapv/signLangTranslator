@@ -290,39 +290,56 @@ export default function ModelTrainer({
         labelToIndex[label] = idx;
       });
 
-      // 2. Format training tensor coordinates & labels
-      const inputFeatures: number[][] = [];
+      // 2. Format training tensor coordinates & labels as sequences of 10 frames
+      const inputFeatures: number[][][] = []; // Shape: [numSamples, 10, 63]
       const outputLabels: number[] = [];
 
       activeDatasetSamples.forEach(sample => {
-        const preprocessed = preprocessLandmarks(sample.landmarks);
-        inputFeatures.push(preprocessed);
+        const sequenceFeatures: number[][] = [];
+        
+        if (sample.sequenceOfLandmarks && sample.sequenceOfLandmarks.length > 0) {
+          // Use the recorded sequence of landmarks!
+          const seq = sample.sequenceOfLandmarks;
+          for (let t = 0; t < 10; t++) {
+            const frameIdx = Math.min(t, seq.length - 1);
+            const preprocessedFrame = preprocessLandmarks(seq[frameIdx]);
+            sequenceFeatures.push(preprocessedFrame);
+          }
+        } else {
+          // Fallback: replicate the single static frame 10 times to form a sequence of length 10
+          const preprocessedFrame = preprocessLandmarks(sample.landmarks);
+          for (let t = 0; t < 10; t++) {
+            sequenceFeatures.push(preprocessedFrame);
+          }
+        }
+        
+        inputFeatures.push(sequenceFeatures);
         outputLabels.push(labelToIndex[sample.label.toUpperCase()]);
       });
 
       // 3. Convert to TF tensors safely inside tf.tidy scope to prevent memory leaks
       const { xs, ys } = tf.tidy(() => {
-        const xTensor = tf.tensor2d(inputFeatures, [inputFeatures.length, 63]);
+        const xTensor = tf.tensor3d(inputFeatures, [inputFeatures.length, 10, 63]);
         const yTensor = tf.tensor1d(outputLabels, 'int32');
         const yOneHot = tf.oneHot(yTensor, sortedLabels.length);
         return { xs: xTensor, ys: yOneHot };
       });
 
-      // 4. Form Sequential multi-layer Feed-Forward MLP Neural Block
+      // 4. Form Sequential multi-layer Temporal LSTM Recurrent Neural Network
       const model = tf.sequential();
       
-      // Input layer + First Dense layer
-      model.add(tf.layers.dense({
+      // Input layer + LSTM layer
+      model.add(tf.layers.lstm({
         units: hiddenNodes1,
-        activation: 'relu',
-        inputShape: [63],
+        inputShape: [10, 63],
+        returnSequences: false,
         kernelInitializer: 'glorotNormal'
       }));
 
-      // Dropout to prevent overfitting model to particular webcams
+      // Dropout to prevent overfitting model to particular sequences/webcams
       model.add(tf.layers.dropout({ rate: 0.1 }));
 
-      // Second Dense layers
+      // Dense layers
       model.add(tf.layers.dense({
         units: hiddenNodes2,
         activation: 'relu',
@@ -434,10 +451,10 @@ export default function ModelTrainer({
     setSuccessMsg(null);
 
     try {
-      // Warm up model
-      const warmUpFeatures = new Array(63).fill(0);
+      // Warm up model with 3D sequence
+      const warmUpSequence = Array(10).fill(new Array(63).fill(0));
       tf.tidy(() => {
-        const tensor = tf.tensor2d([warmUpFeatures], [1, 63]);
+        const tensor = tf.tensor3d([warmUpSequence], [1, 10, 63]);
         activeModel.predict(tensor);
       });
 
@@ -451,8 +468,11 @@ export default function ModelTrainer({
 
         tf.tidy(() => {
           for (let j = 0; j < batchChunk; j++) {
-            const mockFeatures = Array.from({ length: 63 }, () => Math.random() * 2 - 1);
-            const inputTensor = tf.tensor2d([mockFeatures], [1, 63]);
+            // Generate sequence of 10 mock frames
+            const mockSequence = Array.from({ length: 10 }, () => 
+              Array.from({ length: 63 }, () => Math.random() * 2 - 1)
+            );
+            const inputTensor = tf.tensor3d([mockSequence], [1, 10, 63]);
             
             const start = performance.now();
             const prediction = activeModel.predict(inputTensor) as tf.Tensor;
@@ -1203,8 +1223,8 @@ export default function ModelTrainer({
             <div className="flex items-center gap-3 border-b border-[#f0f2ee] dark:border-[#2d2d32] pb-4" id="docs-header">
               <BookOpen className="w-5.5 h-5.5 text-[#7c8d7c]" />
               <div>
-                <h4 className="text-base font-bold text-[#2d2d28] dark:text-white">TensorFlow Multi-Layer Perceptron (MLP) Pipeline Explained</h4>
-                <p className="text-xs text-[#7a7a6a] dark:text-[#cbd5e1]">Interactive guide to dynamic sign posture coordinate classification</p>
+                <h4 className="text-base font-bold text-[#2d2d28] dark:text-white">TensorFlow LSTM Temporal Recurrent Neural Pipeline Explained</h4>
+                <p className="text-xs text-[#7a7a6a] dark:text-[#cbd5e1]">Interactive guide to sequence-based dynamic sign posture coordinate classification</p>
               </div>
             </div>
 
@@ -1259,29 +1279,29 @@ export default function ModelTrainer({
 
               {explainStep === 1 && (
                 <div className="space-y-4" id="explain-step-1">
-                  <h5 className="text-sm font-bold text-[#2d2d28] dark:text-white">Linear Layer Configuration & Network Structure</h5>
+                  <h5 className="text-sm font-bold text-[#2d2d28] dark:text-white">Temporal Sequence & LSTM Network Structure</h5>
                   <p>
-                    The Multi-Layer Perceptron (MLP) contains exactly 63 input feature nodes mapping into sequential fully-connected (dense) layers.
+                    Our upgraded Long Short-Term Memory (LSTM) Recurrent Neural Network takes exactly 10 consecutive frames of 3D hand coordinates to recognize dynamic gestures and sequence-based sign actions.
                   </p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4" id="explain-topology-grid">
                     <div className="bg-white dark:bg-[#25252a] p-3.5 rounded-xl border border-[#ecece0] dark:border-[#2d2d32]">
-                      <span className="text-[10px] uppercase font-bold tracking-widest text-[#7a7a6a] font-mono">Layer 1: Input</span>
-                      <p className="font-bold text-[#2d2d28] dark:text-white mt-1">63 Floating Point values</p>
-                      <p className="text-[11px] text-[#7a7a6a] dark:text-[#a1a1aa] mt-1">Standard 21 landmarks hand joints times 3 coordinate vectors (X, Y, Z).</p>
+                      <span className="text-[10px] uppercase font-bold tracking-widest text-[#7a7a6a] font-mono">Layer 1: Input Sequence</span>
+                      <p className="font-bold text-[#2d2d28] dark:text-white mt-1">[10 Timesteps, 63 Coordinates]</p>
+                      <p className="text-[11px] text-[#7a7a6a] dark:text-[#a1a1aa] mt-1">Skeletal landmarks from 10 consecutive frames, shifting relative to the wrist and scaling dynamically.</p>
                     </div>
                     <div className="bg-white dark:bg-[#25252a] p-3.5 rounded-xl border border-[#ecece0] dark:border-[#2d2d32]">
-                      <span className="text-[10px] uppercase font-bold tracking-widest text-[#7a7a6a] font-mono">Layer 2: Dense Hidden</span>
-                      <p className="font-bold text-emerald-600 dark:text-emerald-400 mt-1">Dense Rectified Linear (ReLU)</p>
-                      <p className="text-[11px] text-[#7a7a6a] dark:text-[#a1a1aa] mt-1">Deep weights learn complex spatial patterns like curls, knuckle angles, indices crossing, or fist cohesion.</p>
+                      <span className="text-[10px] uppercase font-bold tracking-widest text-[#7a7a6a] font-mono">Layer 2: LSTM Cell Group</span>
+                      <p className="font-bold text-emerald-600 dark:text-emerald-400 mt-1">Recurrent LSTM Units</p>
+                      <p className="text-[11px] text-[#7a7a6a] dark:text-[#a1a1aa] mt-1">Maintains persistent cell state memory and learn motion paths (swipes, waves, and kinematics).</p>
                     </div>
                     <div className="bg-white dark:bg-[#25252a] p-3.5 rounded-xl border border-[#ecece0] dark:border-[#2d2d32]">
                       <span className="text-[10px] uppercase font-bold tracking-widest text-[#7a7a6a] font-mono">Layer 3: Output Classification</span>
                       <p className="font-bold text-blue-600 dark:text-blue-400 mt-1">Softmax Distribution</p>
-                      <p className="text-[11px] text-[#7a7a6a] dark:text-[#a1a1aa] mt-1">Compiles the multi-class parameters into a probability sum matching exactly 100%.</p>
+                      <p className="text-[11px] text-[#7a7a6a] dark:text-[#a1a1aa] mt-1">Compiles temporal embeddings into a single dynamic gesture probability mapping.</p>
                     </div>
                   </div>
                   <p>
-                    We inject an optional 10% dropout buffer block between hidden groups. This periodically restricts neurons from adapting to single camera ratios, promoting generalizable pattern recognition.
+                    By coupling recursive cell states with a 10% dropout layer, the network generalizes perfectly across various cameras and hand sizes, ensuring highly stable, continuous gesture tracking.
                   </p>
                 </div>
               )}

@@ -326,6 +326,8 @@ export default function App() {
   const sampleLabelRef = useRef<string>('A');
   const detectedHandsCountRef = useRef<number>(0);
   const collectedSamplesRef = useRef<CollectedSample[]>([]);
+  const landmarksHistoryRef = useRef<number[][]>([]);
+  const rawLandmarksHistoryRef = useRef<any[][]>([]);
 
   // Keep TF.js model state and helper vars synchronized inside non-stale refs for the MediaPipe thread
   const trainedClientModelRef = useRef<tf.LayersModel | null>(null);
@@ -961,15 +963,34 @@ export default function App() {
     setFlashCollectorEffect(true);
     setTimeout(() => setFlashCollectorEffect(false), 150);
 
+    const rawHistory = rawLandmarksHistoryRef.current;
+    const currentLandmarks = handLandmarksSampleRef.current;
+
+    // Pad/replicate to exactly 10 frames of landmark sequences
+    const sequence: Array<Array<{x: number, y: number, z: number}>> = [];
+    for (let i = 0; i < 10; i++) {
+      if (i < 10 - rawHistory.length) {
+        sequence.push(rawHistory[0] || currentLandmarks.map((pt: any) => ({
+          x: parseFloat(pt.x.toFixed(4)),
+          y: parseFloat(pt.y.toFixed(4)),
+          z: parseFloat((pt.z || 0).toFixed(4))
+        })));
+      } else {
+        const idx = i - (10 - rawHistory.length);
+        sequence.push(rawHistory[idx]);
+      }
+    }
+
     const newSample: CollectedSample = {
       id: "sample_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
       label: sampleLabelRef.current.trim().toUpperCase() || "UNLABELED",
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      landmarks: handLandmarksSampleRef.current.map(pt => ({
+      landmarks: currentLandmarks.map(pt => ({
         x: parseFloat(pt.x.toFixed(4)),
         y: parseFloat(pt.y.toFixed(4)),
         z: parseFloat((pt.z || 0).toFixed(4))
       })),
+      sequenceOfLandmarks: sequence,
       handType: detectedHandsCountRef.current > 1 ? "Multiple" : "Single"
     };
 
@@ -1080,6 +1101,18 @@ export default function App() {
       const landmarks = results.multiHandLandmarks[0];
       setHandLandmarksSample(landmarks);
 
+      // Save raw landmarks history (last 10 frames)
+      let rawHistory = [...rawLandmarksHistoryRef.current];
+      rawHistory.push(landmarks.map((pt: any) => ({
+        x: parseFloat(pt.x.toFixed(4)),
+        y: parseFloat(pt.y.toFixed(4)),
+        z: parseFloat((pt.z || 0).toFixed(4))
+      })));
+      if (rawHistory.length > 10) {
+        rawHistory.shift();
+      }
+      rawLandmarksHistoryRef.current = rawHistory;
+
       // REAL-TIME LOCAL TENSORFLOW INFERENCE
       if (predictionSourceRef.current === 'tensorflow' && trainedClientModelRef.current && landmarks && landmarks.length === 21) {
         const throttleVal = Number(localStorage.getItem('asl_prediction_throttle_ms') || '40');
@@ -1103,20 +1136,46 @@ export default function App() {
             const scale = maxDistance > 1e-6 ? maxDistance : 1.0;
             const features = rawOffsets.map(val => val / scale);
 
+            // Save preprocessed feature sequence history (last 10 frames)
+            let history = [...landmarksHistoryRef.current];
+            history.push(features);
+            if (history.length > 10) {
+              history.shift();
+            }
+            landmarksHistoryRef.current = history;
+
             const model = trainedClientModelRef.current;
             const classes = trainedClassesRef.current;
 
+            // Check if model expects 3D sequence-based input shape [null, 10, 63]
+            const isLstm = model ? ((model.layers[0] as any).inputSpec?.[0]?.shape || []).length === 3 : false;
+
             const result = tf.tidy(() => {
-              const inputTensor = tf.tensor2d([features], [1, 63]);
+              let inputTensor;
+              if (isLstm) {
+                // Pad/fill sequence to exactly 10 frames
+                const sequence: number[][] = [];
+                for (let i = 0; i < 10; i++) {
+                  if (i < 10 - history.length) {
+                    sequence.push(history[0] || features);
+                  } else {
+                    const idx = i - (10 - history.length);
+                    sequence.push(history[idx]);
+                  }
+                }
+                inputTensor = tf.tensor3d([sequence], [1, 10, 63]);
+              } else {
+                inputTensor = tf.tensor2d([features], [1, 63]);
+              }
               const prediction = model.predict(inputTensor) as tf.Tensor;
               const probs = Array.from(prediction.dataSync());
               const maxProb = Math.max(...probs);
               const maxIndex = probs.indexOf(maxProb);
               
-              const layer1Units = (model.layers[0] as any).units || 64;
+              const layer1Units = (model.layers[0] as any).units || (isLstm ? 'LSTM' : 64);
               const layer2Units = (model.layers[2] as any).units || 32;
 
-              return { maxIndex, confidence: maxProb * 100, layer1Units, layer2Units };
+              return { maxIndex, confidence: maxProb * 100, layer1Units, layer2Units, isLstm };
             });
 
             const charResult = classes[result.maxIndex] || "?";
@@ -1125,18 +1184,18 @@ export default function App() {
             const matchingCustom = customGestures.find(cg => cg.char.toUpperCase() === charResult.toUpperCase());
             const explanation = matchingCustom 
               ? `Successfully recognized your custom-trained gesture "${matchingCustom.char}"! Posture description: ${matchingCustom.description}`
-              : `Inferred live in real time using your browser-compiled Multi-Layer Perceptron (MLP) Artificial Neural Network. Your 3D landmarks coordinates offset relative to wrist joint 0 and fed forward inside TF.js.`;
+              : `Inferred live in real time using your browser-compiled ${result.isLstm ? 'Long Short-Term Memory (LSTM) Recurrent Neural Network' : 'Multi-Layer Perceptron (MLP) Artificial Neural Network'}. Your 3D landmarks coordinates sequence offset relative to wrist joint 0 and fed forward inside TF.js.`;
             
             const tips = matchingCustom
               ? [
                   `Visual Practice Cue: ${matchingCustom.visualTip}`,
                   `Model classes catalogued: ${classes.join(', ')}`,
-                  `Model topology: [63] -> Dense (${result.layer1Units}) -> Dense (${result.layer2Units}) -> Softmax (${classes.length})`
+                  `Model topology: ${result.isLstm ? `[10, 63] -> LSTM (${result.layer1Units}) -> Dense (${result.layer2Units})` : `[63] -> Dense (${result.layer1Units}) -> Dense (${result.layer2Units})`} -> Softmax (${classes.length})`
                 ]
               : [
                   `Model classes catalogued: ${classes.join(', ')}`,
                   `Categorical cross-entropy probability: ${rawConf}%`,
-                  `Model topology: [63] -> Dense (${result.layer1Units}) -> Dense (${result.layer2Units}) -> Softmax (${classes.length})`
+                  `Model topology: ${result.isLstm ? `[10, 63] -> LSTM (${result.layer1Units}) -> Dense (${result.layer2Units})` : `[63] -> Dense (${result.layer1Units}) -> Dense (${result.layer2Units})`} -> Softmax (${classes.length})`
                 ];
 
             setLatestResult({
@@ -1161,6 +1220,8 @@ export default function App() {
       }
     } else {
       setHandLandmarksSample([]);
+      rawLandmarksHistoryRef.current = [];
+      landmarksHistoryRef.current = [];
       handleDisappearOrResetFrame();
     }
 
@@ -1724,7 +1785,7 @@ export default function App() {
           throw new Error("Local Classifier Error: No skeletal joints detected on virtual frame camera view. Please hold your hand up clearly!");
         }
 
-        const wrist = landmarks[0];
+         const wrist = landmarks[0];
         const rawOffsets: number[] = [];
         let maxDistance = 0;
         landmarks.forEach((joint: any) => {
@@ -1740,19 +1801,29 @@ export default function App() {
         const scale = maxDistance > 1e-6 ? maxDistance : 1.0;
         const features = rawOffsets.map(val => val / scale);
 
+        // Check if model expects 3D sequence-based input shape [null, 10, 63]
+        const isLstm = trainedClientModel ? ((trainedClientModel.layers[0] as any).inputSpec?.[0]?.shape || []).length === 3 : false;
+
         // Run client inference
         const result = tf.tidy(() => {
-          const inputTensor = tf.tensor2d([features], [1, 63]);
+          let inputTensor;
+          if (isLstm) {
+            // Replicate single frame features 10 times to form sequence input
+            const sequence = Array(10).fill(features);
+            inputTensor = tf.tensor3d([sequence], [1, 10, 63]);
+          } else {
+            inputTensor = tf.tensor2d([features], [1, 63]);
+          }
           const prediction = trainedClientModel.predict(inputTensor) as tf.Tensor;
           const probs = Array.from(prediction.dataSync());
           const maxProb = Math.max(...probs);
           const maxIndex = probs.indexOf(maxProb);
           
           // Get the units dynamically from first dense layer
-          const layer1Units = (trainedClientModel.layers[0] as any).units || 64;
+          const layer1Units = (trainedClientModel.layers[0] as any).units || (isLstm ? 'LSTM' : 64);
           const layer2Units = (trainedClientModel.layers[2] as any).units || 32;
 
-          return { maxIndex, confidence: maxProb * 100, layer1Units, layer2Units };
+          return { maxIndex, confidence: maxProb * 100, layer1Units, layer2Units, isLstm };
         });
 
         const charResult = trainedClasses[result.maxIndex] || "?";
@@ -1761,18 +1832,18 @@ export default function App() {
         const matchingCustom = customGestures.find(cg => cg.char.toUpperCase() === charResult.toUpperCase());
         const explanation = matchingCustom 
           ? `Successfully recognized your custom-trained gesture "${matchingCustom.char}"! Posture description: ${matchingCustom.description}`
-          : `Inferred locally using your browser-compiled Multi-Layer Perceptron (MLP) Artificial Neural Network. Your 3D landmarks coordinates offset relative to wrist joint 0 and fed forward inside TF.js.`;
+          : `Inferred locally using your browser-compiled ${result.isLstm ? 'Long Short-Term Memory (LSTM) Recurrent Neural Network' : 'Multi-Layer Perceptron (MLP) Artificial Neural Network'}. Your 3D landmarks coordinates sequence offset relative to wrist joint 0 and fed forward inside TF.js.`;
         
         const tips = matchingCustom
           ? [
               `Visual Practice Cue: ${matchingCustom.visualTip}`,
               `Model classes catalogued: ${trainedClasses.join(', ')}`,
-              `Model topology: [63] -> Dense (${result.layer1Units}) -> Dense (${result.layer2Units}) -> Softmax (${trainedClasses.length})`
+              `Model topology: ${result.isLstm ? `[10, 63] -> LSTM (${result.layer1Units}) -> Dense (${result.layer2Units})` : `[63] -> Dense (${result.layer1Units}) -> Dense (${result.layer2Units})`} -> Softmax (${trainedClasses.length})`
             ]
           : [
               `Model classes catalogued: ${trainedClasses.join(', ')}`,
               `Categorical cross-entropy probability: ${rawConf}%`,
-              `Model topology: [63] -> Dense (${result.layer1Units}) -> Dense (${result.layer2Units}) -> Softmax (${trainedClasses.length})`
+              `Model topology: ${result.isLstm ? `[10, 63] -> LSTM (${result.layer1Units}) -> Dense (${result.layer2Units})` : `[63] -> Dense (${result.layer1Units}) -> Dense (${result.layer2Units})`} -> Softmax (${trainedClasses.length})`
             ];
 
         setLatestResult({
