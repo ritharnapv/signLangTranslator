@@ -286,6 +286,8 @@ export default function App() {
   // MediaPipe Hands states and refs
   const [detectedHandsCount, setDetectedHandsCount] = useState<number>(0);
   const [handLandmarksSample, setHandLandmarksSample] = useState<any[]>([]);
+  const [leftHandSample, setLeftHandSample] = useState<any[]>([]);
+  const [rightHandSample, setRightHandSample] = useState<any[]>([]);
   const [mediaPipeLoaded, setMediaPipeLoaded] = useState<boolean>(false);
   const [mediaPipeError, setMediaPipeError] = useState<string | null>(null);
   const [confidenceThreshold, setConfidenceThreshold] = useState<number>(70);
@@ -323,11 +325,17 @@ export default function App() {
   const [flashCollectorEffect, setFlashCollectorEffect] = useState<boolean>(false);
 
   const handLandmarksSampleRef = useRef<any[]>([]);
+  const leftHandSampleRef = useRef<any[]>([]);
+  const rightHandSampleRef = useRef<any[]>([]);
   const sampleLabelRef = useRef<string>('A');
   const detectedHandsCountRef = useRef<number>(0);
   const collectedSamplesRef = useRef<CollectedSample[]>([]);
   const landmarksHistoryRef = useRef<number[][]>([]);
   const rawLandmarksHistoryRef = useRef<any[][]>([]);
+  const leftLandmarksHistoryRef = useRef<number[][]>([]);
+  const rightLandmarksHistoryRef = useRef<number[][]>([]);
+  const rawLeftHistoryRef = useRef<any[][]>([]);
+  const rawRightHistoryRef = useRef<any[][]>([]);
 
   // Keep TF.js model state and helper vars synchronized inside non-stale refs for the MediaPipe thread
   const trainedClientModelRef = useRef<tf.LayersModel | null>(null);
@@ -634,6 +642,14 @@ export default function App() {
   useEffect(() => {
     handLandmarksSampleRef.current = handLandmarksSample;
   }, [handLandmarksSample]);
+
+  useEffect(() => {
+    leftHandSampleRef.current = leftHandSample;
+  }, [leftHandSample]);
+
+  useEffect(() => {
+    rightHandSampleRef.current = rightHandSample;
+  }, [rightHandSample]);
 
   useEffect(() => {
     sampleLabelRef.current = sampleLabel;
@@ -950,12 +966,12 @@ export default function App() {
       setCollectorError("Webcam must be enabled to capture hand skeletal landmarks.");
       return;
     }
-    if (detectedHandsCountRef.current === 0 || handLandmarksSampleRef.current.length === 0) {
+    const currentLeft = leftHandSampleRef.current;
+    const currentRight = rightHandSampleRef.current;
+    const currentLandmarks = handLandmarksSampleRef.current;
+
+    if (detectedHandsCountRef.current === 0 || currentLandmarks.length === 0) {
       setCollectorError("No hand detected. Position your hand securely in the camera frame.");
-      return;
-    }
-    if (handLandmarksSampleRef.current.length !== 21) {
-      setCollectorError(`Incomplete landmark count (${handLandmarksSampleRef.current.length}/21). Keep hand stable.`);
       return;
     }
 
@@ -964,20 +980,45 @@ export default function App() {
     setTimeout(() => setFlashCollectorEffect(false), 150);
 
     const rawHistory = rawLandmarksHistoryRef.current;
-    const currentLandmarks = handLandmarksSampleRef.current;
+    const rawLeftHistory = rawLeftHistoryRef.current;
+    const rawRightHistory = rawRightHistoryRef.current;
 
-    // Pad/replicate to exactly 10 frames of landmark sequences
+    const mapPoints = (pts: any[]) => pts.map((pt: any) => ({
+      x: parseFloat(pt.x.toFixed(4)),
+      y: parseFloat(pt.y.toFixed(4)),
+      z: parseFloat((pt.z || 0).toFixed(4))
+    }));
+
+    // Pad/replicate primary landmarks to exactly 10 frames of landmark sequences
     const sequence: Array<Array<{x: number, y: number, z: number}>> = [];
     for (let i = 0; i < 10; i++) {
       if (i < 10 - rawHistory.length) {
-        sequence.push(rawHistory[0] || currentLandmarks.map((pt: any) => ({
-          x: parseFloat(pt.x.toFixed(4)),
-          y: parseFloat(pt.y.toFixed(4)),
-          z: parseFloat((pt.z || 0).toFixed(4))
-        })));
+        sequence.push(rawHistory[0] || mapPoints(currentLandmarks));
       } else {
         const idx = i - (10 - rawHistory.length);
         sequence.push(rawHistory[idx]);
+      }
+    }
+
+    // Pad/replicate Left Hand to exactly 10 frames of landmark sequences
+    const sequenceLeft: Array<Array<{x: number, y: number, z: number}>> = [];
+    for (let i = 0; i < 10; i++) {
+      if (i < 10 - rawLeftHistory.length) {
+        sequenceLeft.push(rawLeftHistory[0] || (currentLeft.length > 0 ? mapPoints(currentLeft) : new Array(21).fill({ x: 0, y: 0, z: 0 })));
+      } else {
+        const idx = i - (10 - rawLeftHistory.length);
+        sequenceLeft.push(rawLeftHistory[idx]);
+      }
+    }
+
+    // Pad/replicate Right Hand to exactly 10 frames of landmark sequences
+    const sequenceRight: Array<Array<{x: number, y: number, z: number}>> = [];
+    for (let i = 0; i < 10; i++) {
+      if (i < 10 - rawRightHistory.length) {
+        sequenceRight.push(rawRightHistory[0] || (currentRight.length > 0 ? mapPoints(currentRight) : new Array(21).fill({ x: 0, y: 0, z: 0 })));
+      } else {
+        const idx = i - (10 - rawRightHistory.length);
+        sequenceRight.push(rawRightHistory[idx]);
       }
     }
 
@@ -985,12 +1026,12 @@ export default function App() {
       id: "sample_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
       label: sampleLabelRef.current.trim().toUpperCase() || "UNLABELED",
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      landmarks: currentLandmarks.map(pt => ({
-        x: parseFloat(pt.x.toFixed(4)),
-        y: parseFloat(pt.y.toFixed(4)),
-        z: parseFloat((pt.z || 0).toFixed(4))
-      })),
+      landmarks: mapPoints(currentLandmarks),
       sequenceOfLandmarks: sequence,
+      leftHandLandmarks: currentLeft.length > 0 ? mapPoints(currentLeft) : undefined,
+      rightHandLandmarks: currentRight.length > 0 ? mapPoints(currentRight) : undefined,
+      sequenceOfLeftHandLandmarks: sequenceLeft,
+      sequenceOfRightHandLandmarks: sequenceRight,
       handType: detectedHandsCountRef.current > 1 ? "Multiple" : "Single"
     };
 
@@ -1097,44 +1138,99 @@ export default function App() {
     const handsFound = results.multiHandLandmarks ? results.multiHandLandmarks.length : 0;
     setDetectedHandsCount(handsFound);
     
-    if (handsFound > 0) {
-      const landmarks = results.multiHandLandmarks[0];
-      setHandLandmarksSample(landmarks);
+    // Separate Left and Right hands correctly using multiHandedness
+    let leftLandmarks: any[] = [];
+    let rightLandmarks: any[] = [];
 
-      // Save raw landmarks history (last 10 frames)
+    if (handsFound > 0 && results.multiHandedness) {
+      results.multiHandLandmarks.forEach((lms: any, index: number) => {
+        const handInfo = results.multiHandedness[index];
+        const isLeftHand = handInfo ? handInfo.label === 'Left' : index === 0;
+        if (isLeftHand) {
+          leftLandmarks = lms;
+        } else {
+          rightLandmarks = lms;
+        }
+      });
+    }
+
+    setLeftHandSample(leftLandmarks);
+    setRightHandSample(rightLandmarks);
+
+    // Keep handLandmarksSample for compatibility and visualization
+    const primaryLandmarks = results.multiHandLandmarks && results.multiHandLandmarks.length > 0 
+      ? results.multiHandLandmarks[0] 
+      : [];
+    setHandLandmarksSample(primaryLandmarks);
+
+    const preprocessSingleHand = (handLms: any[]) => {
+      if (!handLms || handLms.length === 0) return new Array(63).fill(0);
+      const wrist = handLms[0];
+      const rawOffsets: number[] = [];
+      let maxDistance = 0;
+      handLms.forEach((joint: any) => {
+        const dx = joint.x - wrist.x;
+        const dy = joint.y - wrist.y;
+        const dz = joint.z - (wrist.z || 0);
+        rawOffsets.push(dx, dy, dz);
+        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (dist > maxDistance) {
+          maxDistance = dist;
+        }
+      });
+      const scale = maxDistance > 1e-6 ? maxDistance : 1.0;
+      return rawOffsets.map(val => val / scale);
+    };
+
+    const mapRawPoints = (handLms: any[]) => handLms.map((pt: any) => ({
+      x: parseFloat(pt.x.toFixed(4)),
+      y: parseFloat(pt.y.toFixed(4)),
+      z: parseFloat((pt.z || 0).toFixed(4))
+    }));
+
+    if (handsFound > 0) {
+      // Raw primary landmarks history
       let rawHistory = [...rawLandmarksHistoryRef.current];
-      rawHistory.push(landmarks.map((pt: any) => ({
-        x: parseFloat(pt.x.toFixed(4)),
-        y: parseFloat(pt.y.toFixed(4)),
-        z: parseFloat((pt.z || 0).toFixed(4))
-      })));
+      rawHistory.push(mapRawPoints(primaryLandmarks));
       if (rawHistory.length > 10) {
         rawHistory.shift();
       }
       rawLandmarksHistoryRef.current = rawHistory;
 
+      // Raw Left Hand landmarks history
+      let rawLeftHistory = [...rawLeftHistoryRef.current];
+      if (leftLandmarks.length > 0) {
+        rawLeftHistory.push(mapRawPoints(leftLandmarks));
+      } else {
+        rawLeftHistory.push(new Array(21).fill({ x: 0, y: 0, z: 0 }));
+      }
+      if (rawLeftHistory.length > 10) {
+        rawLeftHistory.shift();
+      }
+      rawLeftHistoryRef.current = rawLeftHistory;
+
+      // Raw Right Hand landmarks history
+      let rawRightHistory = [...rawRightHistoryRef.current];
+      if (rightLandmarks.length > 0) {
+        rawRightHistory.push(mapRawPoints(rightLandmarks));
+      } else {
+        rawRightHistory.push(new Array(21).fill({ x: 0, y: 0, z: 0 }));
+      }
+      if (rawRightHistory.length > 10) {
+        rawRightHistory.shift();
+      }
+      rawRightHistoryRef.current = rawRightHistory;
+
       // REAL-TIME LOCAL TENSORFLOW INFERENCE
-      if (predictionSourceRef.current === 'tensorflow' && trainedClientModelRef.current && landmarks && landmarks.length === 21) {
+      if (predictionSourceRef.current === 'tensorflow' && trainedClientModelRef.current) {
         const throttleVal = Number(localStorage.getItem('asl_prediction_throttle_ms') || '40');
         const nowMs = performance.now();
         if (nowMs - lastPredictionTimeRef.current >= throttleVal) {
           lastPredictionTimeRef.current = nowMs;
           try {
-            const wrist = landmarks[0];
-            const rawOffsets: number[] = [];
-            let maxDistance = 0;
-            landmarks.forEach((joint: any) => {
-              const dx = joint.x - wrist.x;
-              const dy = joint.y - wrist.y;
-              const dz = joint.z - (wrist.z || 0);
-              rawOffsets.push(dx, dy, dz);
-              const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-              if (dist > maxDistance) {
-                maxDistance = dist;
-              }
-            });
-            const scale = maxDistance > 1e-6 ? maxDistance : 1.0;
-            const features = rawOffsets.map(val => val / scale);
+            const leftFeatures = preprocessSingleHand(leftLandmarks);
+            const rightFeatures = preprocessSingleHand(rightLandmarks);
+            const features = [...leftFeatures, ...rightFeatures]; // Shape: [126] coordinates
 
             // Save preprocessed feature sequence history (last 10 frames)
             let history = [...landmarksHistoryRef.current];
@@ -1147,8 +1243,10 @@ export default function App() {
             const model = trainedClientModelRef.current;
             const classes = trainedClassesRef.current;
 
-            // Check if model expects 3D sequence-based input shape [null, 10, 63]
-            const isLstm = model ? ((model.layers[0] as any).inputSpec?.[0]?.shape || []).length === 3 : false;
+            // Check if model expects 3D sequence-based input shape
+            const firstLayerShape = (model.layers[0] as any).inputSpec?.[0]?.shape || [];
+            const isLstm = firstLayerShape.length === 3;
+            const inputDim = firstLayerShape[firstLayerShape.length - 1] || 126;
 
             const result = tf.tidy(() => {
               let inputTensor;
@@ -1163,9 +1261,22 @@ export default function App() {
                     sequence.push(history[idx]);
                   }
                 }
-                inputTensor = tf.tensor3d([sequence], [1, 10, 63]);
+                const adjustedSequence = sequence.map(seqFrame => {
+                  if (seqFrame.length === inputDim) return seqFrame;
+                  if (seqFrame.length > inputDim) return seqFrame.slice(0, inputDim);
+                  return [...seqFrame, ...new Array(inputDim - seqFrame.length).fill(0)];
+                });
+                inputTensor = tf.tensor3d([adjustedSequence], [1, 10, inputDim]);
               } else {
-                inputTensor = tf.tensor2d([features], [1, 63]);
+                let adjustedFeatures = features;
+                if (features.length !== inputDim) {
+                  if (features.length > inputDim) {
+                    adjustedFeatures = features.slice(0, inputDim);
+                  } else {
+                    adjustedFeatures = [...features, ...new Array(inputDim - features.length).fill(0)];
+                  }
+                }
+                inputTensor = tf.tensor2d([adjustedFeatures], [1, inputDim]);
               }
               const prediction = model.predict(inputTensor) as tf.Tensor;
               const probs = Array.from(prediction.dataSync());
@@ -1175,7 +1286,7 @@ export default function App() {
               const layer1Units = (model.layers[0] as any).units || (isLstm ? 'LSTM' : 64);
               const layer2Units = (model.layers[2] as any).units || 32;
 
-              return { maxIndex, confidence: maxProb * 100, layer1Units, layer2Units, isLstm };
+              return { maxIndex, confidence: maxProb * 100, layer1Units, layer2Units, isLstm, inputDim };
             });
 
             const charResult = classes[result.maxIndex] || "?";
@@ -1190,12 +1301,12 @@ export default function App() {
               ? [
                   `Visual Practice Cue: ${matchingCustom.visualTip}`,
                   `Model classes catalogued: ${classes.join(', ')}`,
-                  `Model topology: ${result.isLstm ? `[10, 63] -> LSTM (${result.layer1Units}) -> Dense (${result.layer2Units})` : `[63] -> Dense (${result.layer1Units}) -> Dense (${result.layer2Units})`} -> Softmax (${classes.length})`
+                  `Model topology: ${result.isLstm ? `[10, ${result.inputDim}] -> LSTM (${result.layer1Units}) -> Dense (${result.layer2Units})` : `[${result.inputDim}] -> Dense (${result.layer1Units}) -> Dense (${result.layer2Units})`} -> Softmax (${classes.length})`
                 ]
               : [
                   `Model classes catalogued: ${classes.join(', ')}`,
                   `Categorical cross-entropy probability: ${rawConf}%`,
-                  `Model topology: ${result.isLstm ? `[10, 63] -> LSTM (${result.layer1Units}) -> Dense (${result.layer2Units})` : `[63] -> Dense (${result.layer1Units}) -> Dense (${result.layer2Units})`} -> Softmax (${classes.length})`
+                  `Model topology: ${result.isLstm ? `[10, ${result.inputDim}] -> LSTM (${result.layer1Units}) -> Dense (${result.layer2Units})` : `[${result.inputDim}] -> Dense (${result.layer1Units}) -> Dense (${result.layer2Units})`} -> Softmax (${classes.length})`
                 ];
 
             setLatestResult({
@@ -1220,7 +1331,11 @@ export default function App() {
       }
     } else {
       setHandLandmarksSample([]);
+      setLeftHandSample([]);
+      setRightHandSample([]);
       rawLandmarksHistoryRef.current = [];
+      rawLeftHistoryRef.current = [];
+      rawRightHistoryRef.current = [];
       landmarksHistoryRef.current = [];
       handleDisappearOrResetFrame();
     }
@@ -1780,29 +1895,50 @@ export default function App() {
     try {
       // TENSORFLOW DIRECT BROWSER CLASSIFICATION BRANCH
       if (predictionSource === 'tensorflow' && trainedClientModel) {
-        const landmarks = handLandmarksSampleRef.current;
-        if (!landmarks || landmarks.length !== 21) {
+        const leftLandmarks = leftHandSampleRef.current;
+        const rightLandmarks = rightHandSampleRef.current;
+        const mainLandmarks = handLandmarksSampleRef.current;
+
+        if ((!leftLandmarks || leftLandmarks.length === 0) && (!rightLandmarks || rightLandmarks.length === 0) && (!mainLandmarks || mainLandmarks.length === 0)) {
           throw new Error("Local Classifier Error: No skeletal joints detected on virtual frame camera view. Please hold your hand up clearly!");
         }
 
-         const wrist = landmarks[0];
-        const rawOffsets: number[] = [];
-        let maxDistance = 0;
-        landmarks.forEach((joint: any) => {
-          const dx = joint.x - wrist.x;
-          const dy = joint.y - wrist.y;
-          const dz = joint.z - (wrist.z || 0);
-          rawOffsets.push(dx, dy, dz);
-          const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-          if (dist > maxDistance) {
-            maxDistance = dist;
-          }
-        });
-        const scale = maxDistance > 1e-6 ? maxDistance : 1.0;
-        const features = rawOffsets.map(val => val / scale);
+        const preprocessSingleHand = (handLms: any[]) => {
+          if (!handLms || handLms.length === 0) return new Array(63).fill(0);
+          const wrist = handLms[0];
+          const rawOffsets: number[] = [];
+          let maxDistance = 0;
+          handLms.forEach((joint: any) => {
+            const dx = joint.x - wrist.x;
+            const dy = joint.y - wrist.y;
+            const dz = joint.z - (wrist.z || 0);
+            rawOffsets.push(dx, dy, dz);
+            const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            if (dist > maxDistance) {
+              maxDistance = dist;
+            }
+          });
+          const scale = maxDistance > 1e-6 ? maxDistance : 1.0;
+          return rawOffsets.map(val => val / scale);
+        };
 
-        // Check if model expects 3D sequence-based input shape [null, 10, 63]
-        const isLstm = trainedClientModel ? ((trainedClientModel.layers[0] as any).inputSpec?.[0]?.shape || []).length === 3 : false;
+        const leftFeatures = preprocessSingleHand(leftLandmarks);
+        const rightFeatures = preprocessSingleHand(rightLandmarks);
+        let features = [...leftFeatures, ...rightFeatures];
+
+        // Check if model expects 3D sequence-based input shape
+        const firstLayerShape = (trainedClientModel.layers[0] as any).inputSpec?.[0]?.shape || [];
+        const isLstm = firstLayerShape.length === 3;
+        const inputDim = firstLayerShape[firstLayerShape.length - 1] || 126;
+
+        // Gracefully adapt single hand features or pad to match the input dimension
+        if (features.length !== inputDim) {
+          if (inputDim === 63) {
+            features = leftLandmarks.length > 0 ? leftFeatures : (rightLandmarks.length > 0 ? rightFeatures : preprocessSingleHand(mainLandmarks));
+          } else {
+            features = [...features, ...new Array(inputDim - features.length).fill(0)];
+          }
+        }
 
         // Run client inference
         const result = tf.tidy(() => {
@@ -1810,9 +1946,9 @@ export default function App() {
           if (isLstm) {
             // Replicate single frame features 10 times to form sequence input
             const sequence = Array(10).fill(features);
-            inputTensor = tf.tensor3d([sequence], [1, 10, 63]);
+            inputTensor = tf.tensor3d([sequence], [1, 10, inputDim]);
           } else {
-            inputTensor = tf.tensor2d([features], [1, 63]);
+            inputTensor = tf.tensor2d([features], [1, inputDim]);
           }
           const prediction = trainedClientModel.predict(inputTensor) as tf.Tensor;
           const probs = Array.from(prediction.dataSync());
@@ -1823,7 +1959,7 @@ export default function App() {
           const layer1Units = (trainedClientModel.layers[0] as any).units || (isLstm ? 'LSTM' : 64);
           const layer2Units = (trainedClientModel.layers[2] as any).units || 32;
 
-          return { maxIndex, confidence: maxProb * 100, layer1Units, layer2Units, isLstm };
+          return { maxIndex, confidence: maxProb * 100, layer1Units, layer2Units, isLstm, inputDim };
         });
 
         const charResult = trainedClasses[result.maxIndex] || "?";
@@ -1838,12 +1974,12 @@ export default function App() {
           ? [
               `Visual Practice Cue: ${matchingCustom.visualTip}`,
               `Model classes catalogued: ${trainedClasses.join(', ')}`,
-              `Model topology: ${result.isLstm ? `[10, 63] -> LSTM (${result.layer1Units}) -> Dense (${result.layer2Units})` : `[63] -> Dense (${result.layer1Units}) -> Dense (${result.layer2Units})`} -> Softmax (${trainedClasses.length})`
+              `Model topology: ${result.isLstm ? `[10, ${result.inputDim}] -> LSTM (${result.layer1Units}) -> Dense (${result.layer2Units})` : `[${result.inputDim}] -> Dense (${result.layer1Units}) -> Dense (${result.layer2Units})`} -> Softmax (${trainedClasses.length})`
             ]
           : [
               `Model classes catalogued: ${trainedClasses.join(', ')}`,
               `Categorical cross-entropy probability: ${rawConf}%`,
-              `Model topology: ${result.isLstm ? `[10, 63] -> LSTM (${result.layer1Units}) -> Dense (${result.layer2Units})` : `[63] -> Dense (${result.layer1Units}) -> Dense (${result.layer2Units})`} -> Softmax (${trainedClasses.length})`
+              `Model topology: ${result.isLstm ? `[10, ${result.inputDim}] -> LSTM (${result.layer1Units}) -> Dense (${result.layer2Units})` : `[${result.inputDim}] -> Dense (${result.layer1Units}) -> Dense (${result.layer2Units})`} -> Softmax (${trainedClasses.length})`
             ];
 
         setLatestResult({

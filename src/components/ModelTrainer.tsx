@@ -233,8 +233,8 @@ export default function ModelTrainer({
 
   // Helper: Normalize Hand Landmark Coordinates (Make them invariant to camera positioning and hand scale)
   // Shift all joints relative to the wrist (Joint index 0) and scale by the maximum distance
-  const preprocessLandmarks = (landmarks: Array<{x: number, y: number, z: number}>) => {
-    if (landmarks.length === 0) return new Array(63).fill(0);
+  const preprocessLandmarks = (landmarks: Array<{x: number, y: number, z: number}> | undefined) => {
+    if (!landmarks || landmarks.length === 0) return new Array(63).fill(0);
     
     // Wrist joint anchor (index 0)
     const wrist = landmarks[0];
@@ -242,9 +242,9 @@ export default function ModelTrainer({
     let maxDistance = 0;
     
     landmarks.forEach(joint => {
-      const dx = joint.x - wrist.x;
-      const dy = joint.y - wrist.y;
-      const dz = joint.z - (wrist.z || 0);
+      const dx = joint.x - (wrist ? wrist.x : 0);
+      const dy = joint.y - (wrist ? wrist.y : 0);
+      const dz = joint.z - (wrist ? (wrist.z || 0) : 0);
       rawOffsets.push(dx, dy, dz);
       
       const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
@@ -255,6 +255,23 @@ export default function ModelTrainer({
     
     const scale = maxDistance > 1e-6 ? maxDistance : 1.0;
     return rawOffsets.map(val => val / scale);
+  };
+
+  const preprocessTwoHands = (
+    left: Array<{x: number, y: number, z: number}> | undefined,
+    right: Array<{x: number, y: number, z: number}> | undefined,
+    fallback?: Array<{x: number, y: number, z: number}>
+  ) => {
+    const leftFeatures = preprocessLandmarks(left);
+    const rightFeatures = preprocessLandmarks(right);
+    
+    // For backwards compatibility: if both hands are empty, fall back to single landmarks
+    if ((!left || left.length === 0) && (!right || right.length === 0) && fallback && fallback.length > 0) {
+      const fallbackFeatures = preprocessLandmarks(fallback);
+      return [...new Array(63).fill(0), ...fallbackFeatures];
+    }
+    
+    return [...leftFeatures, ...rightFeatures];
   };
 
   const stopTraining = () => {
@@ -291,23 +308,33 @@ export default function ModelTrainer({
       });
 
       // 2. Format training tensor coordinates & labels as sequences of 10 frames
-      const inputFeatures: number[][][] = []; // Shape: [numSamples, 10, 63]
+      const inputFeatures: number[][][] = []; // Shape: [numSamples, 10, 126]
       const outputLabels: number[] = [];
 
       activeDatasetSamples.forEach(sample => {
         const sequenceFeatures: number[][] = [];
         
-        if (sample.sequenceOfLandmarks && sample.sequenceOfLandmarks.length > 0) {
-          // Use the recorded sequence of landmarks!
+        if (sample.sequenceOfLeftHandLandmarks && sample.sequenceOfLeftHandLandmarks.length > 0) {
+          const seqLeft = sample.sequenceOfLeftHandLandmarks;
+          const seqRight = sample.sequenceOfRightHandLandmarks || [];
+          for (let t = 0; t < 10; t++) {
+            const frameIdxLeft = Math.min(t, seqLeft.length - 1);
+            const frameIdxRight = Math.min(t, seqRight.length - 1);
+            const leftFrame = seqLeft[frameIdxLeft] || [];
+            const rightFrame = seqRight[frameIdxRight] || [];
+            const fallbackSeqFrame = sample.sequenceOfLandmarks?.[Math.min(t, (sample.sequenceOfLandmarks?.length || 1) - 1)];
+            const preprocessedFrame = preprocessTwoHands(leftFrame, rightFrame, fallbackSeqFrame);
+            sequenceFeatures.push(preprocessedFrame);
+          }
+        } else if (sample.sequenceOfLandmarks && sample.sequenceOfLandmarks.length > 0) {
           const seq = sample.sequenceOfLandmarks;
           for (let t = 0; t < 10; t++) {
             const frameIdx = Math.min(t, seq.length - 1);
-            const preprocessedFrame = preprocessLandmarks(seq[frameIdx]);
+            const preprocessedFrame = preprocessTwoHands([], [], seq[frameIdx]);
             sequenceFeatures.push(preprocessedFrame);
           }
         } else {
-          // Fallback: replicate the single static frame 10 times to form a sequence of length 10
-          const preprocessedFrame = preprocessLandmarks(sample.landmarks);
+          const preprocessedFrame = preprocessTwoHands(sample.leftHandLandmarks, sample.rightHandLandmarks, sample.landmarks);
           for (let t = 0; t < 10; t++) {
             sequenceFeatures.push(preprocessedFrame);
           }
@@ -317,9 +344,9 @@ export default function ModelTrainer({
         outputLabels.push(labelToIndex[sample.label.toUpperCase()]);
       });
 
-      // 3. Convert to TF tensors safely inside tf.tidy scope to prevent memory leaks
+      // 3. Convert to TF Tensors safely with 126-dimensional frames
       const { xs, ys } = tf.tidy(() => {
-        const xTensor = tf.tensor3d(inputFeatures, [inputFeatures.length, 10, 63]);
+        const xTensor = tf.tensor3d(inputFeatures, [inputFeatures.length, 10, 126]);
         const yTensor = tf.tensor1d(outputLabels, 'int32');
         const yOneHot = tf.oneHot(yTensor, sortedLabels.length);
         return { xs: xTensor, ys: yOneHot };
@@ -328,10 +355,10 @@ export default function ModelTrainer({
       // 4. Form Sequential multi-layer Temporal LSTM Recurrent Neural Network
       const model = tf.sequential();
       
-      // Input layer + LSTM layer
+      // Input layer + LSTM layer (upgraded input shape from [10, 63] to [10, 126])
       model.add(tf.layers.lstm({
         units: hiddenNodes1,
-        inputShape: [10, 63],
+        inputShape: [10, 126],
         returnSequences: false,
         kernelInitializer: 'glorotNormal'
       }));
@@ -451,10 +478,12 @@ export default function ModelTrainer({
     setSuccessMsg(null);
 
     try {
-      // Warm up model with 3D sequence
-      const warmUpSequence = Array(10).fill(new Array(63).fill(0));
+      // Warm up model with dynamic 3D sequence matching input dimension
+      const firstLayerShape = (activeModel.layers[0] as any).inputSpec?.[0]?.shape || [];
+      const modelInputDim = firstLayerShape[firstLayerShape.length - 1] || 126;
+      const warmUpSequence = Array(10).fill(new Array(modelInputDim).fill(0));
       tf.tidy(() => {
-        const tensor = tf.tensor3d([warmUpSequence], [1, 10, 63]);
+        const tensor = tf.tensor3d([warmUpSequence], [1, 10, modelInputDim]);
         activeModel.predict(tensor);
       });
 
@@ -468,11 +497,11 @@ export default function ModelTrainer({
 
         tf.tidy(() => {
           for (let j = 0; j < batchChunk; j++) {
-            // Generate sequence of 10 mock frames
+            // Generate sequence of 10 mock frames with correct dimension
             const mockSequence = Array.from({ length: 10 }, () => 
-              Array.from({ length: 63 }, () => Math.random() * 2 - 1)
+              Array.from({ length: modelInputDim }, () => Math.random() * 2 - 1)
             );
-            const inputTensor = tf.tensor3d([mockSequence], [1, 10, 63]);
+            const inputTensor = tf.tensor3d([mockSequence], [1, 10, modelInputDim]);
             
             const start = performance.now();
             const prediction = activeModel.predict(inputTensor) as tf.Tensor;
@@ -1269,10 +1298,10 @@ export default function ModelTrainer({
                     <p className="pl-4">features.push(joint.x - wristCoordinate.x); // X displacement relative to wrist</p>
                     <p className="pl-4">features.push(joint.y - wristCoordinate.y); // Y displacement relative to wrist</p>
                     <p className="pl-4">features.push(joint.z - wristCoordinate.z); // Z displacement relative to wrist</p>
-                    <p>&#125;); // Generates exactly 63 independent relative normalized coordinate vectors</p>
+                    <p>&#125;); // Generates exactly 126 coordinates for dual-hand vectors (63 values per hand)</p>
                   </div>
                   <p>
-                    By grounding each finger joint's placement strictly against the wrist position, we isolate the biological posture shape from its frame coordinates.
+                    By grounding each finger joint's placement strictly against the wrist position of each respective hand, we isolate the biological posture shape from its frame coordinates.
                   </p>
                 </div>
               )}
@@ -1281,12 +1310,12 @@ export default function ModelTrainer({
                 <div className="space-y-4" id="explain-step-1">
                   <h5 className="text-sm font-bold text-[#2d2d28] dark:text-white">Temporal Sequence & LSTM Network Structure</h5>
                   <p>
-                    Our upgraded Long Short-Term Memory (LSTM) Recurrent Neural Network takes exactly 10 consecutive frames of 3D hand coordinates to recognize dynamic gestures and sequence-based sign actions.
+                    Our upgraded Long Short-Term Memory (LSTM) Recurrent Neural Network takes exactly 10 consecutive frames of 3D dual-hand hand coordinates to recognize dynamic gestures and sequence-based sign actions.
                   </p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4" id="explain-topology-grid">
                     <div className="bg-white dark:bg-[#25252a] p-3.5 rounded-xl border border-[#ecece0] dark:border-[#2d2d32]">
                       <span className="text-[10px] uppercase font-bold tracking-widest text-[#7a7a6a] font-mono">Layer 1: Input Sequence</span>
-                      <p className="font-bold text-[#2d2d28] dark:text-white mt-1">[10 Timesteps, 63 Coordinates]</p>
+                      <p className="font-bold text-[#2d2d28] dark:text-white mt-1">[10 Timesteps, 126 Coordinates]</p>
                       <p className="text-[11px] text-[#7a7a6a] dark:text-[#a1a1aa] mt-1">Skeletal landmarks from 10 consecutive frames, shifting relative to the wrist and scaling dynamically.</p>
                     </div>
                     <div className="bg-white dark:bg-[#25252a] p-3.5 rounded-xl border border-[#ecece0] dark:border-[#2d2d32]">

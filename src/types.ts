@@ -43,6 +43,10 @@ export interface CollectedSample {
   timestamp: string;
   landmarks: Array<{x: number, y: number, z: number}>;
   sequenceOfLandmarks?: Array<Array<{x: number, y: number, z: number}>>;
+  leftHandLandmarks?: Array<{x: number, y: number, z: number}>;
+  rightHandLandmarks?: Array<{x: number, y: number, z: number}>;
+  sequenceOfLeftHandLandmarks?: Array<Array<{x: number, y: number, z: number}>>;
+  sequenceOfRightHandLandmarks?: Array<Array<{x: number, y: number, z: number}>>;
   handType?: string;
 }
 
