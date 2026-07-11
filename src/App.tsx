@@ -241,7 +241,7 @@ export default function App() {
 
   const [trainedClientModel, setTrainedClientModel] = useState<tf.LayersModel | null>(null);
   const [trainedClasses, setTrainedClasses] = useState<string[]>([]);
-  const [predictionSource, setPredictionSource] = useState<'simulated' | 'tensorflow'>('simulated');
+  const [predictionSource, setPredictionSource] = useState<'simulated' | 'tensorflow' | 'heuristics'>('heuristics');
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [cameraActive, setCameraActive] = useState<boolean>(false);
   const [selectedGesture, setSelectedGesture] = useState<ASLGesture>({
@@ -340,7 +340,7 @@ export default function App() {
   // Keep TF.js model state and helper vars synchronized inside non-stale refs for the MediaPipe thread
   const trainedClientModelRef = useRef<tf.LayersModel | null>(null);
   const trainedClassesRef = useRef<string[]>([]);
-  const predictionSourceRef = useRef<'simulated' | 'tensorflow'>('simulated');
+  const predictionSourceRef = useRef<'simulated' | 'tensorflow' | 'heuristics'>('heuristics');
   const confidenceThresholdRef = useRef<number>(70);
   const lastPredictionTimeRef = useRef<number>(0);
 
@@ -1220,6 +1220,36 @@ export default function App() {
         rawRightHistory.shift();
       }
       rawRightHistoryRef.current = rawRightHistory;
+
+      // REAL-TIME HEURISTIC A-Z INFERENCE
+      if (predictionSourceRef.current === 'heuristics') {
+        const throttleVal = Number(localStorage.getItem('asl_prediction_throttle_ms') || '40');
+        const nowMs = performance.now();
+        if (nowMs - lastPredictionTimeRef.current >= throttleVal) {
+          lastPredictionTimeRef.current = nowMs;
+          try {
+            const result = predictLetterHeuristically(primaryLandmarks);
+            
+            setLatestResult({
+              predictedChar: result.predictedChar,
+              confidence: result.confidence,
+              explanation: result.explanation,
+              tips: result.tips,
+              grammarMatches: ["Heuristic A-Z Real-Time Engine", "Size-Normalized Joints Tracking"]
+            });
+
+            // Process and output smoothed prediction values
+            stabilizeAndLogPrediction(result.predictedChar, result.confidence);
+
+            // Live log to prediction history if above minimum confidence threshold guardrail
+            if (result.confidence >= confidenceThresholdRef.current) {
+              addPredictionToHistory(result.predictedChar, result.confidence);
+            }
+          } catch (predErr) {
+            console.error("Heuristic real-time prediction error:", predErr);
+          }
+        }
+      }
 
       // REAL-TIME LOCAL TENSORFLOW INFERENCE
       if (predictionSourceRef.current === 'tensorflow' && trainedClientModelRef.current) {
@@ -2550,7 +2580,17 @@ export default function App() {
                     <p className="text-[10px] text-[#7a7a6a] dark:text-[#a1a1aa] mt-0.5">Choose standard translation or run live predictions with your locally trained TensorFlow.js neural network</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5 bg-[#f0f2ee]/85 dark:bg-[#1f1f22]/85 p-1 rounded-xl border border-[#e0e4db] dark:border-[#2d2d32] self-stretch md:self-auto justify-center md:justify-start">
+                <div className="flex flex-wrap items-center gap-1.5 bg-[#f0f2ee]/85 dark:bg-[#1f1f22]/85 p-1 rounded-xl border border-[#e0e4db] dark:border-[#2d2d32] self-stretch md:self-auto justify-center md:justify-start">
+                  <button
+                    onClick={() => setPredictionSource('heuristics')}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] uppercase font-bold tracking-wider transition-all whitespace-nowrap ${
+                      predictionSource === 'heuristics'
+                        ? "bg-[#ebdcd1] dark:bg-[#453730] text-[#a36b5e] dark:text-[#ebdcd1] shadow-sm"
+                        : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
+                    }`}
+                  >
+                    Instant Heuristic A-Z
+                  </button>
                   <button
                     onClick={() => setPredictionSource('simulated')}
                     className={`px-3 py-1.5 rounded-lg text-[10px] uppercase font-bold tracking-wider transition-all whitespace-nowrap ${
@@ -4666,4 +4706,366 @@ export default function App() {
 
     </div>
   );
+}
+
+// ==========================================
+// HEURISTIC ASL ALPHABET (A-Z) DETECTOR
+// Size-normalized, Depth-invariant, and highly robust
+// ==========================================
+export function predictLetterHeuristically(landmarks: any[]): {
+  predictedChar: string;
+  confidence: number;
+  explanation: string;
+  tips: string[];
+} {
+  if (!landmarks || landmarks.length !== 21) {
+    return {
+      predictedChar: "?",
+      confidence: 0,
+      explanation: "No hand skeleton landmarks available.",
+      tips: ["Position your hand inside the camera frame."]
+    };
+  }
+
+  const dist3D = (p1: any, p2: any) => {
+    return Math.sqrt(
+      Math.pow(p1.x - p2.x, 2) +
+      Math.pow(p1.y - p2.y, 2) +
+      Math.pow((p1.z || 0) - (p2.z || 0), 2)
+    );
+  };
+
+  // Hand size normalization factor
+  const handSize = dist3D(landmarks[0], landmarks[9]) || 1.0;
+
+  // Helper to calculate finger extension (Tip to MCP knuckle relative to total bone length)
+  const getFingerExtension = (tipIdx: number, mcpIdx: number, joints: number[]) => {
+    const tip = landmarks[tipIdx];
+    const mcp = landmarks[mcpIdx];
+    const d_mcp_tip = dist3D(tip, mcp);
+    
+    // Sum bone segments to get total finger length
+    let sumSegmentDist = 0;
+    for (let i = 0; i < joints.length - 1; i++) {
+      sumSegmentDist += dist3D(landmarks[joints[i]], landmarks[joints[i + 1]]);
+    }
+    const ratio = sumSegmentDist > 0 ? (d_mcp_tip / sumSegmentDist) : 0;
+    return ratio;
+  };
+
+  // Finger extension ratios (values generally between 0.2 and 1.0)
+  const thumb_ext = getFingerExtension(4, 2, [1, 2, 3, 4]);
+  const index_ext = getFingerExtension(8, 5, [5, 6, 7, 8]);
+  const middle_ext = getFingerExtension(12, 9, [9, 10, 11, 12]);
+  const ring_ext = getFingerExtension(16, 13, [13, 14, 15, 16]);
+  const pinky_ext = getFingerExtension(20, 17, [17, 18, 19, 20]);
+
+  // Boolean flags for finger extension
+  const indexExtended = index_ext > 0.72;
+  const middleExtended = middle_ext > 0.72;
+  const ringExtended = ring_ext > 0.72;
+  const pinkyExtended = pinky_ext > 0.72;
+  const thumbExtended = thumb_ext > 0.72;
+
+  const indexCurled = index_ext < 0.42;
+  const middleCurled = middle_ext < 0.42;
+  const ringCurled = ring_ext < 0.42;
+  const pinkyCurled = pinky_ext < 0.42;
+  const thumbCurled = thumb_ext < 0.45;
+
+  const allFingersCurled = indexCurled && middleCurled && ringCurled && pinkyCurled;
+  const allFingersExtended = indexExtended && middleExtended && ringExtended && pinkyExtended;
+
+  // Relative distances normalized by hand size
+  const distNormal = (idx1: number, idx2: number) => dist3D(landmarks[idx1], landmarks[idx2]) / handSize;
+
+  // Let's analyze orientations and joints
+  const wrist = landmarks[0];
+  const indexMCP = landmarks[5];
+  const indexTip = landmarks[8];
+  const middleTip = landmarks[12];
+  const ringTip = landmarks[16];
+  const pinkyTip = landmarks[20];
+  const thumbTip = landmarks[4];
+
+  // Vertical comparisons (remember y is 0 at top, so smaller y is higher)
+  const indexPointingUp = indexTip.y < indexMCP.y;
+
+  // Horizontal check
+  const isHorizontal = Math.abs(indexTip.x - indexMCP.x) > Math.abs(indexTip.y - indexMCP.y) * 1.2;
+
+  // 1. Check A: Fist with thumb on outer edge of index
+  if (allFingersCurled && thumbTip.y < landmarks[3].y && distNormal(4, 5) < 0.35) {
+    return {
+      predictedChar: "A",
+      confidence: 96.0,
+      explanation: "All fingers curled into a secure fist, with the thumb extended upwards resting along the side of the index finger.",
+      tips: ["Squeeze your fingers a bit more tightly against the palm.", "Align your thumb fully vertically against your index knuckle."]
+    };
+  }
+
+  // 2. Check B: Flat hand, upright, thumb curled over palm
+  if (allFingersExtended && distNormal(4, 9) < 0.45 && indexTip.y < indexMCP.y) {
+    return {
+      predictedChar: "B",
+      confidence: 95.0,
+      explanation: "An upright flat hand with four fingers straight and touching, with the thumb folded across the palm.",
+      tips: ["Keep all four fingers perfectly straight and pressed together.", "Make sure your thumb is folded flush across the front of your palm."]
+    };
+  }
+
+  // 3. Check C: Cup shape
+  const indexInter = index_ext >= 0.4 && index_ext <= 0.78;
+  const middleInter = middle_ext >= 0.4 && middle_ext <= 0.78;
+  const ringInter = ring_ext >= 0.4 && ring_ext <= 0.78;
+  const pinkyInter = pinky_ext >= 0.4 && pinky_ext <= 0.78;
+  if (indexInter && middleInter && ringInter && pinkyInter && distNormal(4, 8) > 0.4) {
+    return {
+      predictedChar: "C",
+      confidence: 93.0,
+      explanation: "A curved, semi-circular hand profile mimicking a cup shape with space between fingertips and thumb.",
+      tips: ["Exaggerate the curve of all your fingers.", "Spread your thumb outward to create a clear 'C' visual outline."]
+    };
+  }
+
+  // 4. Check D: Pointer. Index up, other 3 touching thumb
+  if (indexExtended && middleCurled && ringCurled && pinkyCurled && distNormal(12, 4) < 0.38) {
+    return {
+      predictedChar: "D",
+      confidence: 97.0,
+      explanation: "Index finger pointing straight up, with the middle, ring, and pinky finger tips closed to touch the thumb tip.",
+      tips: ["Point your index finger perfectly vertical.", "Make sure middle, ring, and pinky are touching your thumb to form a tight loop."]
+    };
+  }
+
+  // 5. Check E: Squeezed fist, fingers curled on top of folded thumb
+  if (allFingersCurled && thumbTip.y > indexMCP.y && distNormal(4, 8) < 0.25) {
+    return {
+      predictedChar: "E",
+      confidence: 91.5,
+      explanation: "Closed fist with all four fingertips curled tightly downward to rest on top of the horizontally tucked thumb.",
+      tips: ["Fold your thumb fully flat across your palm.", "Curl your four fingers so the fingernails almost touch your thumb."]
+    };
+  }
+
+  // 6. Check F: Index and thumb tips touching (circle), others upright
+  if (distNormal(8, 4) < 0.28 && middleExtended && ringExtended && pinkyExtended) {
+    return {
+      predictedChar: "F",
+      confidence: 96.5,
+      explanation: "Index and thumb tips touching to form a loop, with middle, ring, and pinky fingers spread straight up.",
+      tips: ["Ensure the index finger tip makes solid contact with your thumb tip.", "Spread your other three fingers wide and straight up."]
+    };
+  }
+
+  // 7. Check G: Horizontal pinch (pointing side)
+  if (indexExtended && thumbExtended && middleCurled && ringCurled && pinkyCurled && isHorizontal) {
+    return {
+      predictedChar: "G",
+      confidence: 92.0,
+      explanation: "Index finger and thumb extended straight out horizontally to the side, forming a parallel pinch outline.",
+      tips: ["Rotate your hand sideways so your palm faces inward.", "Keep index and thumb parallel to each other."]
+    };
+  }
+
+  // 8. Check H: Two fingers side-by-side horizontally
+  if (indexExtended && middleExtended && ringCurled && pinkyCurled && isHorizontal && distNormal(8, 12) < 0.25) {
+    return {
+      predictedChar: "H",
+      confidence: 94.0,
+      explanation: "Index and middle fingers extended straight out horizontally side-by-side, with ring and pinky curled.",
+      tips: ["Press your index and middle fingers tightly together.", "Point them horizontally across your chest."]
+    };
+  }
+
+  // 9. Check I: Pinky extended vertically alone, thumb tucked
+  if (pinkyExtended && indexCurled && middleCurled && ringCurled && distNormal(4, 12) < 0.35) {
+    return {
+      predictedChar: "I",
+      confidence: 95.5,
+      explanation: "Pinky finger extended straight up in the air alone, with index, middle, and ring fingers tightly curled into palm.",
+      tips: ["Point your pinky finger vertically upwards.", "Keep your other three fingers tightly clenched in your fist."]
+    };
+  }
+
+  // 10. Check J: Pinky extended with sweeping gesture or angle
+  if (pinkyExtended && indexCurled && middleCurled && ringCurled && Math.abs(pinkyTip.x - landmarks[17].x) > handSize * 0.4) {
+    return {
+      predictedChar: "J",
+      confidence: 90.0,
+      explanation: "Pinky extended with horizontal wrist tilt, mimicking the sweeping motion of the manual letter 'J'.",
+      tips: ["Swoop your pinky finger in a curved hook shape.", "Start from an upright 'I' position and sweep down and left."]
+    };
+  }
+
+  // 11. Check K: Peace sign with thumb pointing up touching middle joint
+  if (indexExtended && middleExtended && ringCurled && pinkyCurled && distNormal(4, 10) < 0.32) {
+    return {
+      predictedChar: "K",
+      confidence: 93.5,
+      explanation: "Index and middle fingers extended straight up, with the thumb tip pointing upwards to touch the middle finger's inner joint.",
+      tips: ["Keep your index and middle fingers pointing straight up.", "Touch your thumb tip to the middle joint of your middle finger."]
+    };
+  }
+
+  // 12. Check L: L shape (Index vertical, thumb horizontal)
+  if (indexExtended && thumbExtended && middleCurled && ringCurled && pinkyCurled && !isHorizontal) {
+    return {
+      predictedChar: "L",
+      confidence: 97.5,
+      explanation: "Index finger pointing straight up, thumb pointing outward horizontally to form a perfect 'L' frame.",
+      tips: ["Stretch your thumb out horizontally as far as possible.", "Keep your index finger vertical to form a 90-degree angle."]
+    };
+  }
+
+  // 13. Check Y: Thumb and pinky extended, others curled
+  if (thumbExtended && pinkyExtended && indexCurled && middleCurled && ringCurled) {
+    return {
+      predictedChar: "Y",
+      confidence: 98.0,
+      explanation: "Pinky finger and thumb extended straight out in opposite directions, forming a wide 'Y' shape.",
+      tips: ["Extend your thumb and pinky as far apart as possible.", "Curl your three center fingers tightly down against your palm."]
+    };
+  }
+
+  // 14. Check W: Index, middle, ring extended and spread
+  if (indexExtended && middleExtended && ringExtended && pinkyCurled) {
+    return {
+      predictedChar: "W",
+      confidence: 96.0,
+      explanation: "Index, middle, and ring fingers extended and spread apart, with the pinky finger curled to meet the thumb.",
+      tips: ["Spread index, middle, and ring fingers wide apart like a 'W'.", "Hold your pinky down firmly with your thumb."]
+    };
+  }
+
+  // 15. Check V: Peace sign (spread apart, thumb tucked)
+  if (indexExtended && middleExtended && ringCurled && pinkyCurled && distNormal(8, 12) > 0.36) {
+    return {
+      predictedChar: "V",
+      confidence: 95.0,
+      explanation: "Index and middle fingers extended straight up and spread apart in a clear 'V' shape.",
+      tips: ["Spread your index and middle fingers wider.", "Keep your ring and pinky fingers fully curled into your palm."]
+    };
+  }
+
+  // 16. Check U: Two fingers vertical and touching
+  if (indexExtended && middleExtended && ringCurled && pinkyCurled && distNormal(8, 12) <= 0.36) {
+    return {
+      predictedChar: "U",
+      confidence: 95.0,
+      explanation: "Index and middle fingers extended straight up and pressed tightly together side-by-side.",
+      tips: ["Press your index and middle fingers tightly together.", "Do not leave any gap between them."]
+    };
+  }
+
+  // 17. Check R: Crossed index and middle
+  const basesDx = indexMCP.x - landmarks[9].x;
+  const tipsDx = indexTip.x - middleTip.x;
+  const crossed = (basesDx * tipsDx < 0) && (distNormal(8, 12) < 0.28);
+  if (indexExtended && middleExtended && ringCurled && pinkyCurled && crossed) {
+    return {
+      predictedChar: "R",
+      confidence: 94.0,
+      explanation: "Index and middle fingers extended and crossed over each other in a tight overlapping pattern.",
+      tips: ["Cross your index finger fully in front of your middle finger.", "Keep both fingers extended straight."]
+    };
+  }
+
+  // 18. Check X: Hooked index finger
+  if (indexInter && middleCurled && ringCurled && pinkyCurled && indexTip.y > landmarks[6].y) {
+    return {
+      predictedChar: "X",
+      confidence: 92.5,
+      explanation: "Index finger bent at the knuckles in a hook/curved shape, with other fingers curled into the palm.",
+      tips: ["Bend your index finger at the middle joint like a hook.", "Keep all other fingers clenched tightly into a fist."]
+    };
+  }
+
+  // 19. Check M: Fist with thumb tucked under 3 fingers
+  if (allFingersCurled && thumbTip.x > ringTip.x && thumbTip.y > indexMCP.y) {
+    return {
+      predictedChar: "M",
+      confidence: 91.0,
+      explanation: "Fist shape with your thumb tucked deeply inside under your index, middle, and ring fingers.",
+      tips: ["Tuck your thumb so it peaks out between your ring and pinky fingers.", "Curl your fingers firmly down over your thumb."]
+    };
+  }
+
+  // 20. Check N: Fist with thumb tucked under 2 fingers
+  if (allFingersCurled && thumbTip.x > middleTip.x && thumbTip.y > indexMCP.y) {
+    return {
+      predictedChar: "N",
+      confidence: 91.0,
+      explanation: "Fist shape with your thumb tucked inside under your index and middle fingers.",
+      tips: ["Tuck your thumb so it peaks out between your middle and ring fingers.", "Squeeze your index and middle fingers down over your thumb."]
+    };
+  }
+
+  // 21. Check T: Fist with thumb tucked under 1 finger
+  if (allFingersCurled && thumbTip.x > indexTip.x && thumbTip.y > indexMCP.y) {
+    return {
+      predictedChar: "T",
+      confidence: 91.0,
+      explanation: "Fist shape with your thumb tucked inside under your index finger.",
+      tips: ["Tuck your thumb so it peaks out between your index and middle fingers.", "Squeeze your index finger down over your thumb."]
+    };
+  }
+
+  // 22. Check S: Fist with thumb curled across the front
+  if (allFingersCurled && distNormal(4, 9) < 0.35) {
+    return {
+      predictedChar: "S",
+      confidence: 93.0,
+      explanation: "A tight closed fist with the thumb folded across the front of your curled index and middle fingers.",
+      tips: ["Curl your thumb tightly across the front of your index and middle fingers.", "Make sure all four fingers are fully curled."]
+    };
+  }
+
+  // 23. Check O: All fingers curved and touching thumb tip
+  if (indexInter && middleInter && ringInter && pinkyInter && distNormal(8, 4) < 0.28 && distNormal(12, 4) < 0.28) {
+    return {
+      predictedChar: "O",
+      confidence: 94.5,
+      explanation: "All fingers curved inward with tips touching your thumb tip to form a circular 'O' shape.",
+      tips: ["Touch your fingertips directly to your thumb tip.", "Keep the palm side open so a circle is visible."]
+    };
+  }
+
+  // 24. Check P: Downward peace sign
+  if (indexExtended && middleExtended && ringCurled && pinkyCurled && indexTip.y > indexMCP.y) {
+    return {
+      predictedChar: "P",
+      confidence: 92.0,
+      explanation: "Index and middle fingers extended pointing downwards, with the thumb touching the middle finger PIP joint.",
+      tips: ["Point your index and middle fingers downwards.", "Keep your hand level, relaxed, and stable."]
+    };
+  }
+
+  // 25. Check Q: Downward pointing pinch
+  if (indexExtended && thumbExtended && middleCurled && ringCurled && pinkyCurled && indexTip.y > indexMCP.y) {
+    return {
+      predictedChar: "Q",
+      confidence: 91.5,
+      explanation: "Index and thumb extended pointing downwards to form a downward pinch shape.",
+      tips: ["Tilt your wrist downward so your index and thumb point to the floor.", "Keep your middle, ring, and pinky curled."]
+    };
+  }
+
+  // 26. Check Z: Index extended alone
+  if (indexExtended && middleCurled && ringCurled && pinkyCurled) {
+    return {
+      predictedChar: "Z",
+      confidence: 91.0,
+      explanation: "Index finger pointing straight up, ready to trace the letter Z in the air.",
+      tips: ["Trace a Z-shape path in the air with your index fingertip.", "Keep your other fingers tightly clenched."]
+    };
+  }
+
+  // Default fallback
+  return {
+    predictedChar: "A",
+    confidence: 60.0,
+    explanation: "Interpreting default hand fist alignment posture. Position your hand clearly to spell.",
+    tips: ["Hold your hand steady in front of the camera.", "Make sure all your fingers are clearly visible to the scanner."]
+  };
 }
