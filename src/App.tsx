@@ -241,7 +241,7 @@ export default function App() {
 
   const [trainedClientModel, setTrainedClientModel] = useState<tf.LayersModel | null>(null);
   const [trainedClasses, setTrainedClasses] = useState<string[]>([]);
-  const [predictionSource, setPredictionSource] = useState<'simulated' | 'tensorflow' | 'heuristics'>('heuristics');
+  const [predictionSource, setPredictionSource] = useState<'simulated' | 'tensorflow' | 'heuristics' | 'heuristics-numbers'>('heuristics');
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [cameraActive, setCameraActive] = useState<boolean>(false);
   const [selectedGesture, setSelectedGesture] = useState<ASLGesture>({
@@ -340,7 +340,7 @@ export default function App() {
   // Keep TF.js model state and helper vars synchronized inside non-stale refs for the MediaPipe thread
   const trainedClientModelRef = useRef<tf.LayersModel | null>(null);
   const trainedClassesRef = useRef<string[]>([]);
-  const predictionSourceRef = useRef<'simulated' | 'tensorflow' | 'heuristics'>('heuristics');
+  const predictionSourceRef = useRef<'simulated' | 'tensorflow' | 'heuristics' | 'heuristics-numbers'>('heuristics');
   const confidenceThresholdRef = useRef<number>(70);
   const lastPredictionTimeRef = useRef<number>(0);
 
@@ -1247,6 +1247,36 @@ export default function App() {
             }
           } catch (predErr) {
             console.error("Heuristic real-time prediction error:", predErr);
+          }
+        }
+      }
+
+      // REAL-TIME HEURISTIC 0–9 INFERENCE
+      if (predictionSourceRef.current === 'heuristics-numbers') {
+        const throttleVal = Number(localStorage.getItem('asl_prediction_throttle_ms') || '40');
+        const nowMs = performance.now();
+        if (nowMs - lastPredictionTimeRef.current >= throttleVal) {
+          lastPredictionTimeRef.current = nowMs;
+          try {
+            const result = predictNumberHeuristically(primaryLandmarks);
+            
+            setLatestResult({
+              predictedChar: result.predictedChar,
+              confidence: result.confidence,
+              explanation: result.explanation,
+              tips: result.tips,
+              grammarMatches: ["Heuristic 0–9 Real-Time Engine", "Size-Normalized Joints Tracking"]
+            });
+
+            // Process and output smoothed prediction values
+            stabilizeAndLogPrediction(result.predictedChar, result.confidence);
+
+            // Live log to prediction history if above minimum confidence threshold guardrail
+            if (result.confidence >= confidenceThresholdRef.current) {
+              addPredictionToHistory(result.predictedChar, result.confidence);
+            }
+          } catch (predErr) {
+            console.error("Heuristic numbers real-time prediction error:", predErr);
           }
         }
       }
@@ -2590,6 +2620,16 @@ export default function App() {
                     }`}
                   >
                     Instant Heuristic A-Z
+                  </button>
+                  <button
+                    onClick={() => setPredictionSource('heuristics-numbers')}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] uppercase font-bold tracking-wider transition-all whitespace-nowrap ${
+                      predictionSource === 'heuristics-numbers'
+                        ? "bg-[#ebdcd1] dark:bg-[#453730] text-[#a36b5e] dark:text-[#ebdcd1] shadow-sm"
+                        : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
+                    }`}
+                  >
+                    Instant Heuristic 0–9
                   </button>
                   <button
                     onClick={() => setPredictionSource('simulated')}
@@ -5067,5 +5107,198 @@ export function predictLetterHeuristically(landmarks: any[]): {
     confidence: 60.0,
     explanation: "Interpreting default hand fist alignment posture. Position your hand clearly to spell.",
     tips: ["Hold your hand steady in front of the camera.", "Make sure all your fingers are clearly visible to the scanner."]
+  };
+}
+
+// ==========================================
+// HEURISTIC ASL NUMBER (0-9) DETECTOR
+// Size-normalized, Depth-invariant, and highly robust
+// ==========================================
+export function predictNumberHeuristically(landmarks: any[]): {
+  predictedChar: string;
+  confidence: number;
+  explanation: string;
+  tips: string[];
+} {
+  if (!landmarks || landmarks.length !== 21) {
+    return {
+      predictedChar: "?",
+      confidence: 0,
+      explanation: "No hand skeleton landmarks available.",
+      tips: ["Position your hand inside the camera frame."]
+    };
+  }
+
+  const dist3D = (p1: any, p2: any) => {
+    return Math.sqrt(
+      Math.pow(p1.x - p2.x, 2) +
+      Math.pow(p1.y - p2.y, 2) +
+      Math.pow((p1.z || 0) - (p2.z || 0), 2)
+    );
+  };
+
+  // Hand size normalization factor
+  const handSize = dist3D(landmarks[0], landmarks[9]) || 1.0;
+
+  // Helper to calculate finger extension
+  const getFingerExtension = (tipIdx: number, mcpIdx: number, joints: number[]) => {
+    const tip = landmarks[tipIdx];
+    const mcp = landmarks[mcpIdx];
+    const d_mcp_tip = dist3D(tip, mcp);
+    
+    let sumSegmentDist = 0;
+    for (let i = 0; i < joints.length - 1; i++) {
+      sumSegmentDist += dist3D(landmarks[joints[i]], landmarks[joints[i + 1]]);
+    }
+    const ratio = sumSegmentDist > 0 ? (d_mcp_tip / sumSegmentDist) : 0;
+    return ratio;
+  };
+
+  const thumb_ext = getFingerExtension(4, 2, [1, 2, 3, 4]);
+  const index_ext = getFingerExtension(8, 5, [5, 6, 7, 8]);
+  const middle_ext = getFingerExtension(12, 9, [9, 10, 11, 12]);
+  const ring_ext = getFingerExtension(16, 13, [13, 14, 15, 16]);
+  const pinky_ext = getFingerExtension(20, 17, [17, 18, 19, 20]);
+
+  // Boolean flags for finger extension
+  const indexExtended = index_ext > 0.72;
+  const middleExtended = middle_ext > 0.72;
+  const ringExtended = ring_ext > 0.72;
+  const pinkyExtended = pinky_ext > 0.72;
+  const thumbExtended = thumb_ext > 0.70;
+
+  const indexCurled = index_ext < 0.42;
+  const middleCurled = middle_ext < 0.42;
+  const ringCurled = ring_ext < 0.42;
+  const pinkyCurled = pinky_ext < 0.42;
+
+  const distNormal = (idx1: number, idx2: number) => dist3D(landmarks[idx1], landmarks[idx2]) / handSize;
+
+  // Let's analyze joint distances to thumb tip (landmark 4)
+  const d_thumb_index = distNormal(4, 8);
+  const d_thumb_middle = distNormal(4, 12);
+  const d_thumb_ring = distNormal(4, 16);
+  const d_thumb_pinky = distNormal(4, 20);
+
+  // Distances between finger tips to measure spread
+  const d_index_middle = distNormal(8, 12);
+
+  // Heuristic predictions
+  // 1. Digit '0'
+  // All fingers curled, tips very close to thumb tip
+  if (indexCurled && middleCurled && ringCurled && pinkyCurled && d_thumb_index < 0.35 && d_thumb_middle < 0.35) {
+    return {
+      predictedChar: "0",
+      confidence: Math.round(Math.max(10, Math.min(99, 92 - (d_thumb_index + d_thumb_middle) * 30))),
+      explanation: "All fingertips are fisted and curled together, touching your thumb tip to form a closed, circular '0'.",
+      tips: ["Excellent. Keep your fingers rounded and touching your thumb tip."]
+    };
+  }
+
+  // 2. Digit '5'
+  // All five fingers fanned out straight and extended
+  if (indexExtended && middleExtended && ringExtended && pinkyExtended && thumbExtended && d_index_middle > 0.22) {
+    return {
+      predictedChar: "5",
+      confidence: 96,
+      explanation: "All five fingers are fanned wide and standing straight, representing the fanned-out digit '5'.",
+      tips: ["Perfect fanning. Splay all your fingers wide to register a clear 5."]
+    };
+  }
+
+  // 3. Digit '4'
+  // Index, middle, ring, pinky fanned out, thumb folded
+  if (indexExtended && middleExtended && ringExtended && pinkyExtended && !thumbExtended) {
+    return {
+      predictedChar: "4",
+      confidence: 95,
+      explanation: "Four fingers are standing straight and spread wide, with the thumb tucked flat against your palm.",
+      tips: ["Make sure your thumb is tucked tightly against your palm, keeping the other four fanned."]
+    };
+  }
+
+  // 4. Digit '3'
+  // Thumb, index, middle extended, ring and pinky curled
+  if (thumbExtended && indexExtended && middleExtended && ringCurled && pinkyCurled) {
+    return {
+      predictedChar: "3",
+      confidence: 96,
+      explanation: "Your thumb, index, and middle fingers are fanned out while the ring and pinky fingers are fully folded.",
+      tips: ["In ASL, '3' is signed with the thumb extended along with the index and middle fingers."]
+    };
+  }
+
+  // 5. Digit '2'
+  // Index and middle extended, other fingers fisted (like peace sign)
+  if (indexExtended && middleExtended && ringCurled && pinkyCurled && !thumbExtended) {
+    return {
+      predictedChar: "2",
+      confidence: 95,
+      explanation: "Your index and middle fingers are fanned open in a V-shape, and other fingers are folded.",
+      tips: ["Keep your ring and pinky fingers pinned down by your thumb."]
+    };
+  }
+
+  // 6. Digit '1'
+  // Index extended alone, middle, ring, pinky curled, thumb tucked
+  if (indexExtended && middleCurled && ringCurled && pinkyCurled && d_thumb_index > 0.35) {
+    return {
+      predictedChar: "1",
+      confidence: 96,
+      explanation: "Only your index finger is extended straight up, with other fingers curled into a fist.",
+      tips: ["Hold your index finger up vertically and keep your middle finger firmly closed."]
+    };
+  }
+
+  // 7. Digit '9'
+  // Index and thumb touching, middle, ring, pinky fanned and extended
+  if (indexCurled && middleExtended && ringExtended && pinkyExtended && d_thumb_index < 0.28) {
+    return {
+      predictedChar: "9",
+      confidence: Math.round(Math.max(10, Math.min(99, 94 - d_thumb_index * 20))),
+      explanation: "Your index and thumb tips are joined together to form a loop, with other fingers extended straight up.",
+      tips: ["Touch your index finger directly to your thumb tip to form the digit '9'."]
+    };
+  }
+
+  // 8. Digit '6'
+  // Pinky and thumb touching, index, middle, ring fanned and extended
+  if (indexExtended && middleExtended && ringExtended && pinkyCurled && d_thumb_pinky < 0.28) {
+    return {
+      predictedChar: "6",
+      confidence: Math.round(Math.max(10, Math.min(99, 93 - d_thumb_pinky * 20))),
+      explanation: "Your pinky and thumb tips are touching, leaving the other three fanned fingers standing straight up.",
+      tips: ["Touch only your pinky tip to your thumb tip to declare the digit '6'."]
+    };
+  }
+
+  // 9. Digit '7'
+  // Ring and thumb touching, index, middle, pinky fanned and extended
+  if (indexExtended && middleExtended && ringCurled && pinkyExtended && d_thumb_ring < 0.28) {
+    return {
+      predictedChar: "7",
+      confidence: Math.round(Math.max(10, Math.min(99, 93 - d_thumb_ring * 20))),
+      explanation: "Your ring finger and thumb tips are joined, while the index, middle, and pinky fingers are fanned.",
+      tips: ["Pinch your ring finger tip and thumb tip together to represent '7'."]
+    };
+  }
+
+  // 10. Digit '8'
+  // Middle and thumb touching, index, ring, pinky fanned and extended
+  if (indexExtended && middleCurled && ringExtended && pinkyExtended && d_thumb_middle < 0.28) {
+    return {
+      predictedChar: "8",
+      confidence: Math.round(Math.max(10, Math.min(99, 94 - d_thumb_middle * 20))),
+      explanation: "Your middle finger and thumb tips are joined, while the index, ring, and pinky fingers are fanned.",
+      tips: ["Pinch your middle finger tip and thumb tip together to represent '8'."]
+    };
+  }
+
+  // Default fallback for numbers
+  return {
+    predictedChar: "None",
+    confidence: 15,
+    explanation: "Hand shape does not fully match a clear ASL digit (0 to 9) yet.",
+    tips: ["Hold your hand steady facing the camera.", "Make sure your fingers fanned out correspond to a number (0-9)."]
   };
 }

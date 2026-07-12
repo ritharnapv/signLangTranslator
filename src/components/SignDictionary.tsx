@@ -373,6 +373,166 @@ const DICTIONARY_GESTURES: ASLGesture[] = [
       "Keep other fingers tucked back in fists.",
       "Unlink them, reverse your hand positions, and hook the non-dominant index finger over the dominant index finger."
     ]
+  },
+  {
+    id: "sign_0",
+    char: "0",
+    description: "Form a tight circle with all your fingers and thumb tips touching to resemble the number 0.",
+    category: "numbers",
+    visualTip: "All fingertips touching your thumb to form a hollow circle.",
+    meaning: "The numerical value zero '0'. In ASL, it looks identical to the letter 'O'.",
+    synonyms: ["Zero", "Digit 0", "Empty Set"],
+    difficulty: "easy",
+    grammaticalRole: "Number",
+    steps: [
+      "Curve all four of your fingers inward.",
+      "Bring the tip of your thumb to touch the tips of all four fingers simultaneously.",
+      "Ensure the profile is circular, creating a hollow O-ring space."
+    ]
+  },
+  {
+    id: "sign_1",
+    char: "1",
+    description: "Extend your index finger straight up. Keep other fingers curled in a fist with thumb across palm.",
+    category: "numbers",
+    visualTip: "Single index finger pointed straight up with palm facing inward.",
+    meaning: "The numerical value one '1'.",
+    synonyms: ["One", "Single", "Digit 1"],
+    difficulty: "easy",
+    grammaticalRole: "Number",
+    steps: [
+      "Form a clenched fist with your dominant hand.",
+      "Extend only your index finger straight up vertically.",
+      "Fold your thumb across your curled middle, ring, and pinky fingers."
+    ]
+  },
+  {
+    id: "sign_2",
+    char: "2",
+    description: "Extend your index and middle fingers straight up and spread them. Keep other fingers curled.",
+    category: "numbers",
+    visualTip: "Index and middle fingers extended in a spread V-shape.",
+    meaning: "The numerical value two '2'.",
+    synonyms: ["Two", "Pair", "Digit 2"],
+    difficulty: "easy",
+    grammaticalRole: "Number",
+    steps: [
+      "Form a fist with your dominant hand.",
+      "Extend your index and middle fingers straight up vertically.",
+      "Spread the two extended fingers slightly apart, similar to a peace sign."
+    ]
+  },
+  {
+    id: "sign_3",
+    char: "3",
+    description: "Extend your thumb, index, and middle fingers. Curl your ring and pinky fingers into your palm.",
+    category: "numbers",
+    visualTip: "Thumb, index, and middle fingers extended and spread.",
+    meaning: "The numerical value three '3'. Note that in ASL, '3' uses the thumb instead of the ring finger.",
+    synonyms: ["Three", "Trio", "Digit 3"],
+    difficulty: "medium",
+    grammaticalRole: "Number",
+    steps: [
+      "Clench your ring and pinky fingers into your palm.",
+      "Extend your thumb outward horizontally.",
+      "Extend your index and middle fingers straight up vertically, spreading all three apart."
+    ]
+  },
+  {
+    id: "sign_4",
+    char: "4",
+    description: "Extend all four fingers straight up and spread them wide. Fold your thumb across your palm.",
+    category: "numbers",
+    visualTip: "Four fingers spread straight up, thumb tucked inward.",
+    meaning: "The numerical value four '4'.",
+    synonyms: ["Four", "Digit 4"],
+    difficulty: "easy",
+    grammaticalRole: "Number",
+    steps: [
+      "Extend your index, middle, ring, and pinky fingers straight up.",
+      "Spread the four fingers apart from each other.",
+      "Fold your thumb horizontally across your palm."
+    ]
+  },
+  {
+    id: "sign_5",
+    char: "5",
+    description: "Extend all five fingers straight up and spread them apart as wide as possible.",
+    category: "numbers",
+    visualTip: "An open, fully spread hand with all five fingers straight.",
+    meaning: "The numerical value five '5'.",
+    synonyms: ["Five", "Full Hand", "Digit 5"],
+    difficulty: "easy",
+    grammaticalRole: "Number",
+    steps: [
+      "Open your dominant hand fully.",
+      "Extend all five fingers straight up and outwards.",
+      "Spread all fingers and thumb as wide apart as possible."
+    ]
+  },
+  {
+    id: "sign_6",
+    char: "6",
+    description: "Touch the tip of your pinky finger directly to your thumb tip, keeping index, middle, and ring fingers extended.",
+    category: "numbers",
+    visualTip: "Pinky and thumb touching, other three fingers extended straight up.",
+    meaning: "The numerical value six '6'. In ASL, counting 6-9 starts by touching fingers to the thumb.",
+    synonyms: ["Six", "Digit 6"],
+    difficulty: "medium",
+    grammaticalRole: "Number",
+    steps: [
+      "Extend your index, middle, and ring fingers straight up.",
+      "Curve your pinky finger and thumb inward.",
+      "Touch the very tip of your pinky directly to your thumb tip."
+    ]
+  },
+  {
+    id: "sign_7",
+    char: "7",
+    description: "Touch the tip of your ring finger directly to your thumb tip, keeping index, middle, and pinky fingers extended.",
+    category: "numbers",
+    visualTip: "Ring finger and thumb touching, other fingers extended straight up.",
+    meaning: "The numerical value seven '7'.",
+    synonyms: ["Seven", "Digit 7"],
+    difficulty: "medium",
+    grammaticalRole: "Number",
+    steps: [
+      "Extend your index, middle, and pinky fingers straight up.",
+      "Curve your ring finger and thumb inward.",
+      "Touch the very tip of your ring finger directly to your thumb tip."
+    ]
+  },
+  {
+    id: "sign_8",
+    char: "8",
+    description: "Touch the tip of your middle finger directly to your thumb tip, keeping index, ring, and pinky fingers extended.",
+    category: "numbers",
+    visualTip: "Middle finger and thumb touching, other fingers extended straight up.",
+    meaning: "The numerical value eight '8'.",
+    synonyms: ["Eight", "Digit 8"],
+    difficulty: "medium",
+    grammaticalRole: "Number",
+    steps: [
+      "Extend your index, ring, and pinky fingers straight up.",
+      "Curve your middle finger and thumb inward.",
+      "Touch the very tip of your middle finger directly to your thumb tip."
+    ]
+  },
+  {
+    id: "sign_9",
+    char: "9",
+    description: "Touch the tip of your index finger directly to your thumb tip, keeping middle, ring, and pinky fingers extended.",
+    category: "numbers",
+    visualTip: "Index finger and thumb touching, other three fingers extended straight up.",
+    meaning: "The numerical value nine '9'. Identical in handshape to the manual letter 'F'.",
+    synonyms: ["Nine", "Digit 9", "Letter F"],
+    difficulty: "medium",
+    grammaticalRole: "Number",
+    steps: [
+      "Extend your middle, ring, and pinky fingers straight up.",
+      "Curve your index finger and thumb inward.",
+      "Touch the very tip of your index finger directly to your thumb tip."
+    ]
   }
 ];
 
@@ -500,6 +660,41 @@ function getHandLandmarks(char: string): { x: number; y: number }[] {
   } else if (c === 'FRIEND') {
     indexCurved = true; middleFolded = true; ringFolded = true; pinkyFolded = true;
     thumbAngle = -50;
+  } else if (c === '0') {
+    thumbCurved = true; indexCurved = true; middleCurved = true; ringCurved = true; pinkyCurved = true;
+  } else if (c === '1') {
+    middleFolded = true; ringFolded = true; pinkyFolded = true;
+    indexAngle = 0; thumbFolded = true;
+  } else if (c === '2') {
+    ringFolded = true; pinkyFolded = true;
+    indexAngle = -15; middleAngle = 15;
+    thumbFolded = true;
+  } else if (c === '3') {
+    ringFolded = true; pinkyFolded = true;
+    indexAngle = -15; middleAngle = 15;
+    thumbAngle = -85;
+  } else if (c === '4') {
+    thumbFolded = true;
+    indexAngle = -15; middleAngle = -5; ringAngle = 5; pinkyAngle = 15;
+  } else if (c === '5') {
+    thumbAngle = -85;
+    indexAngle = -20; middleAngle = 0; ringAngle = 20; pinkyAngle = 35;
+  } else if (c === '6') {
+    pinkyCurved = true; thumbCurved = true;
+    indexAngle = -15; middleAngle = 0; ringAngle = 15;
+    pinkyAngle = 30; thumbAngle = -20;
+  } else if (c === '7') {
+    ringCurved = true; thumbCurved = true;
+    indexAngle = -15; middleAngle = 0; pinkyAngle = 25;
+    ringAngle = 15; thumbAngle = -20;
+  } else if (c === '8') {
+    middleCurved = true; thumbCurved = true;
+    indexAngle = -15; ringAngle = 15; pinkyAngle = 25;
+    middleAngle = 0; thumbAngle = -20;
+  } else if (c === '9') {
+    indexCurved = true; thumbCurved = true;
+    indexAngle = -25; thumbAngle = -35;
+    middleAngle = -5; ringAngle = 10; pinkyAngle = 25;
   }
 
   // Draw 5 fingers starting from their anatomical bases in knuckles
@@ -525,7 +720,7 @@ interface SignDictionaryProps {
 
 export default function SignDictionary({ onSelectGesture, activeGesture, customGestures = [] }: SignDictionaryProps) {
   // State variables for filter and layout configuration
-  const [activeCategory, setActiveCategory] = useState<'all' | 'alphabet' | 'greeting' | 'common' | 'custom' | 'bookmarked'>('all');
+  const [activeCategory, setActiveCategory] = useState<'all' | 'alphabet' | 'numbers' | 'greeting' | 'common' | 'custom' | 'bookmarked'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDifficulty, setSelectedDifficulty] = useState<'all' | 'easy' | 'medium' | 'hard'>('all');
   const [animateSkeleton, setAnimateSkeleton] = useState(true);
@@ -720,6 +915,17 @@ export default function SignDictionary({ onSelectGesture, activeGesture, customG
             >
               A-Z Alphabets
               <span className="text-[9px] opacity-70 font-mono">({categoryStats.alphabet})</span>
+            </button>
+            <button
+              onClick={() => setActiveCategory('numbers')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                activeCategory === 'numbers'
+                  ? "bg-[#7c8d7c] text-white shadow-sm"
+                  : "bg-gray-50/50 dark:bg-zinc-900/40 text-[#7a7a6a] hover:text-[#2d2d28] dark:hover:text-white border border-gray-100 dark:border-zinc-800"
+              }`}
+            >
+              Numbers 0–9
+              <span className="text-[9px] opacity-70 font-mono">({categoryStats.numbers})</span>
             </button>
             <button
               onClick={() => setActiveCategory('greeting')}
