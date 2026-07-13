@@ -778,6 +778,170 @@ Text: "${text}"`;
   }
 });
 
+// 11. POST predict next word and auto-complete sentences (AI-based sentence prediction system)
+app.post("/api/predict-sentence", async (req, res): Promise<any> => {
+  try {
+    const { currentText } = req.body;
+    const text = (currentText || "").trim();
+
+    const ai = getAiClient();
+    if (!ai) {
+      // Intelligent, context-aware rule-based fallback when offline / no secrets configured
+      const normalized = text.toLowerCase();
+      
+      let nextWords: string[] = ["I", "You", "Please", "Hello", "Thank", "Can", "Yes", "No"];
+      let sentenceCompletions: string[] = [
+        "Hello, how are you today?",
+        "Please help me learn sign language.",
+        "Thank you for practicing with me."
+      ];
+      let improvedFlow = text || "Hello, I am practicing sign language.";
+
+      if (!text) {
+        // Empty state suggestions
+        nextWords = ["I", "You", "Please", "Hello", "Thank", "Can", "Yes", "No"];
+        sentenceCompletions = [
+          "Hello, how are you today?",
+          "Please help me learn sign language.",
+          "Thank you for practicing with me."
+        ];
+        improvedFlow = "";
+      } else if (normalized.endsWith("i")) {
+        nextWords = ["am", "want", "need", "love", "like", "can", "have"];
+        sentenceCompletions = [
+          text + " am learning American Sign Language.",
+          text + " want to practice with you.",
+          text + " like this real-time app."
+        ];
+        improvedFlow = text + " ...";
+      } else if (normalized.endsWith("i am") || normalized.endsWith("i'm")) {
+        nextWords = ["learning", "practicing", "happy", "going", "fine", "hungry"];
+        sentenceCompletions = [
+          text + " learning to communicate with signs.",
+          text + " practicing my hand signs every day.",
+          text + " happy to meet you today."
+        ];
+        improvedFlow = text + " learning to sign.";
+      } else if (normalized.endsWith("please")) {
+        nextWords = ["help", "repeat", "show", "give", "come", "sign"];
+        sentenceCompletions = [
+          text + " help me understand this word.",
+          text + " repeat the sign for zero.",
+          text + " show me how to do letter A."
+        ];
+        improvedFlow = "Please, " + text.replace(/please/i, "").trim();
+      } else if (normalized.endsWith("thank") || normalized.endsWith("thank you")) {
+        nextWords = ["very", "for", "friend", "teacher", "helping"];
+        sentenceCompletions = [
+          text + " very much for your kind assistance.",
+          text + " for helping me learn ASL.",
+          text + " my friend for practicing today."
+        ];
+        improvedFlow = text + " very much!";
+      } else if (normalized.endsWith("can you")) {
+        nextWords = ["help", "please", "repeat", "understand", "translate", "see"];
+        sentenceCompletions = [
+          text + " help me with my fingerspelling?",
+          text + " repeat that letter sign again?",
+          text + " translate this full sentence for me?"
+        ];
+        improvedFlow = text + " please help me?";
+      } else if (normalized.endsWith("want")) {
+        nextWords = ["to", "food", "water", "help", "more", "you"];
+        sentenceCompletions = [
+          text + " to learn more advanced hand gestures.",
+          text + " help with my daily lessons.",
+          text + " to practice fingerspelling letters."
+        ];
+        improvedFlow = text + " to learn.";
+      } else {
+        // Generic completions based on last word
+        const words = text.split(/\s+/);
+        const lastWord = words[words.length - 1];
+        nextWords = ["and", "with", "the", "to", "you", "now", "here"];
+        sentenceCompletions = [
+          text + " and continue practicing our signs.",
+          text + " with the new interactive helper.",
+          text + " to build a full sentence flow."
+        ];
+        improvedFlow = text + ".";
+      }
+
+      // Ensure suggestions don't get messy formatting
+      sentenceCompletions = sentenceCompletions.map(s => s.replace(/\s+/g, ' ').replace(/\s+([.,!?])/g, '$1').trim());
+      if (improvedFlow) {
+        improvedFlow = improvedFlow.replace(/\s+/g, ' ').replace(/\s+([.,!?])/g, '$1').trim();
+        // Capitalize first letter of improvedFlow
+        improvedFlow = improvedFlow.charAt(0).toUpperCase() + improvedFlow.slice(1);
+      }
+
+      return res.json({
+        nextWords: nextWords.slice(0, 5),
+        sentenceCompletions: sentenceCompletions,
+        improvedFlow: improvedFlow,
+        simulated: true,
+        message: "Offline heuristic prediction engine used."
+      });
+    }
+
+    // Call actual Gemini model for high-fidelity contextual text prediction
+    const promptText = `You are a state-of-the-art predictive text and sentence auto-completion AI model.
+The user is practicing fingerspelling or sign gestures, and has typed or composed the following current text: "${text}".
+
+Analyze this text and generate predictions in the requested JSON schema:
+1. "nextWords": A list of 3-5 high-probability next words (single words only) that would naturally and contextually follow the current text. If the current text is empty, suggest common sentence starters like ["I", "You", "Please", "Hello", "We"].
+2. "sentenceCompletions": A list of 2-3 fully formed, grammatically polished, and cohesive sentences completing the user's current partial thoughts. Make sure they represent friendly, positive, and typical communication (e.g., related to daily life, learning, sign language, greetings, or common conversations).
+3. "improvedFlow": An alternative, elegant, and highly natural phrasing of the user's current input to improve readability, grammar, and sentence flow (especially if the current text is fragmented or has awkward transitions).
+
+You must return EXACTLY valid JSON matching the specified schema. Do not include markdown wraps or any conversational chatter outside the JSON structure.`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: promptText,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            nextWords: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING },
+              description: "3-5 single-word suggestions that contextually follow the current text"
+            },
+            sentenceCompletions: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING },
+              description: "2-3 polished, natural-sounding full-sentence auto-completions of the input text"
+            },
+            improvedFlow: {
+              type: Type.STRING,
+              description: "An elegant, grammatically polished rewrite of the input text with improved sentence flow"
+            }
+          },
+          required: ["nextWords", "sentenceCompletions", "improvedFlow"]
+        }
+      }
+    });
+
+    const resultText = response.text || "{}";
+    const parsedData = JSON.parse(resultText.trim());
+
+    res.json({
+      nextWords: parsedData.nextWords || [],
+      sentenceCompletions: parsedData.sentenceCompletions || [],
+      improvedFlow: parsedData.improvedFlow || text,
+      simulated: false
+    });
+
+  } catch (error: any) {
+    console.error("Sentence prediction error:", error);
+    res.status(500).json({
+      error: "AI Sentence Prediction Failed",
+      details: error.message || error
+    });
+  }
+});
+
 // Configure Vite integration or static file rendering
 async function startServer() {
   // 1. Create standard HTTP server

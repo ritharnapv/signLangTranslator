@@ -382,6 +382,13 @@ export default function App() {
   const [formedSentence, setFormedSentence] = useState<string>("");
   const [copied, setCopied] = useState<boolean>(false);
   const [autoAppend, setAutoAppend] = useState<boolean>(false);
+
+  // Sentence Prediction States (AI-based sentence prediction system)
+  const [nextWordSuggestions, setNextWordSuggestions] = useState<string[]>([]);
+  const [sentenceCompletions, setSentenceCompletions] = useState<string[]>([]);
+  const [improvedFlowSuggestion, setImprovedFlowSuggestion] = useState<string>("");
+  const [isPredicting, setIsPredicting] = useState<boolean>(false);
+  const [autoPredictEnabled, setAutoPredictEnabled] = useState<boolean>(true);
   
   const [autoFilterDuplicates, setAutoFilterDuplicates] = useState<boolean>(true);
   const [autoGrammar, setAutoGrammar] = useState<boolean>(true);
@@ -835,6 +842,70 @@ export default function App() {
       }
       return filtered.join(' ');
     });
+  };
+
+  const fetchSentencePredictions = async (textToPredict: string) => {
+    if (!textToPredict.trim()) {
+      setNextWordSuggestions([]);
+      setSentenceCompletions([]);
+      setImprovedFlowSuggestion("");
+      return;
+    }
+
+    setIsPredicting(true);
+    try {
+      const res = await fetch(getApiUrl("/api/predict-sentence"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ currentText: textToPredict })
+      });
+      if (!res.ok) {
+        throw new Error("Server error predicting sentence");
+      }
+      const data = await res.json();
+      if (data) {
+        setNextWordSuggestions(data.nextWords || []);
+        setSentenceCompletions(data.sentenceCompletions || []);
+        setImprovedFlowSuggestion(data.improvedFlow || "");
+      }
+    } catch (err) {
+      console.error("Failed to fetch sentence predictions:", err);
+    } finally {
+      setIsPredicting(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!autoPredictEnabled) return;
+    const delayDebounceFn = setTimeout(() => {
+      fetchSentencePredictions(formedSentence);
+    }, 600); // 600ms debounce to avoid excessive network requests
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [formedSentence, autoPredictEnabled]);
+
+  const handleSelectNextWord = (word: string) => {
+    setFormedSentence(prev => {
+      const trimmed = prev.trim();
+      if (!trimmed) return word;
+      const lastChar = trimmed.charAt(trimmed.length - 1);
+      if (/[.,!?;]/.test(lastChar)) {
+        return trimmed + " " + word;
+      }
+      return trimmed + " " + word;
+    });
+  };
+
+  const handleSelectSentenceCompletion = (sentence: string) => {
+    setFormedSentence(sentence);
+  };
+
+  const handleSelectImprovedFlow = () => {
+    if (improvedFlowSuggestion) {
+      setFormedSentence(improvedFlowSuggestion);
+    }
   };
 
   const handleImproveGrammarAI = async () => {
@@ -3291,6 +3362,128 @@ export default function App() {
                       </button>
                     )}
                   </div>
+                </div>
+
+                {/* AI Predictive Text Companion Panel */}
+                <div 
+                  className="bg-[#fdfcfb] dark:bg-[#18181c] border border-[#ebdcd1]/80 dark:border-[#3a312c] rounded-2xl p-4 space-y-4 shadow-xs" 
+                  id="ai-predictive-companion"
+                >
+                  <div className="flex items-center justify-between border-b border-[#ebdcd1]/35 dark:border-[#3a312c]/40 pb-2">
+                    <span className="text-[10px] uppercase font-black tracking-widest text-[#a36b5e] dark:text-orange-400 font-mono flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-[#a36b5e] dark:text-orange-400" />
+                      AI Prediction & Flow Companion
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] text-gray-500 font-medium">Auto-Predict</span>
+                      <input
+                        type="checkbox"
+                        checked={autoPredictEnabled}
+                        onChange={(e) => setAutoPredictEnabled(e.target.checked)}
+                        className="w-8 h-4 bg-gray-200 dark:bg-gray-800 rounded-full appearance-none cursor-pointer relative checked:bg-[#a36b5e] transition-colors duration-200
+                        before:content-[''] before:absolute before:w-3 before:h-3 before:rounded-full before:bg-white before:top-0.5 before:left-0.5 checked:before:translate-x-4 before:transition-transform before:duration-200 border border-gray-300 dark:border-gray-700"
+                        title="Toggle real-time smart predictions based on your input words"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Suggest Next Word Section */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] uppercase font-black tracking-wider text-gray-400 dark:text-gray-500 font-mono block">
+                        Next Word Suggestions
+                      </span>
+                      {isPredicting && (
+                        <span className="text-[9px] text-[#a36b5e] dark:text-orange-400 font-bold font-mono animate-pulse flex items-center gap-1">
+                          <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                          Predicting...
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div className="flex flex-wrap gap-1.5 min-h-[32px]">
+                      {nextWordSuggestions.length > 0 ? (
+                        nextWordSuggestions.map((word, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => handleSelectNextWord(word)}
+                            className="text-xs bg-white dark:bg-zinc-900 text-[#2d2d28] dark:text-zinc-200 border border-gray-200 dark:border-zinc-800 hover:border-[#a36b5e] dark:hover:border-[#a36b5e] px-3 py-1.5 rounded-xl flex items-center gap-1 hover:bg-orange-50/20 dark:hover:bg-orange-950/20 transition-all cursor-pointer shadow-2xs font-medium"
+                          >
+                            <Plus className="w-3 h-3 text-[#a36b5e] opacity-75" />
+                            {word}
+                          </button>
+                        ))
+                      ) : (
+                        <p className="text-[11px] text-gray-400 dark:text-zinc-600 italic leading-relaxed pt-0.5">
+                          {formedSentence.trim() 
+                            ? "No word suggestions for current context yet." 
+                            : "Enter some words in the notepad to trigger smart predictions."}
+                        </p>
+                      )}
+                      {!autoPredictEnabled && formedSentence.trim() && (
+                        <button
+                          type="button"
+                          onClick={() => fetchSentencePredictions(formedSentence)}
+                          className="text-[10px] font-bold text-[#a36b5e] hover:text-[#c48174] flex items-center gap-1 bg-orange-50/40 dark:bg-[#2c201a] border border-[#f3dfcf]/50 dark:border-[#4e382f] px-2.5 py-1 rounded-lg transition-all ml-auto cursor-pointer"
+                        >
+                          <RefreshCw className="w-3 h-3" />
+                          Manual Suggest
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Auto-Complete Sentences Section */}
+                  <div className="space-y-2 pt-1">
+                    <span className="text-[9px] uppercase font-black tracking-wider text-gray-400 dark:text-gray-500 font-mono block">
+                      Sentence Auto-Completions
+                    </span>
+                    <div className="space-y-1.5">
+                      {sentenceCompletions.length > 0 ? (
+                        sentenceCompletions.map((sentence, idx) => (
+                          <div 
+                            key={idx}
+                            onClick={() => handleSelectSentenceCompletion(sentence)}
+                            className="bg-white dark:bg-zinc-900 border border-gray-150 dark:border-zinc-800 hover:border-[#a36b5e] dark:hover:border-[#a36b5e] p-2.5 rounded-xl text-xs flex items-center justify-between cursor-pointer group hover:bg-orange-50/5 dark:hover:bg-orange-950/5 transition-all shadow-2xs"
+                          >
+                            <span className="text-gray-700 dark:text-zinc-300 font-sans group-hover:text-gray-900 dark:group-hover:text-white transition-colors">
+                              "{sentence}"
+                            </span>
+                            <span className="text-[10px] text-[#a36b5e] font-black tracking-wider font-mono opacity-0 group-hover:opacity-100 transition-all flex items-center gap-1 shrink-0 ml-3">
+                              Use Completion
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                            </span>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-[11px] text-gray-400 dark:text-zinc-600 italic">
+                          Awaiting context to formulate full sentences...
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Improve Sentence Flow Section */}
+                  {improvedFlowSuggestion && improvedFlowSuggestion.toLowerCase() !== formedSentence.trim().toLowerCase() && (
+                    <div className="bg-[#fbfbf9] dark:bg-[#1a1a1e] border border-[#e2e2d0]/60 dark:border-[#2d2d32]/60 p-3 rounded-xl space-y-2 pt-2 shadow-2xs">
+                      <span className="text-[9px] uppercase font-black tracking-wider text-[#7a7a6a] dark:text-[#a1a1aa] font-mono block">
+                        Recommended Sentence Flow Improvement
+                      </span>
+                      <div className="flex items-start justify-between gap-4 text-xs">
+                        <p className="text-gray-700 dark:text-zinc-300 italic font-sans leading-relaxed">
+                          "{improvedFlowSuggestion}"
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleSelectImprovedFlow}
+                          className="text-[10px] font-black tracking-wider uppercase font-mono bg-[#ebdcd1] dark:bg-[#453730] text-[#5c3c35] dark:text-[#f3dfcf] hover:bg-[#dfcdbf] dark:hover:bg-[#523d32] px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-all shrink-0 cursor-pointer shadow-3xs"
+                        >
+                          Apply Flow
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Multilingual Translation Hub Panel */}
