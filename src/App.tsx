@@ -52,7 +52,9 @@ import {
   X,
   FlipHorizontal,
   Smartphone,
-  Laptop
+  Laptop,
+  Mic,
+  MicOff
 } from 'lucide-react';
 
 // Production environment configuration helpers
@@ -406,6 +408,23 @@ export default function App() {
   const [autoTranslate, setAutoTranslate] = useState<boolean>(true);
   const [translationError, setTranslationError] = useState<string | null>(null);
 
+  // Voice Control States
+  const [voiceControlEnabled, setVoiceControlEnabled] = useState<boolean>(false);
+  const [voiceTranscript, setVoiceTranscript] = useState<string>("");
+  const [voiceFeedback, setVoiceFeedback] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
+  const [speechSupported, setSpeechSupported] = useState<boolean>(true);
+
+  const cameraActiveRef = useRef<boolean>(false);
+  const formedSentenceRef = useRef<string>("");
+
+  useEffect(() => {
+    cameraActiveRef.current = cameraActive;
+  }, [cameraActive]);
+
+  useEffect(() => {
+    formedSentenceRef.current = formedSentence;
+  }, [formedSentence]);
+
   const autoAppendRef = useRef<boolean>(false);
   const lastAutoAppendedCharRef = useRef<string | null>(null);
   const autoFilterDuplicatesRef = useRef<boolean>(true);
@@ -427,6 +446,134 @@ export default function App() {
   useEffect(() => {
     appendModeRef.current = appendMode;
   }, [appendMode]);
+
+  // Voice Control SpeechRecognition & Commands Controller
+  const voiceControlEnabledRef = useRef<boolean>(false);
+  useEffect(() => {
+    voiceControlEnabledRef.current = voiceControlEnabled;
+  }, [voiceControlEnabled]);
+
+  useEffect(() => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setSpeechSupported(false);
+      return;
+    }
+    setSpeechSupported(true);
+
+    if (!voiceControlEnabled) {
+      setVoiceTranscript("");
+      return;
+    }
+
+    const matchVoiceCommand = (rawTranscript: string) => {
+      const t = rawTranscript.toLowerCase().trim().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"");
+      
+      const startCameraPhrases = ["start camera", "enable camera", "camera start", "turn on camera", "open camera", "activate camera"];
+      const stopCameraPhrases = ["stop camera", "disable camera", "camera stop", "turn off camera", "close camera", "deactivate camera"];
+      const clearTextPhrases = ["clear text", "clear notepad", "delete text", "clear sentence", "clear", "erase text", "erase notepad"];
+      const speakTextPhrases = ["speak text", "speak", "read text", "read sentence", "say text", "read notepad", "talk", "voice out"];
+
+      if (startCameraPhrases.some(p => t.includes(p))) return "start_camera";
+      if (stopCameraPhrases.some(p => t.includes(p))) return "stop_camera";
+      if (clearTextPhrases.some(p => t.includes(p))) return "clear_text";
+      if (speakTextPhrases.some(p => t.includes(p))) return "speak_text";
+      return null;
+    };
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    recognition.lang = "en-US";
+
+    recognition.onstart = () => {
+      setVoiceFeedback({ text: "Voice Assistant listening... Say 'Start camera', 'Stop camera', 'Clear text', or 'Speak text'.", type: "info" });
+    };
+
+    recognition.onresult = (event: any) => {
+      const resultsLength = event.results.length;
+      if (resultsLength === 0) return;
+      
+      const lastResult = event.results[resultsLength - 1];
+      if (!lastResult.isFinal) return;
+
+      const rawTranscript = lastResult[0].transcript || "";
+      setVoiceTranscript(rawTranscript.trim());
+
+      const matchedCommand = matchVoiceCommand(rawTranscript);
+      if (matchedCommand === "start_camera") {
+        if (!cameraActiveRef.current) {
+          toggleCamera();
+          setVoiceFeedback({ text: `Recognized: "${rawTranscript.trim()}" → Starting Camera...`, type: "success" });
+        } else {
+          setVoiceFeedback({ text: `Recognized: "${rawTranscript.trim()}" → Camera is already running`, type: "info" });
+        }
+      } else if (matchedCommand === "stop_camera") {
+        if (cameraActiveRef.current) {
+          stopCamera();
+          setVoiceFeedback({ text: `Recognized: "${rawTranscript.trim()}" → Stopping Camera...`, type: "success" });
+        } else {
+          setVoiceFeedback({ text: `Recognized: "${rawTranscript.trim()}" → Camera is already stopped`, type: "info" });
+        }
+      } else if (matchedCommand === "clear_text") {
+        setFormedSentence("");
+        setVoiceFeedback({ text: `Recognized: "${rawTranscript.trim()}" → Clearing Practice Notepad`, type: "success" });
+      } else if (matchedCommand === "speak_text") {
+        if (formedSentenceRef.current.trim()) {
+          handleSpeak(formedSentenceRef.current);
+          setVoiceFeedback({ text: `Recognized: "${rawTranscript.trim()}" → Speaking text...`, type: "success" });
+        } else {
+          setVoiceFeedback({ text: `Recognized: "${rawTranscript.trim()}" → Notepad is empty`, type: "error" });
+        }
+      } else {
+        setVoiceFeedback({ text: `Heard: "${rawTranscript.trim()}" (No matching command)`, type: "info" });
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      console.warn("Speech recognition error:", event.error);
+      if (event.error === "not-allowed") {
+        setVoiceControlEnabled(false);
+        setVoiceFeedback({ text: "Microphone permission denied. Please enable microphone access.", type: "error" });
+      } else if (event.error === "no-speech") {
+        // Soft error, keep listening
+      } else {
+        setVoiceFeedback({ text: `Voice assistant error: ${event.error}`, type: "error" });
+      }
+    };
+
+    recognition.onend = () => {
+      if (voiceControlEnabledRef.current) {
+        try {
+          recognition.start();
+        } catch (err) {
+          console.warn("Failed to restart speech recognition:", err);
+        }
+      }
+    };
+
+    try {
+      recognition.start();
+    } catch (err) {
+      console.error("Failed to start speech recognition:", err);
+      setVoiceControlEnabled(false);
+      setVoiceFeedback({ text: "Failed to initialize microphone recognition.", type: "error" });
+    }
+
+    return () => {
+      try {
+        recognition.stop();
+      } catch (e) {}
+    };
+  }, [voiceControlEnabled]);
+
+  useEffect(() => {
+    if (!voiceFeedback) return;
+    const timer = setTimeout(() => {
+      setVoiceFeedback(null);
+    }, 4500);
+    return () => clearTimeout(timer);
+  }, [voiceFeedback]);
 
   // Browser and Cloud based Text-to-Speech (TTS) states
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
@@ -3481,6 +3628,120 @@ export default function App() {
                         >
                           Apply Flow
                         </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* AI Voice Assistant & Hands-free Control Panel */}
+                <div 
+                  className="bg-[#fbfcfa] dark:bg-[#151518] border border-[#e2e2d0] dark:border-[#2d2d32] rounded-2xl p-4 space-y-4 shadow-sm" 
+                  id="ai-voice-control-panel"
+                >
+                  <div className="flex items-center justify-between border-b border-[#ecece0] dark:border-[#2d2d32] pb-2">
+                    <span className="text-[10px] uppercase font-black tracking-widest text-[#a36b5e] dark:text-orange-400 font-mono flex items-center gap-1.5">
+                      <Mic className={`w-3.5 h-3.5 ${voiceControlEnabled ? "animate-pulse text-rose-500" : "text-[#a36b5e]"}`} />
+                      AI Voice Assistant
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] text-gray-500 font-semibold font-mono">Hands-Free Mode</span>
+                      <button
+                        type="button"
+                        onClick={() => setVoiceControlEnabled(!voiceControlEnabled)}
+                        className={`px-3 py-1 rounded-xl text-[10px] uppercase font-bold tracking-wider transition-all duration-200 cursor-pointer shadow-xs border flex items-center gap-1 ${
+                          voiceControlEnabled 
+                            ? "bg-rose-500 hover:bg-rose-600 text-white border-rose-600"
+                            : "bg-white dark:bg-zinc-900 hover:bg-gray-50 dark:hover:bg-zinc-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-zinc-800"
+                        }`}
+                        title="Toggle Voice Assistant Speech Recognition for hands-free command control"
+                        disabled={!speechSupported}
+                      >
+                        {voiceControlEnabled ? (
+                          <>
+                            <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping"></span>
+                            Active
+                          </>
+                        ) : (
+                          "Activate"
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {!speechSupported ? (
+                    <div className="bg-amber-50/65 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-900/40 p-2.5 rounded-xl flex items-start gap-2 text-[11px] text-amber-800 dark:text-amber-300">
+                      <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold">Speech Recognition Not Supported</p>
+                        <p className="opacity-80 leading-relaxed mt-0.5">Your browser doesn't support speech recognition. Please try using Google Chrome or Microsoft Edge.</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {/* Active Status Display and Heard Transcript */}
+                      <div className="bg-[#f7f6f2] dark:bg-[#1a1a1d] border border-[#e2e2d0]/50 dark:border-zinc-800 p-3 rounded-xl space-y-2 relative overflow-hidden">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[9px] uppercase font-black tracking-wider text-gray-400 dark:text-gray-500 font-mono">Assistant Status</span>
+                          <span className="text-[10px] font-mono flex items-center gap-1.5">
+                            {voiceControlEnabled ? (
+                              <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                Listening for command...
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 dark:text-zinc-600">Inactive</span>
+                            )}
+                          </span>
+                        </div>
+
+                        <div className="min-h-[24px] pt-1">
+                          {voiceTranscript ? (
+                            <p className="text-xs text-gray-800 dark:text-zinc-200 font-medium">
+                              Heard: <span className="italic text-[#a36b5e] dark:text-orange-400">"{voiceTranscript}"</span>
+                            </p>
+                          ) : (
+                            <p className="text-[11px] text-gray-400 dark:text-zinc-600 italic">
+                              {voiceControlEnabled ? "Say a voice command..." : "Activate the mic to start command listening."}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Interactive Command Feedback Indicator */}
+                        {voiceFeedback && (
+                          <div className={`mt-2 p-2 rounded-lg text-xs flex items-center gap-1.5 border transition-all duration-300 ${
+                            voiceFeedback.type === 'success' 
+                              ? "bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/40 text-emerald-800 dark:text-emerald-300"
+                              : voiceFeedback.type === 'error'
+                              ? "bg-rose-50/70 dark:bg-rose-950/20 border-rose-100 dark:border-rose-900/40 text-rose-800 dark:text-rose-300"
+                              : "bg-blue-50/70 dark:bg-blue-950/20 border-blue-100 dark:border-blue-900/40 text-blue-800 dark:text-blue-300"
+                          }`}>
+                            <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                            <span className="font-medium leading-tight">{voiceFeedback.text}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Reference Voice Command Guidelines */}
+                      <div className="space-y-1.5">
+                        <span className="text-[9px] uppercase font-black tracking-wider text-gray-400 dark:text-gray-500 font-mono block">Supported Voice Commands</span>
+                        <div className="grid grid-cols-2 gap-2 text-[11px]">
+                          <div className="bg-white dark:bg-zinc-900/50 border border-gray-100 dark:border-zinc-800/80 p-2 rounded-xl">
+                            <span className="font-bold text-gray-800 dark:text-zinc-300 block mb-0.5">📷 Start Camera</span>
+                            <span className="text-[10px] text-gray-400 dark:text-zinc-500 font-mono">"Start camera"</span>
+                          </div>
+                          <div className="bg-white dark:bg-zinc-900/50 border border-gray-100 dark:border-zinc-800/80 p-2 rounded-xl">
+                            <span className="font-bold text-gray-800 dark:text-zinc-300 block mb-0.5">🛑 Stop Camera</span>
+                            <span className="text-[10px] text-gray-400 dark:text-zinc-500 font-mono">"Stop camera"</span>
+                          </div>
+                          <div className="bg-white dark:bg-zinc-900/50 border border-gray-100 dark:border-zinc-800/80 p-2 rounded-xl">
+                            <span className="font-bold text-gray-800 dark:text-zinc-300 block mb-0.5">🧹 Clear Text</span>
+                            <span className="text-[10px] text-gray-400 dark:text-zinc-500 font-mono">"Clear text"</span>
+                          </div>
+                          <div className="bg-white dark:bg-zinc-900/50 border border-gray-100 dark:border-zinc-800/80 p-2 rounded-xl">
+                            <span className="font-bold text-gray-800 dark:text-zinc-300 block mb-0.5">🔊 Speak Text</span>
+                            <span className="text-[10px] text-gray-400 dark:text-zinc-500 font-mono">"Speak text"</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}

@@ -50,168 +50,171 @@ app.get("/api/health", (req, res) => {
 });
 
 // 2. Multimodal Camera Frame Sign Language Translation Endpoint
+// Helper function to process camera frames with either real Gemini Multimodal API or local simulation
+async function runPrediction(image: string, targetGesture?: string): Promise<any> {
+  if (!image) {
+    throw new Error("Missing frame capture data");
+  }
+
+  // Capture Base64 segments
+  const matches = image.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+  if (!matches || matches.length !== 3) {
+    throw new Error("Invalid canvas base64 image data");
+  }
+
+  const mimeType = matches[1];
+  const base64Data = matches[2];
+
+  const ai = getAiClient();
+
+  if (!ai) {
+    // Graceful local offline developer simulation if API Key is not set up
+    // Delivers realistic letter prediction from user choice or A-Z alphabet to make workspace functional
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const sampleLetters = targetGesture ? [targetGesture] : ["H", "A", "Y", "L", "O", "W"];
+    const chosenLetter = sampleLetters[Math.floor(Math.random() * sampleLetters.length)];
+    
+    const simulatedResponses: Record<string, any> = {
+      "A": {
+        predictedChar: "A",
+        confidence: 94.5,
+        explanation: "Strong fist gesture recognized with the thumb resting comfortably flat along the vertical side of the index finger.",
+        tips: ["Keep your fingers tightly closed together.", "Avoid tucking your thumb underneath the fingers; push it outward as a support pillar."],
+        grammarMatches: ["Symbol for Letter 'A'", "ASL Alphabet Entry #1"]
+      },
+      "B": {
+        predictedChar: "B",
+        confidence: 89.2,
+        explanation: "Open flat hand layout oriented upwards, with fingers pressed together and index/thumb neatly tucked inside the front.",
+        tips: ["Ensure all four main fingers are fully straightened vertically.", "Fold your thumb securely across your upper palm."],
+        grammarMatches: ["Symbol for Letter 'B'", "Numerical gesture '4' variation"]
+      },
+      "C": {
+        predictedChar: "C",
+        confidence: 91.8,
+        explanation: "A clean, semicircular skeletal shape formed by curved fingers and thumb, mimicking a cup structure.",
+        tips: ["Keep your palm open to reveal the side curve.", "Ensure the spacing between the fingertips and thumb tip remains clearly aligned."],
+        grammarMatches: ["Symbol for letter 'C'"]
+      },
+      "Hello": {
+        predictedChar: "Hello",
+        confidence: 95.8,
+        explanation: "Flat hand posture aligned vertically at forehead height, swept outwards in an elegant salute motion. High contrast fingers detected against the background.",
+        tips: ["Hold your hand flat and tilt your wrist outward.", "Make sure your thumb is tucked close to the side of your index finger."],
+        grammarMatches: ["Greeting", "ASL Universal Hello"]
+      },
+      "Thank You": {
+        predictedChar: "Thank You",
+        confidence: 92.4,
+        explanation: "Flat open palm meeting the lip region and moving gracefully downward and outward facing the reader.",
+        tips: ["Ensure your hand starts close to your lips before moving outward.", "Keep your palm facing upward at the end of the sign."],
+        grammarMatches: ["Greeting", "Politeness Formula 'Thank You'"]
+      },
+      "Yes": {
+        predictedChar: "Yes",
+        confidence: 94.1,
+        explanation: "S-hand shape (closed fist) facing outward, rocking vertically forward and back in a rhythmic nodding pattern.",
+        tips: ["Keep your fingers tightly closed into a fist mimicking a head shape.", "Tilt your wrist cleanly from top to bottom, not side to side."],
+        grammarMatches: ["Agreement", "Affirmation 'Yes'"]
+      },
+      "No": {
+        predictedChar: "No",
+        confidence: 93.0,
+        explanation: "Index and middle fingers extended together and rapidly striking the extended thumb pad below.",
+        tips: ["Keep your ring and pinky fingers fully curled into your palm.", "Perform a crisp double-tap motion for maximum recognition accuracy."],
+        grammarMatches: ["Negation", "Refusal 'No'"]
+      },
+      "Help": {
+        predictedChar: "Help",
+        confidence: 91.5,
+        explanation: "Dominant hand closed in a thumbs-up shape resting squarely on top of the flat, open non-dominant hand, moving upward in a lifting motion.",
+        tips: ["Ensure the non-dominant palm acts as a clear flat supporting platform.", "Extend your thumb pointing straight up in a clean thumbs-up posture."],
+        grammarMatches: ["Request", "Assistance 'Help'", "SOS Emergency Sign"]
+      },
+      "DEFAULT": {
+        predictedChar: chosenLetter,
+        confidence: 85.0 + Math.random() * 12.0,
+        explanation: `We've detected a distinctive gesture resembling '${chosenLetter}' under localized camera lighting. The joints are angled well with clear outline distinction.`,
+        tips: ["Keep your hand centered inside the green detection ring for ideal tracking.", "Minimize background clutter and maintain high contrast shadow lines."],
+        grammarMatches: [`Symbol for ${chosenLetter}`, "General gesture sequence"]
+      }
+    };
+
+    const payload = simulatedResponses[chosenLetter] || simulatedResponses["DEFAULT"];
+    
+    return {
+      ...payload,
+      simulated: true,
+      message: "Secrets not configured in Settings. Using Interactive Developer Sandbox recognition."
+    };
+  }
+
+  // Call actual Gemini 3.5 Multimodal model
+  const promptText = targetGesture
+    ? `You are a certified sign language interpreter. The user is practicing the ASL symbol for "${targetGesture}". Analyze their camera snapshot. Check if they did it correctly, output their prediction, confidence (0-100), detailed feedback explanation and constructive correction tips.`
+    : "You are a professional sign language interpreter. Analyze this camera frame image and translate the hand gesture to its corresponding ASL alphabet letter or common sign (like Hello, Please, Thank You, Love). Return prediction, confidence, explanation, and physical correctness tips.";
+
+  const imagePart = {
+    inlineData: {
+      mimeType: mimeType,
+      data: base64Data,
+    },
+  };
+
+  const textPart = {
+    text: promptText,
+  };
+
+  const response = await ai.models.generateContent({
+    model: "gemini-3.5-flash",
+    contents: { parts: [imagePart, textPart] },
+    config: {
+      systemInstruction: "You are a professional sign language feedback AI. Analyze the uploaded image containing a sign language hand shape, output the correct letter/word, a numeric confidence score, a visual outline description, and a list of 2 or 3 corrective hand-placement improvement tips. You must return EXACTLY valid JSON matching the schema.",
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          predictedChar: {
+            type: Type.STRING,
+            description: "The primary ASL alphabet letter (A-Z) or greeting word predicted from the hand shape."
+          },
+          confidence: {
+            type: Type.NUMBER,
+            description: "Prediction confidence percentage from 0 to 100."
+          },
+          explanation: {
+            type: Type.STRING,
+            description: "A description of the fingers, palm rotation, and current joint conformation detected in the image."
+          },
+          tips: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "2 or 3 operational tips on physical adjustments the user can make to execute a cleaner, more readable sign (e.g., 'Fully extend index finger', 'Separate your thumb')."
+          },
+          grammarMatches: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "Contextual info or words containing this letter."
+          }
+        },
+        required: ["predictedChar", "confidence", "explanation", "tips"]
+      }
+    }
+  });
+
+  const resultText = response.text || "";
+  return {
+    ...JSON.parse(resultText.trim()),
+    simulated: false
+  };
+}
+
+// 2. Multimodal Camera Frame Sign Language Translation Endpoint
 app.post("/api/translate-frame", async (req, res): Promise<any> => {
   try {
     const { image, targetGesture } = req.body;
-
-    if (!image) {
-      return res.status(400).json({ error: "Missing frame capture data" });
-    }
-
-    // Capture Base64 segments
-    const matches = image.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-    if (!matches || matches.length !== 3) {
-      return res.status(400).json({ error: "Invalid canvas base64 image data" });
-    }
-
-    const mimeType = matches[1];
-    const base64Data = matches[2];
-
-    const ai = getAiClient();
-
-    if (!ai) {
-      // Graceful local offline developer simulation if API Key is not set up
-      // Delivers realistic letter prediction from user choice or A-Z alphabet to make workspace functional
-      const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-      const sampleLetters = targetGesture ? [targetGesture] : ["H", "A", "Y", "L", "O", "W"];
-      const chosenLetter = sampleLetters[Math.floor(Math.random() * sampleLetters.length)];
-      
-      const simulatedResponses: Record<string, any> = {
-        "A": {
-          predictedChar: "A",
-          confidence: 94.5,
-          explanation: "Strong fist gesture recognized with the thumb resting comfortably flat along the vertical side of the index finger.",
-          tips: ["Keep your fingers tightly closed together.", "Avoid tucking your thumb underneath the fingers; push it outward as a support pillar."],
-          grammarMatches: ["Symbol for Letter 'A'", "ASL Alphabet Entry #1"]
-        },
-        "B": {
-          predictedChar: "B",
-          confidence: 89.2,
-          explanation: "Open flat hand layout oriented upwards, with fingers pressed together and index/thumb neatly tucked inside the front.",
-          tips: ["Ensure all four main fingers are fully straightened vertically.", "Fold your thumb securely across your upper palm."],
-          grammarMatches: ["Symbol for Letter 'B'", "Numerical gesture '4' variation"]
-        },
-        "C": {
-          predictedChar: "C",
-          confidence: 91.8,
-          explanation: "A clean, semicircular skeletal shape formed by curved fingers and thumb, mimicking a cup structure.",
-          tips: ["Keep your palm open to reveal the side curve.", "Ensure the spacing between the fingertips and thumb tip remains clearly aligned."],
-          grammarMatches: ["Symbol for letter 'C'"]
-        },
-        "Hello": {
-          predictedChar: "Hello",
-          confidence: 95.8,
-          explanation: "Flat hand posture aligned vertically at forehead height, swept outwards in an elegant salute motion. High contrast fingers detected against the background.",
-          tips: ["Hold your hand flat and tilt your wrist outward.", "Make sure your thumb is tucked close to the side of your index finger."],
-          grammarMatches: ["Greeting", "ASL Universal Hello"]
-        },
-        "Thank You": {
-          predictedChar: "Thank You",
-          confidence: 92.4,
-          explanation: "Flat open palm meeting the lip region and moving gracefully downward and outward facing the reader.",
-          tips: ["Ensure your hand starts close to your lips before moving outward.", "Keep your palm facing upward at the end of the sign."],
-          grammarMatches: ["Greeting", "Politeness Formula 'Thank You'"]
-        },
-        "Yes": {
-          predictedChar: "Yes",
-          confidence: 94.1,
-          explanation: "S-hand shape (closed fist) facing outward, rocking vertically forward and back in a rhythmic nodding pattern.",
-          tips: ["Keep your fingers tightly closed into a fist mimicking a head shape.", "Tilt your wrist cleanly from top to bottom, not side to side."],
-          grammarMatches: ["Agreement", "Affirmation 'Yes'"]
-        },
-        "No": {
-          predictedChar: "No",
-          confidence: 93.0,
-          explanation: "Index and middle fingers extended together and rapidly striking the extended thumb pad below.",
-          tips: ["Keep your ring and pinky fingers fully curled into your palm.", "Perform a crisp double-tap motion for maximum recognition accuracy."],
-          grammarMatches: ["Negation", "Refusal 'No'"]
-        },
-        "Help": {
-          predictedChar: "Help",
-          confidence: 91.5,
-          explanation: "Dominant hand closed in a thumbs-up shape resting squarely on top of the flat, open non-dominant hand, moving upward in a lifting motion.",
-          tips: ["Ensure the non-dominant palm acts as a clear flat supporting platform.", "Extend your thumb pointing straight up in a clean thumbs-up posture."],
-          grammarMatches: ["Request", "Assistance 'Help'", "SOS Emergency Sign"]
-        },
-        "DEFAULT": {
-          predictedChar: chosenLetter,
-          confidence: 85.0 + Math.random() * 12.0,
-          explanation: `We've detected a distinctive gesture resembling '${chosenLetter}' under localized camera lighting. The joints are angled well with clear outline distinction.`,
-          tips: ["Keep your hand centered inside the green detection ring for ideal tracking.", "Minimize background clutter and maintain high contrast shadow lines."],
-          grammarMatches: [`Symbol for ${chosenLetter}`, "General gesture sequence"]
-        }
-      };
-
-      const payload = simulatedResponses[chosenLetter] || simulatedResponses["DEFAULT"];
-      
-      // Delay slightly to simulate AI network processing
-      return setTimeout(() => {
-        res.json({
-          ...payload,
-          simulated: true,
-          message: "Secrets not configured in Settings. Using Interactive Developer Sandbox recognition."
-        });
-      }, 900);
-    }
-
-    // Call actual Gemini 3.5 Multimodal model
-    const promptText = targetGesture
-      ? `You are a certified sign language interpreter. The user is practicing the ASL symbol for "${targetGesture}". Analyze their camera snapshot. Check if they did it correctly, output their prediction, confidence (0-100), detailed feedback explanation and constructive correction tips.`
-      : "You are a professional sign language interpreter. Analyze this camera frame image and translate the hand gesture to its corresponding ASL alphabet letter or common sign (like Hello, Please, Thank You, Love). Return prediction, confidence, explanation, and physical correctness tips.";
-
-    const imagePart = {
-      inlineData: {
-        mimeType: mimeType,
-        data: base64Data,
-      },
-    };
-
-    const textPart = {
-      text: promptText,
-    };
-
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: { parts: [imagePart, textPart] },
-      config: {
-        systemInstruction: "You are a professional sign language feedback AI. Analyze the uploaded image containing a sign language hand shape, output the correct letter/word, a numeric confidence score, a visual outline description, and a list of 2 or 3 corrective hand-placement improvement tips. You must return EXACTLY valid JSON matching the schema.",
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            predictedChar: {
-              type: Type.STRING,
-              description: "The primary ASL alphabet letter (A-Z) or greeting word predicted from the hand shape."
-            },
-            confidence: {
-              type: Type.NUMBER,
-              description: "Prediction confidence percentage from 0 to 100."
-            },
-            explanation: {
-              type: Type.STRING,
-              description: "A description of the fingers, palm rotation, and current joint conformation detected in the image."
-            },
-            tips: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING },
-              description: "2 or 3 operational tips on physical adjustments the user can make to execute a cleaner, more readable sign (e.g., 'Fully extend index finger', 'Separate your thumb')."
-            },
-            grammarMatches: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING },
-              description: "Contextual info or words containing this letter."
-            }
-          },
-          required: ["predictedChar", "confidence", "explanation", "tips"]
-        }
-      }
-    });
-
-    const resultText = response.text || "";
-    const parsedData = JSON.parse(resultText.trim());
-
-    res.json(parsedData);
-
+    const result = await runPrediction(image, targetGesture);
+    res.json(result);
   } catch (error: any) {
     console.error("Frame recognition error:", error);
     res.status(500).json({
@@ -959,6 +962,10 @@ async function startServer() {
     "127.0.0.1"
   ]);
 
+  fastapiProcess.on("error", (err) => {
+    console.warn("[Server Warning] Failed to spawn FastAPI process. Real-time stream will automatically fallback to high-performance Node-native prediction pipeline. Error:", err.message);
+  });
+
   fastapiProcess.stdout.on("data", (data) => {
     console.log(`[FastAPI] ${data.toString().trim()}`);
   });
@@ -971,18 +978,18 @@ async function startServer() {
     fastapiProcess.kill();
   });
 
-  // 3. Create the WebSocket server for proxying
+  // 3. Create the WebSocket server with automated fallback
   const wss = new WebSocketServer({ noServer: true });
 
   wss.on("connection", (clientWs) => {
     console.log("[WS Proxy] Browser client connected. Initiating connection to FastAPI on port 8000...");
     
+    let fastapiConnected = false;
+    let useLocalFallback = false;
+    const messageQueue: string[] = [];
+
     // Connect to the local FastAPI WebSocket server
     const fastapiWs = new NodeWebSocket("ws://127.0.0.1:8000/ws");
-    
-    // Safe message queue in case messages are sent before FastAPI connection is open
-    const messageQueue: string[] = [];
-    let fastapiConnected = false;
 
     fastapiWs.on("open", () => {
       console.log("[WS Proxy] Connected to FastAPI backend successfully.");
@@ -1001,37 +1008,82 @@ async function startServer() {
     });
     
     fastapiWs.on("close", (code, reason) => {
-      console.log(`[WS Proxy] FastAPI backend disconnected with code ${code}. Reason: ${reason}`);
-      clientWs.close();
+      console.log(`[WS Proxy] FastAPI backend disconnected. Code: ${code}. Reason: ${reason}`);
+      if (!useLocalFallback) {
+        console.log("[WS Proxy] Switching client to Node-native fallback prediction pipeline.");
+        useLocalFallback = true;
+      }
     });
     
     fastapiWs.on("error", (error) => {
-      console.error("[WS Proxy] FastAPI error:", error);
-      if (clientWs.readyState === NodeWebSocket.OPEN) {
-        clientWs.send(JSON.stringify({
-          type: "error",
-          message: "Real-time Neural backend connectivity issue."
-        }));
-      }
-      clientWs.close();
+      console.warn("[WS Proxy] FastAPI connection error. Transitioning browser client to Node-native fallback pipeline.");
+      useLocalFallback = true;
     });
     
-    clientWs.on("message", (data) => {
-      if (fastapiConnected && fastapiWs.readyState === NodeWebSocket.OPEN) {
-        fastapiWs.send(data.toString());
+    clientWs.on("message", async (data) => {
+      if (useLocalFallback || (!fastapiConnected && messageQueue.length > 5)) {
+        // Handle websocket predictions entirely inside Node.js
+        try {
+          const rawData = data.toString();
+          const parsed = JSON.parse(rawData);
+          
+          if (parsed.type === "ping") {
+            if (clientWs.readyState === NodeWebSocket.OPEN) {
+              clientWs.send(JSON.stringify({ type: "pong" }));
+            }
+            return;
+          }
+          
+          if (parsed.type === "frame") {
+            const imageStr = parsed.image;
+            const targetGesture = parsed.targetGesture;
+            
+            // Run prediction directly using Gemini or Local Simulation
+            const prediction = await runPrediction(imageStr, targetGesture);
+            
+            if (clientWs.readyState === NodeWebSocket.OPEN) {
+              clientWs.send(JSON.stringify({
+                type: "prediction",
+                predictedChar: prediction.predictedChar,
+                confidence: prediction.confidence || 90.0,
+                explanation: prediction.explanation || "",
+                tips: prediction.tips || [],
+                grammarMatches: prediction.grammarMatches || [],
+                simulated: prediction.simulated !== false
+              }));
+            }
+          }
+        } catch (err: any) {
+          console.error("[WS Resilient Fallback] Error processing frame:", err);
+          if (clientWs.readyState === NodeWebSocket.OPEN) {
+            clientWs.send(JSON.stringify({
+              type: "error",
+              message: `Prediction error: ${err.message}`
+            }));
+          }
+        }
       } else {
-        messageQueue.push(data.toString());
+        // Forward message to FastAPI
+        if (fastapiConnected && fastapiWs.readyState === NodeWebSocket.OPEN) {
+          fastapiWs.send(data.toString());
+        } else {
+          messageQueue.push(data.toString());
+        }
       }
     });
     
     clientWs.on("close", () => {
       console.log("[WS Proxy] Browser client disconnected.");
-      fastapiWs.close();
+      try {
+        fastapiWs.close();
+      } catch (e) {}
     });
     
     clientWs.on("error", (error) => {
       console.error("[WS Proxy] Browser client socket error:", error);
-      fastapiWs.close();
+      try {
+        fastapiWs.close();
+      } catch (e) {}
     });
   });
 
