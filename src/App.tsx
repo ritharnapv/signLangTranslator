@@ -70,18 +70,51 @@ const getApiUrl = (path: string): string => {
   return path;
 };
 
+const EMOTION_MAP: Record<string, { label: string; emoji: string; colorClass: string; bgClass: string; borderClass: string }> = {
+  happy: {
+    label: "Happy",
+    emoji: "😊",
+    colorClass: "text-emerald-700 dark:text-emerald-400",
+    bgClass: "bg-emerald-50 dark:bg-emerald-950/20",
+    borderClass: "border-emerald-200 dark:border-emerald-800/40"
+  },
+  sad: {
+    label: "Sad",
+    emoji: "😢",
+    colorClass: "text-blue-700 dark:text-blue-400",
+    bgClass: "bg-blue-50 dark:bg-blue-950/20",
+    borderClass: "border-blue-200 dark:border-blue-800/40"
+  },
+  angry: {
+    label: "Angry",
+    emoji: "😠",
+    colorClass: "text-rose-700 dark:text-rose-400",
+    bgClass: "bg-rose-50 dark:bg-rose-950/20",
+    borderClass: "border-rose-200 dark:border-rose-800/40"
+  },
+  neutral: {
+    label: "Neutral",
+    emoji: "😐",
+    colorClass: "text-slate-600 dark:text-slate-400",
+    bgClass: "bg-slate-50 dark:bg-slate-800/40",
+    borderClass: "border-slate-200 dark:border-slate-700/40"
+  }
+};
+
 const INITIAL_SESSIONS: SessionHistoryItem[] = [
   {
     id: "session-1",
     timestamp: "14:02 Today",
     caption: "Perfect gesture alignment for Alphabet 'A'",
-    confidence: 94.5
+    confidence: 94.5,
+    emotion: "neutral"
   },
   {
     id: "session-2",
     timestamp: "Yesterday",
     caption: "Successfully practiced Greetings: 'Thank You'",
-    confidence: 91.8
+    confidence: 91.8,
+    emotion: "happy"
   }
 ];
 
@@ -259,7 +292,8 @@ export default function App() {
     confidence: 94.5,
     explanation: "Excellent fist structure recognized. The fingers are tightly coiled in harmony and your thumb is resting along the vertical edge of the index knuckle.",
     tips: ["Your palm height is optimal.", "Keep fingers fully folded flush for maximum contrast."],
-    grammarMatches: ["Symbol for Letter 'A'", "First entry of ASL Alphabet"]
+    grammarMatches: ["Symbol for Letter 'A'", "First entry of ASL Alphabet"],
+    detectedEmotion: "neutral"
   });
   const [sessions, setSessions] = useState<SessionHistoryItem[]>(INITIAL_SESSIONS);
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
@@ -353,7 +387,8 @@ export default function App() {
     confidence: 94.5,
     explanation: "Excellent stable gesture lock. The model outputs have been consolidated over a rolling moving average window.",
     tips: ["Stabilization engine online.", "Moving average filter active."],
-    grammarMatches: ["Stabilized output feed"]
+    grammarMatches: ["Stabilized output feed"],
+    detectedEmotion: "neutral"
   });
   const [chartData, setChartData] = useState<{ frame: number; raw: number; smoothed: number; gesture: string }[]>([]);
   
@@ -817,7 +852,7 @@ export default function App() {
     collectedSamplesRef.current = collectedSamples;
   }, [collectedSamples]);
 
-  const stabilizeAndLogPrediction = (rawChar: string, rawConfidence: number) => {
+  const stabilizeAndLogPrediction = (rawChar: string, rawConfidence: number, emotion?: string) => {
     const buffer = predictionBufferRef.current;
     buffer.push({ char: rawChar, confidence: rawConfidence, timestamp: Date.now() });
     
@@ -866,7 +901,8 @@ export default function App() {
         `Consolidated moving average confidence: ${finalSmoothed}%`,
         `Buffer retention match list: ${currentBuffer.map(i => i.char).join(', ')}`
       ],
-      grammarMatches: ["Stabilized output feed"]
+      grammarMatches: ["Stabilized output feed"],
+      detectedEmotion: emotion || "neutral"
     });
 
     // Update real-time chart data points
@@ -2033,11 +2069,12 @@ export default function App() {
               confidence: data.confidence,
               explanation: data.explanation,
               tips: data.tips,
-              grammarMatches: data.grammarMatches
+              grammarMatches: data.grammarMatches,
+              detectedEmotion: data.detectedEmotion || "neutral"
             });
-            stabilizeAndLogPrediction(data.predictedChar, data.confidence);
+            stabilizeAndLogPrediction(data.predictedChar, data.confidence, data.detectedEmotion);
             if (data.confidence >= confidenceThreshold) {
-              addPredictionToHistory(data.predictedChar, data.confidence);
+              addPredictionToHistory(data.predictedChar, data.confidence, data.detectedEmotion);
             }
           } else if (data && data.type === "error") {
             setWsError(data.message);
@@ -2322,11 +2359,11 @@ export default function App() {
       setLatestResult(report);
 
       // Run prediction stabilizer moving-average filter!
-      stabilizeAndLogPrediction(report.predictedChar, Number(report.confidence.toFixed(1)));
+      stabilizeAndLogPrediction(report.predictedChar, Number(report.confidence.toFixed(1)), report.detectedEmotion);
 
       // Save to sessions history list if above threshold
       if (Number(report.confidence.toFixed(1)) >= confidenceThreshold) {
-        addPredictionToHistory(report.predictedChar, Number(report.confidence.toFixed(1)));
+        addPredictionToHistory(report.predictedChar, Number(report.confidence.toFixed(1)), report.detectedEmotion);
       }
 
     } catch (e: any) {
@@ -2377,7 +2414,7 @@ export default function App() {
 
   const lastHistoryLogTimeRef = useRef<number>(0);
 
-  const addPredictionToHistory = (predictedChar: string, confidence: number) => {
+  const addPredictionToHistory = (predictedChar: string, confidence: number, emotion?: string) => {
     const now = Date.now();
     // Throttle history logging to at most once per 1.5 seconds in real-time camera processing to keep the frame loop super fast and smooth.
     if (now - lastHistoryLogTimeRef.current < 1500) {
@@ -2392,6 +2429,7 @@ export default function App() {
         updated[0] = {
           ...updated[0],
           confidence: Number(confidence.toFixed(1)),
+          emotion: emotion || updated[0].emotion || "neutral",
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " Today"
         };
         localStorage.setItem('asl_sessions', JSON.stringify(updated));
@@ -2404,7 +2442,8 @@ export default function App() {
         id: `session-${Date.now()}`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " Today",
         caption: `Practiced ${label} '${predictedChar}'`,
-        confidence: Number(confidence.toFixed(1))
+        confidence: Number(confidence.toFixed(1)),
+        emotion: emotion || "neutral"
       };
       const updated = [newItem, ...prev].slice(0, 8);
       localStorage.setItem('asl_sessions', JSON.stringify(updated));
@@ -2412,7 +2451,7 @@ export default function App() {
     });
   };
 
-  const addLearningPracticeLog = (predictedChar: string, confidence: number) => {
+  const addLearningPracticeLog = (predictedChar: string, confidence: number, emotion?: string) => {
     setSessions(prev => {
       const isWord = ["Hello", "Thank You", "Yes", "No", "Help", "Love", "Please", "Sorry", "HI", "SOS"].includes(predictedChar);
       const label = isWord ? 'Sign' : 'Letter';
@@ -2420,7 +2459,8 @@ export default function App() {
         id: `session-learn-${Date.now()}`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " Today",
         caption: `Practice Arena: ${label} '${predictedChar}'`,
-        confidence: Number(confidence.toFixed(1))
+        confidence: Number(confidence.toFixed(1)),
+        emotion: emotion || "neutral"
       };
       const updated = [newItem, ...prev].slice(0, 10);
       localStorage.setItem('asl_sessions', JSON.stringify(updated));
@@ -3209,6 +3249,21 @@ export default function App() {
                           Predicted Target Key Match
                         </span>
                       </div>
+                      {latestResult.detectedEmotion && (
+                        <div className="flex items-center gap-1.5 mt-2">
+                          <span className="text-[10px] uppercase font-bold tracking-wider text-[#9a9a8a] dark:text-zinc-500 font-sans">Face Sentiment:</span>
+                          {(() => {
+                            const emo = latestResult.detectedEmotion.toLowerCase();
+                            const details = EMOTION_MAP[emo] || EMOTION_MAP.neutral;
+                            return (
+                              <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full border shadow-2xs ${details.bgClass} ${details.colorClass} ${details.borderClass}`}>
+                                <span>{details.emoji}</span>
+                                <span>{details.label}</span>
+                              </span>
+                            );
+                          })()}
+                        </div>
+                      )}
                       <p className="text-xs text-[#5a5a4a] dark:text-[#d4d4d8] leading-relaxed mt-2.5 italic">
                         {latestResult.explanation}
                       </p>
@@ -4432,7 +4487,20 @@ export default function App() {
                           ASL
                         </div>
                         <div className="min-w-0">
-                          <p className="text-[11px] font-bold text-[#2d2d28] dark:text-[#cbdcbc] truncate">{ses.caption}</p>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="text-[11px] font-bold text-[#2d2d28] dark:text-[#cbdcbc] truncate">{ses.caption}</p>
+                            {ses.emotion && (
+                              (() => {
+                                const details = EMOTION_MAP[ses.emotion.toLowerCase()] || EMOTION_MAP.neutral;
+                                return (
+                                  <span className={`inline-flex items-center gap-0.5 text-[8px] font-bold px-1.5 py-0.5 rounded-full border leading-none ${details.bgClass} ${details.colorClass} ${details.borderClass}`} title={`Facial Expression: ${details.label}`}>
+                                    <span>{details.emoji}</span>
+                                    <span>{details.label}</span>
+                                  </span>
+                                );
+                              })()
+                            )}
+                          </div>
                           <p className="text-[9px] text-[#9a9a8a] mt-0.5">{ses.timestamp}</p>
                         </div>
                       </div>

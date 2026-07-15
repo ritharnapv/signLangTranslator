@@ -18,6 +18,7 @@ export interface TranslationResult {
   explanation: string;
   tips: string[];
   grammarMatches?: string[];
+  detectedEmotion?: 'happy' | 'sad' | 'angry' | 'neutral' | string;
 }
 
 export interface MilestoneDay {
@@ -35,6 +36,7 @@ export interface SessionHistoryItem {
   caption: string;
   confidence: number;
   canvasImage?: string; // fallback base64
+  emotion?: 'happy' | 'sad' | 'angry' | 'neutral' | string;
 }
 
 export interface CollectedSample {

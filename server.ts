@@ -74,69 +74,81 @@ async function runPrediction(image: string, targetGesture?: string): Promise<any
     const sampleLetters = targetGesture ? [targetGesture] : ["H", "A", "Y", "L", "O", "W"];
     const chosenLetter = sampleLetters[Math.floor(Math.random() * sampleLetters.length)];
     
+    const possibleEmotions = ["happy", "sad", "angry", "neutral"];
+    const randomEmotion = possibleEmotions[Math.floor(Math.random() * possibleEmotions.length)];
+
     const simulatedResponses: Record<string, any> = {
       "A": {
         predictedChar: "A",
         confidence: 94.5,
         explanation: "Strong fist gesture recognized with the thumb resting comfortably flat along the vertical side of the index finger.",
         tips: ["Keep your fingers tightly closed together.", "Avoid tucking your thumb underneath the fingers; push it outward as a support pillar."],
-        grammarMatches: ["Symbol for Letter 'A'", "ASL Alphabet Entry #1"]
+        grammarMatches: ["Symbol for Letter 'A'", "ASL Alphabet Entry #1"],
+        detectedEmotion: "neutral"
       },
       "B": {
         predictedChar: "B",
         confidence: 89.2,
         explanation: "Open flat hand layout oriented upwards, with fingers pressed together and index/thumb neatly tucked inside the front.",
         tips: ["Ensure all four main fingers are fully straightened vertically.", "Fold your thumb securely across your upper palm."],
-        grammarMatches: ["Symbol for Letter 'B'", "Numerical gesture '4' variation"]
+        grammarMatches: ["Symbol for Letter 'B'", "Numerical gesture '4' variation"],
+        detectedEmotion: "neutral"
       },
       "C": {
         predictedChar: "C",
         confidence: 91.8,
         explanation: "A clean, semicircular skeletal shape formed by curved fingers and thumb, mimicking a cup structure.",
         tips: ["Keep your palm open to reveal the side curve.", "Ensure the spacing between the fingertips and thumb tip remains clearly aligned."],
-        grammarMatches: ["Symbol for letter 'C'"]
+        grammarMatches: ["Symbol for letter 'C'"],
+        detectedEmotion: "happy"
       },
       "Hello": {
         predictedChar: "Hello",
         confidence: 95.8,
         explanation: "Flat hand posture aligned vertically at forehead height, swept outwards in an elegant salute motion. High contrast fingers detected against the background.",
         tips: ["Hold your hand flat and tilt your wrist outward.", "Make sure your thumb is tucked close to the side of your index finger."],
-        grammarMatches: ["Greeting", "ASL Universal Hello"]
+        grammarMatches: ["Greeting", "ASL Universal Hello"],
+        detectedEmotion: "happy"
       },
       "Thank You": {
         predictedChar: "Thank You",
         confidence: 92.4,
         explanation: "Flat open palm meeting the lip region and moving gracefully downward and outward facing the reader.",
         tips: ["Ensure your hand starts close to your lips before moving outward.", "Keep your palm facing upward at the end of the sign."],
-        grammarMatches: ["Greeting", "Politeness Formula 'Thank You'"]
+        grammarMatches: ["Greeting", "Politeness Formula 'Thank You'"],
+        detectedEmotion: "happy"
       },
       "Yes": {
         predictedChar: "Yes",
         confidence: 94.1,
         explanation: "S-hand shape (closed fist) facing outward, rocking vertically forward and back in a rhythmic nodding pattern.",
         tips: ["Keep your fingers tightly closed into a fist mimicking a head shape.", "Tilt your wrist cleanly from top to bottom, not side to side."],
-        grammarMatches: ["Agreement", "Affirmation 'Yes'"]
+        grammarMatches: ["Agreement", "Affirmation 'Yes'"],
+        detectedEmotion: "happy"
       },
       "No": {
         predictedChar: "No",
         confidence: 93.0,
         explanation: "Index and middle fingers extended together and rapidly striking the extended thumb pad below.",
         tips: ["Keep your ring and pinky fingers fully curled into your palm.", "Perform a crisp double-tap motion for maximum recognition accuracy."],
-        grammarMatches: ["Negation", "Refusal 'No'"]
+        grammarMatches: ["Negation", "Refusal 'No'"],
+        detectedEmotion: "angry"
       },
       "Help": {
         predictedChar: "Help",
         confidence: 91.5,
         explanation: "Dominant hand closed in a thumbs-up shape resting squarely on top of the flat, open non-dominant hand, moving upward in a lifting motion.",
         tips: ["Ensure the non-dominant palm acts as a clear flat supporting platform.", "Extend your thumb pointing straight up in a clean thumbs-up posture."],
-        grammarMatches: ["Request", "Assistance 'Help'", "SOS Emergency Sign"]
+        grammarMatches: ["Request", "Assistance 'Help'", "SOS Emergency Sign"],
+        detectedEmotion: "sad"
       },
       "DEFAULT": {
         predictedChar: chosenLetter,
         confidence: 85.0 + Math.random() * 12.0,
         explanation: `We've detected a distinctive gesture resembling '${chosenLetter}' under localized camera lighting. The joints are angled well with clear outline distinction.`,
         tips: ["Keep your hand centered inside the green detection ring for ideal tracking.", "Minimize background clutter and maintain high contrast shadow lines."],
-        grammarMatches: [`Symbol for ${chosenLetter}`, "General gesture sequence"]
+        grammarMatches: [`Symbol for ${chosenLetter}`, "General gesture sequence"],
+        detectedEmotion: randomEmotion
       }
     };
 
@@ -151,8 +163,8 @@ async function runPrediction(image: string, targetGesture?: string): Promise<any
 
   // Call actual Gemini 3.5 Multimodal model
   const promptText = targetGesture
-    ? `You are a certified sign language interpreter. The user is practicing the ASL symbol for "${targetGesture}". Analyze their camera snapshot. Check if they did it correctly, output their prediction, confidence (0-100), detailed feedback explanation and constructive correction tips.`
-    : "You are a professional sign language interpreter. Analyze this camera frame image and translate the hand gesture to its corresponding ASL alphabet letter or common sign (like Hello, Please, Thank You, Love). Return prediction, confidence, explanation, and physical correctness tips.";
+    ? `You are a certified sign language interpreter. The user is practicing the ASL symbol for "${targetGesture}". Analyze their camera snapshot. Check if they did it correctly, output their prediction, confidence (0-100), detailed feedback explanation, constructive correction tips, and also identify if their face is visible and what facial emotion they are displaying: happy, sad, angry, or neutral (default to neutral if not clear).`
+    : "You are a professional sign language interpreter. Analyze this camera frame image and translate the hand gesture to its corresponding ASL alphabet letter or common sign (like Hello, Please, Thank You, Love). Also analyze the face in the image to detect the user's facial emotion: happy, sad, angry, or neutral (default to neutral if not clear or not visible). Return prediction, confidence, explanation, physical correctness tips, and detected facial emotion.";
 
   const imagePart = {
     inlineData: {
@@ -169,7 +181,7 @@ async function runPrediction(image: string, targetGesture?: string): Promise<any
     model: "gemini-3.5-flash",
     contents: { parts: [imagePart, textPart] },
     config: {
-      systemInstruction: "You are a professional sign language feedback AI. Analyze the uploaded image containing a sign language hand shape, output the correct letter/word, a numeric confidence score, a visual outline description, and a list of 2 or 3 corrective hand-placement improvement tips. You must return EXACTLY valid JSON matching the schema.",
+      systemInstruction: "You are a professional sign language feedback and facial sentiment AI. Analyze the uploaded image containing a sign language hand shape and face expression, output the correct letter/word, a numeric confidence score, a visual outline description, a list of 2 or 3 corrective hand-placement improvement tips, and the detected facial emotion ('happy', 'sad', 'angry', 'neutral'). You must return EXACTLY valid JSON matching the schema.",
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
@@ -195,9 +207,13 @@ async function runPrediction(image: string, targetGesture?: string): Promise<any
             type: Type.ARRAY,
             items: { type: Type.STRING },
             description: "Contextual info or words containing this letter."
+          },
+          detectedEmotion: {
+            type: Type.STRING,
+            description: "The user's detected facial emotion in the image. Must be one of: 'happy', 'sad', 'angry', 'neutral'."
           }
         },
-        required: ["predictedChar", "confidence", "explanation", "tips"]
+        required: ["predictedChar", "confidence", "explanation", "tips", "detectedEmotion"]
       }
     }
   });
@@ -1049,6 +1065,7 @@ async function startServer() {
                 explanation: prediction.explanation || "",
                 tips: prediction.tips || [],
                 grammarMatches: prediction.grammarMatches || [],
+                detectedEmotion: prediction.detectedEmotion || "neutral",
                 simulated: prediction.simulated !== false
               }));
             }
