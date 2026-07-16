@@ -123,12 +123,40 @@
           "description": "Creation timestamp"
         }
       }
+    },
+    "faceProfile": {
+      "title": "FaceProfile",
+      "description": "Secure face recognition login snapshot and registration metadata",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "User identifier"
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address"
+        },
+        "enrolledFace": {
+          "type": "string",
+          "description": "Base64 string of the registered face image"
+        },
+        "enrolledAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO timestamp of face enrollment"
+        }
+      }
     }
   },
   "firestore": {
     "users/{userId}": {
       "schema": "user",
       "description": "Root user settings profiles"
+    },
+    "face_profiles/{userId}": {
+      "schema": "faceProfile",
+      "description": "Enrolled Face ID data for users"
     },
     "users/{userId}/backups/{backupId}": {
       "schema": "backup",

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { auth, db } from '../firebase';
 import { updateProfile, updatePassword, signOut } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
@@ -18,7 +18,11 @@ import {
   UserSquare2, 
   TrendingUp, 
   RefreshCw,
-  Clock
+  Clock,
+  Camera,
+  UserCheck,
+  Trash2,
+  Lock
 } from 'lucide-react';
 import { CollectedSample, SessionHistoryItem } from '../types';
 
@@ -51,6 +55,147 @@ export default function UserProfile({
   const [backupStatus, setBackupStatus] = useState<string | null>(null);
   const [loadStatus, setLoadStatus] = useState<string | null>(null);
   const [settingsStatus, setSettingsStatus] = useState<string | null>(null);
+
+  // Biometric Face ID states
+  const [isEnrolled, setIsEnrolled] = useState<boolean>(false);
+  const [enrolledAt, setEnrolledAt] = useState<string>('');
+  const [isEnrolling, setIsEnrolling] = useState<boolean>(false);
+  const [enrollLoading, setEnrollLoading] = useState<boolean>(false);
+  const [enrollStatus, setEnrollStatus] = useState<string | null>(null);
+  const [enrollCameraActive, setEnrollCameraActive] = useState<boolean>(false);
+  const enrollVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  // Check existing Face ID enrollment on mount
+  useEffect(() => {
+    if (!user) return;
+    const checkEnrollment = async () => {
+      try {
+        const docSnap = await getDoc(doc(db, 'face_profiles', user.uid));
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setIsEnrolled(true);
+          if (data.enrolledAt) {
+            setEnrolledAt(new Date(data.enrolledAt).toLocaleDateString(undefined, {
+              year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+            }));
+          }
+        }
+      } catch (err) {
+        console.error("Error loading Face ID enrollment status:", err);
+      }
+    };
+    checkEnrollment();
+  }, [user]);
+
+  // Set up camera session for Face ID enrollment view finder
+  useEffect(() => {
+    let activeStream: MediaStream | null = null;
+    
+    if (isEnrolling) {
+      const startCamera = async () => {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { width: 640, height: 480 },
+            audio: false
+          });
+          activeStream = stream;
+          if (enrollVideoRef.current) {
+            enrollVideoRef.current.srcObject = stream;
+          }
+          setEnrollCameraActive(true);
+        } catch (err: any) {
+          console.error("Error starting camera for Face ID Enrollment:", err);
+          setEnrollStatus("Failed to access camera. Please allow webcam permission.");
+          setEnrollCameraActive(false);
+        }
+      };
+      startCamera();
+    } else {
+      setEnrollCameraActive(false);
+    }
+
+    return () => {
+      if (activeStream) {
+        activeStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [isEnrolling]);
+
+  const handleEnrollFace = async () => {
+    if (!enrollVideoRef.current || !user) return;
+    setEnrollLoading(true);
+    setEnrollStatus("Capturing face snapshot...");
+
+    try {
+      // 1. Capture snapshot from video
+      const canvas = document.createElement('canvas');
+      canvas.width = 640;
+      canvas.height = 480;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error("Could not construct 2D context canvas.");
+      
+      ctx.drawImage(enrollVideoRef.current, 0, 0, 640, 480);
+      const snapshotBase64 = canvas.toDataURL('image/jpeg', 0.85);
+
+      setEnrollStatus("Analyzing facial landmarks & storing biometric signature...");
+
+      // 2. Obtain Firebase client auth ID token to verify backend request
+      const idToken = await user.getIdToken();
+
+      // Submit enrollment package to backend
+      const response = await fetch('/api/face-auth/enroll', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
+        body: JSON.stringify({
+          email: user.email,
+          image: snapshotBase64
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || errorData.details || "Face enrollment registration rejected by security center.");
+      }
+
+      setIsEnrolled(true);
+      setEnrolledAt(new Date().toLocaleDateString(undefined, {
+        year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+      }));
+      setEnrollStatus("Face ID Enrollment Secured successfully!");
+      setIsEnrolling(false);
+      setTimeout(() => setEnrollStatus(null), 3500);
+    } catch (err: any) {
+      console.error("Face ID Enrollment error:", err);
+      setEnrollStatus(`Enrollment Error: ${err.message || err}`);
+    } finally {
+      setEnrollLoading(false);
+    }
+  };
+
+  const handleDeleteFaceId = async () => {
+    if (!user) return;
+    if (!window.confirm("Are you sure you want to permanently delete your registered Face ID biometric template? This cannot be undone.")) return;
+    
+    setEnrollLoading(true);
+    setEnrollStatus("Deleting biometric record...");
+
+    try {
+      const { deleteDoc, doc } = await import('firebase/firestore');
+      await deleteDoc(doc(db, 'face_profiles', user.uid));
+      setIsEnrolled(false);
+      setEnrolledAt('');
+      setEnrollStatus("Biometric Face ID deleted.");
+      setTimeout(() => setEnrollStatus(null), 3000);
+    } catch (err: any) {
+      console.error("Face ID deletion error:", err);
+      setEnrollStatus(`Deletion error: ${err.message || err}`);
+    } finally {
+      setEnrollLoading(false);
+    }
+  };
 
   // Load user settings from Firestore on mount
   useEffect(() => {
@@ -407,6 +552,141 @@ export default function UserProfile({
 
             </div>
 
+          </div>
+
+          {/* Secure Biometric Face ID Configuration Card */}
+          <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-6 shadow-sm space-y-5 animate-fadeIn" id="face-id-enroll-card">
+            <div className="border-b border-[#f0f2ee] dark:border-[#2d2d32] pb-4 flex justify-between items-start">
+              <div>
+                <h2 className="text-base font-bold text-[#2d2d28] dark:text-[#f4f4f5] flex items-center gap-2">
+                  <Lock className="w-5 h-5 text-[#7c8d7c]" />
+                  Secure Biometric Face ID
+                </h2>
+                <p className="text-xs text-[#7a7a6a] dark:text-[#a1a1aa] mt-0.5">
+                  Register your facial geometry template to log in securely with your webcam from any machine.
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5 bg-[#f0f2ee] dark:bg-[#151518] px-2.5 py-1 rounded-full border border-[#e0e4db] dark:border-[#2d2d32]">
+                <span className={`w-2 h-2 rounded-full ${isEnrolled ? 'bg-emerald-500 animate-pulse' : 'bg-neutral-400'}`} />
+                <span className="text-[9px] font-black uppercase tracking-wider text-[#5a5a4a] dark:text-[#cbd5e1] font-mono">
+                  {isEnrolled ? "Secured" : "Inactive"}
+                </span>
+              </div>
+            </div>
+
+            {enrollStatus && (
+              <div className="bg-[#fdfcf9] dark:bg-[#151518] border border-[#e0e4db] dark:border-[#2d2d32] text-[#2d2d28] dark:text-[#cbd5e1] p-3.5 rounded-xl text-xs font-semibold font-sans animate-fadeIn" id="enroll-status-alert">
+                {enrollStatus}
+              </div>
+            )}
+
+            {!isEnrolling ? (
+              <div className="space-y-4">
+                {isEnrolled ? (
+                  <div className="p-4 bg-[#fdfcf9] dark:bg-[#151518]/50 border border-[#e0e4db] dark:border-[#2d2d32] rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <h3 className="text-xs font-bold text-emerald-800 dark:text-emerald-400 flex items-center gap-1">
+                        <CheckCircle className="w-4 h-4" />
+                        Webcam Biometrics Registered
+                      </h3>
+                      <p className="text-[11px] text-[#5c5c50] dark:text-[#a1a1aa] leading-relaxed">
+                        Your Face ID credentials are active and synchronized. Registered on: <strong className="font-semibold text-[#2d2d28] dark:text-white">{enrolledAt}</strong>.
+                      </p>
+                    </div>
+                    <div className="flex gap-2 w-full sm:w-auto self-stretch sm:self-center">
+                      <button
+                        onClick={() => setIsEnrolling(true)}
+                        className="flex-1 sm:flex-initial py-2 px-3 border border-[#cbdcbc] text-[#7c8d7c] hover:bg-[#7c8d7c] hover:text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1"
+                      >
+                        <Camera className="w-3.5 h-3.5" />
+                        <span>Update Face</span>
+                      </button>
+                      <button
+                        onClick={handleDeleteFaceId}
+                        className="py-2 px-3 border border-rose-200 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-[#fdfcf9] dark:bg-[#151518]/50 border border-[#e0e4db] dark:border-[#2d2d32] rounded-2xl flex flex-col items-center text-center space-y-3">
+                    <div className="w-12 h-12 bg-neutral-100 dark:bg-[#1e1e22] border border-[#e0e4db] dark:border-[#2d2d32] rounded-full flex items-center justify-center text-neutral-400">
+                      <Camera className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-bold text-[#2d2d28] dark:text-[#cbd5e1] uppercase tracking-wide">Enroll Face ID Biometrics</h3>
+                      <p className="text-[11px] text-[#5c5c50] dark:text-[#a1a1aa] leading-relaxed mt-1 max-w-sm">
+                        Activate biometric security logins. This creates a secure, mathematically mapped neural signature of your face using your system webcam.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setIsEnrolling(true)}
+                      className="py-2.5 px-4 bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white hover:bg-[#6c7d6c] dark:hover:bg-[#3d4c3f] rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                    >
+                      <Camera className="w-4 h-4" />
+                      <span>Start Enrollment</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4 animate-fadeIn" id="enrollment-webcam-panel">
+                <div className="space-y-1">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-[#5a5a4a] dark:text-[#cbd5e1] font-mono block">
+                    Webcam View Finder
+                  </span>
+                  <div className="relative aspect-video bg-neutral-950 rounded-2xl overflow-hidden border border-[#e0e4db] dark:border-[#2d2d32] shadow-inner flex items-center justify-center">
+                    {enrollCameraActive ? (
+                      <video
+                        ref={enrollVideoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        className="w-full h-full object-cover scale-x-[-1]"
+                      />
+                    ) : (
+                      <div className="text-center p-4 text-neutral-500 font-mono text-[10px] uppercase">
+                        <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-[#7c8d7c]" />
+                        Accessing Webcam Feed...
+                      </div>
+                    )}
+
+                    {/* Secure Scan Lines Layer */}
+                    {enrollCameraActive && (
+                      <div className="absolute inset-0 pointer-events-none border border-[#7c8d7c]/20 rounded-2xl overflow-hidden">
+                        <div className="w-full h-0.5 bg-[#7c8d7c] opacity-40 shadow-[0_0_8px_#7c8d7c] absolute top-0 left-0 animate-scan" />
+                      </div>
+                    )}
+
+                    {enrollLoading && (
+                      <div className="absolute inset-0 bg-neutral-950/80 backdrop-blur-xs flex flex-col items-center justify-center text-center p-6 space-y-3 relative z-30">
+                        <RefreshCw className="w-10 h-10 animate-spin text-[#7c8d7c]" />
+                        <span className="text-xs font-bold text-white tracking-wide uppercase">Registering Face Signature</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex gap-3 justify-end pt-2">
+                  <button
+                    onClick={() => setIsEnrolling(false)}
+                    disabled={enrollLoading}
+                    className="py-2.5 px-4 border border-[#e0e4db] text-neutral-600 dark:text-zinc-300 hover:bg-neutral-50 dark:hover:bg-zinc-800 rounded-xl text-xs font-black uppercase tracking-wider cursor-pointer disabled:opacity-40 transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleEnrollFace}
+                    disabled={enrollLoading || !enrollCameraActive}
+                    className="py-2.5 px-5 bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white hover:bg-[#6c7d6c] dark:hover:bg-[#3d4c3f] rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-sm cursor-pointer disabled:opacity-40"
+                  >
+                    <Camera className="w-4 h-4" />
+                    <span>Capture & Enroll Face</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
         </div>

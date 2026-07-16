@@ -51,5 +51,14 @@ service cloud.firestore {
         allow delete: if isOwner(userId);
       }
     }
+
+    // Face profiles path (Secure Biometric templates)
+    match /face_profiles/{userId} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId)
+        && request.resource.data.email is string
+        && request.resource.data.enrolledFace is string;
+      allow delete: if isOwner(userId);
+    }
   }
 }
