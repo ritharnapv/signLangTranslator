@@ -9,6 +9,7 @@ import ModelTrainer from './components/ModelTrainer';
 import UserAuth from './components/UserAuth';
 import UserProfile from './components/UserProfile';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
+import TranslationHistory from './components/TranslationHistory';
 import { auth, db } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
@@ -145,7 +146,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
 
-  // Translation logs state for Analytics Dashboard
+  // Translation logs state for Analytics Dashboard & History Archive
   const [translations, setTranslations] = useState<TranslationLogItem[]>(() => {
     try {
       const stored = localStorage.getItem('asl_translations');
@@ -155,21 +156,74 @@ export default function App() {
     }
   });
 
-  const logTranslationEvent = (inputText: string, translatedText: string, targetLanguage: string) => {
+  const logTranslationEvent = async (inputText: string, translatedText: string, targetLanguage: string) => {
     if (!inputText.trim() || !translatedText.trim()) return;
     
+    const newItem: TranslationLogItem = {
+      id: `trans-${Date.now()}`,
+      timestamp: new Date().toLocaleString([], {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      }),
+      inputText,
+      translatedText,
+      targetLanguage
+    };
+
     setTranslations(prev => {
-      const newItem: TranslationLogItem = {
-        id: `trans-${Date.now()}`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " Today",
-        inputText,
-        translatedText,
-        targetLanguage
-      };
-      const updated = [newItem, ...prev].slice(0, 50); // Keep last 50 translations
+      const updated = [newItem, ...prev]; // Save ALL sentences (no slice!)
       localStorage.setItem('asl_translations', JSON.stringify(updated));
       return updated;
     });
+
+    if (currentUser) {
+      try {
+        const docRef = doc(db, "users", currentUser.uid, "translations", newItem.id);
+        await setDoc(docRef, newItem);
+      } catch (err) {
+        console.error("Firestore Error saving translation:", err);
+      }
+    }
+  };
+
+  const handleDeleteTranslationItem = async (id: string) => {
+    setTranslations(prev => {
+      const updated = prev.filter(item => item.id !== id);
+      localStorage.setItem('asl_translations', JSON.stringify(updated));
+      return updated;
+    });
+
+    if (currentUser) {
+      try {
+        await deleteDoc(doc(db, "users", currentUser.uid, "translations", id));
+      } catch (err) {
+        console.error("Firestore Error deleting translation:", err);
+      }
+    }
+  };
+
+  const handleClearTranslations = async () => {
+    setTranslations([]);
+    localStorage.removeItem('asl_translations');
+
+    if (currentUser) {
+      try {
+        const colRef = collection(db, "users", currentUser.uid, "translations");
+        const snap = await getDocs(colRef);
+        const { writeBatch } = await import('firebase/firestore');
+        const batch = writeBatch(db);
+        snap.forEach(docSnap => {
+          batch.delete(docSnap.ref);
+        });
+        await batch.commit();
+      } catch (err) {
+        console.error("Firestore Error clearing translations:", err);
+      }
+    }
   };
 
 
@@ -180,6 +234,31 @@ export default function App() {
     });
     return () => unsubscribe();
   }, []);
+
+  // Sync translation history from Cloud Firestore when user logs in
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const loadCloudTranslations = async () => {
+      try {
+        const colRef = collection(db, "users", currentUser.uid, "translations");
+        const snap = await getDocs(colRef);
+        const fetched: TranslationLogItem[] = [];
+        snap.forEach((docSnap) => {
+          fetched.push(docSnap.data() as TranslationLogItem);
+        });
+        if (fetched.length > 0) {
+          fetched.sort((a, b) => b.id.localeCompare(a.id));
+          setTranslations(fetched);
+          localStorage.setItem('asl_translations', JSON.stringify(fetched));
+        }
+      } catch (err) {
+        console.error("Firestore Error loading translations:", err);
+      }
+    };
+
+    loadCloudTranslations();
+  }, [currentUser]);
 
   // Custom gestures state & sync logic
   const [customGestures, setCustomGestures] = useState<ASLGesture[]>(() => {
@@ -4225,6 +4304,14 @@ export default function App() {
                   });
                 }}
                 activeGesture={selectedGesture}
+              />
+
+              {/* Translation History Archive Panel */}
+              <TranslationHistory 
+                translations={translations}
+                onDeleteIndividual={handleDeleteTranslationItem}
+                onClearHistory={handleClearTranslations}
+                onSpeak={handleSpeak}
               />
 
             </div>
