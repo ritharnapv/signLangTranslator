@@ -11,15 +11,18 @@ import {
   Filter,
   FileJson,
   FileSpreadsheet,
+  FileText,
   Calendar
 } from 'lucide-react';
 import { TranslationLogItem } from '../types';
+import { jsPDF } from 'jspdf';
 
 interface TranslationHistoryProps {
   translations: TranslationLogItem[];
   onDeleteIndividual: (id: string) => void;
   onClearHistory: () => void;
   onSpeak: (text: string, lang: string) => void;
+  currentUser?: any;
 }
 
 export default function TranslationHistory({
@@ -27,6 +30,7 @@ export default function TranslationHistory({
   onDeleteIndividual,
   onClearHistory,
   onSpeak,
+  currentUser,
 }: TranslationHistoryProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLanguage, setSelectedLanguage] = useState('All');
@@ -86,6 +90,185 @@ export default function TranslationHistory({
     document.body.removeChild(link);
   };
 
+  // Export clean PDF report matching sage/slate aesthetic with timestamps and user details
+  const exportToPDF = () => {
+    if (filteredTranslations.length === 0) return;
+
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    // Color definitions
+    // Sage Accent: [124, 141, 124]
+    // Dark Charcoal Text: [45, 45, 40]
+    // Subtle Sage-Tint Box bg: [251, 251, 246]
+    // Border line color: [224, 228, 219]
+
+    const margin = 15;
+    const pageWidth = 210;
+    const pageHeight = 297;
+    const contentWidth = pageWidth - (margin * 2);
+
+    let y = margin;
+
+    // Header Sage Line
+    doc.setFillColor(124, 141, 124);
+    doc.rect(margin, y, contentWidth, 3, 'F');
+    y += 10;
+
+    // Report Title
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(20);
+    doc.setTextColor(45, 45, 40);
+    doc.text('ASL Sign Language Translation Report', margin, y);
+    y += 6;
+
+    // Subtitle
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(122, 122, 106);
+    doc.text('Official translation archive & learning activity logs generated via ASL Studio.', margin, y);
+    y += 8;
+
+    // Horizontal Divider
+    doc.setDrawColor(224, 228, 219);
+    doc.setLineWidth(0.4);
+    doc.line(margin, y, margin + contentWidth, y);
+    y += 6;
+
+    // User & Session Context Summary Block
+    doc.setFillColor(251, 251, 246);
+    doc.rect(margin, y, contentWidth, 28, 'F');
+    doc.setDrawColor(224, 228, 219);
+    doc.rect(margin, y, contentWidth, 28, 'S');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(45, 45, 40);
+    doc.text('SECURITY STATUS & USER INFORMATION', margin + 5, y + 6);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(80, 80, 70);
+    
+    const userEmail = currentUser?.email || 'Guest Learner (Offline Session)';
+    const userUID = currentUser?.uid ? `UID: ${currentUser.uid}` : 'Local-only guest session';
+    doc.text(`Account Email: ${userEmail}`, margin + 5, y + 12);
+    doc.text(`Security Node: ${userUID}`, margin + 5, y + 17);
+
+    const formattedNow = new Date().toLocaleString([], {
+      year: 'numeric', month: 'long', day: 'numeric',
+      hour: '2-digit', minute: '2-digit', second: '2-digit'
+    });
+    doc.text(`Exported On: ${formattedNow}`, margin + 5, y + 22);
+
+    // Language statistics
+    const languageStats = filteredTranslations.reduce((acc, curr) => {
+      acc[curr.targetLanguage] = (acc[curr.targetLanguage] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    const statsString = Object.entries(languageStats).map(([lang, count]) => `${lang}: ${count}`).join(', ');
+
+    doc.setFont('helvetica', 'bold');
+    doc.text('ARCHIVE INSIGHTS', margin + contentWidth - 80, y + 6);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Total Records Displayed: ${filteredTranslations.length}`, margin + contentWidth - 80, y + 12);
+    doc.text(`Language Breakdown:`, margin + contentWidth - 80, y + 17);
+    doc.setFontSize(7.5);
+    doc.text(statsString || 'None', margin + contentWidth - 80, y + 21, { maxWidth: 75 });
+
+    y += 36;
+
+    // Table Columns Headers
+    doc.setFillColor(240, 242, 238);
+    doc.rect(margin, y - 8, contentWidth, 8, 'F');
+    
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(45, 45, 40);
+    doc.text('TIMESTAMP / ID', margin + 3, y - 2.5);
+    doc.text('DETECTED SIGN GESTURES', margin + 55, y - 2.5);
+    doc.text('TRANSLATED OUTPUT (TARGET LOCALE)', margin + 110, y - 2.5);
+
+    // Items list
+    filteredTranslations.forEach((item, index) => {
+      const splitInput = doc.splitTextToSize(item.inputText || 'N/A', 50);
+      const splitTrans = doc.splitTextToSize(`[${item.targetLanguage}] ${item.translatedText || ''}`, contentWidth - 113);
+      
+      const linesCount = Math.max(splitInput.length, splitTrans.length, 2);
+      const itemHeight = (linesCount * 4.5) + 8; // dynamic cell height with safe line spacing
+
+      // Check if we overflow current page (A4 height is 297, margin is 15, footer is 15)
+      if (y + itemHeight > pageHeight - margin - 15) {
+        doc.addPage();
+        y = margin + 15;
+        
+        // Page border line at top of new page
+        doc.setFillColor(124, 141, 124);
+        doc.rect(margin, y - 10, contentWidth, 2, 'F');
+
+        // Draw headers on new page
+        doc.setFillColor(240, 242, 238);
+        doc.rect(margin, y - 8, contentWidth, 8, 'F');
+        
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8.5);
+        doc.setTextColor(45, 45, 40);
+        doc.text('TIMESTAMP / ID', margin + 3, y - 2.5);
+        doc.text('DETECTED SIGN GESTURES', margin + 55, y - 2.5);
+        doc.text('TRANSLATED OUTPUT (TARGET LOCALE)', margin + 110, y - 2.5);
+      }
+
+      // Draw alternate zebra background rows
+      if (index % 2 === 1) {
+        doc.setFillColor(253, 252, 249);
+        doc.rect(margin, y, contentWidth, itemHeight, 'F');
+      }
+
+      // Border line separating entries
+      doc.setDrawColor(240, 242, 238);
+      doc.setLineWidth(0.3);
+      doc.line(margin, y + itemHeight, margin + contentWidth, y + itemHeight);
+
+      // Col 1: Timestamp
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(110, 110, 100);
+      doc.text(item.timestamp || 'N/A', margin + 3, y + 6);
+      doc.setFont('helvetica', 'italic');
+      doc.text(`ID: ${item.id}`, margin + 3, y + 11);
+
+      // Col 2: Input Sign Phrase (bold)
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.5);
+      doc.setTextColor(70, 70, 65);
+      doc.text(splitInput, margin + 55, y + 6);
+
+      // Col 3: Translated Sentences
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(45, 45, 40);
+      doc.text(splitTrans, margin + 110, y + 6);
+
+      y += itemHeight;
+    });
+
+    // Add running headers / page numbers
+    const pageCount = doc.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(122, 122, 106);
+      doc.text(`Page ${i} of ${pageCount}`, margin, pageHeight - 10);
+      doc.text(`ASL Studio Translation Utility - Academic & Personal Logs`, margin + contentWidth - 95, pageHeight - 10);
+    }
+
+    doc.save(`ASL_Translation_History_${Date.now()}.pdf`);
+  };
+
   return (
     <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-[32px] p-6 shadow-sm space-y-5 animate-fadeIn" id="translation-history-panel">
       {/* Header section with counts and global controls */}
@@ -120,6 +303,15 @@ export default function TranslationHistory({
               >
                 <FileSpreadsheet className="w-3.5 h-3.5" />
                 <span>CSV</span>
+              </button>
+              <div className="w-px h-4 bg-gray-200 dark:bg-zinc-800" />
+              <button
+                onClick={exportToPDF}
+                className="p-1.5 hover:bg-white dark:hover:bg-zinc-800 rounded-lg text-[#5a5a4a] dark:text-zinc-300 hover:text-[#7c8d7c] transition-all cursor-pointer flex items-center gap-1 text-[10px] font-black uppercase font-mono tracking-wider"
+                title="Export History as PDF Report"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>PDF</span>
               </button>
             </div>
 

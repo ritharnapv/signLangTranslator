@@ -4312,6 +4312,7 @@ export default function App() {
                 onDeleteIndividual={handleDeleteTranslationItem}
                 onClearHistory={handleClearTranslations}
                 onSpeak={handleSpeak}
+                currentUser={currentUser}
               />
 
             </div>
