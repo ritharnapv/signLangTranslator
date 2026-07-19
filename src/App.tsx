@@ -10,6 +10,7 @@ import UserAuth from './components/UserAuth';
 import UserProfile from './components/UserProfile';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
 import TranslationHistory from './components/TranslationHistory';
+import ContinuousConversation from './components/ContinuousConversation';
 import { auth, db } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
@@ -49,6 +50,7 @@ import {
   Sun,
   Moon,
   Languages,
+  MessageSquare,
   Menu,
   X,
   FlipHorizontal,
@@ -142,7 +144,7 @@ export default function App() {
     localStorage.setItem('dark_mode_preference', String(darkMode));
   }, [darkMode]);
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'learning' | 'dictionary' | 'roadmap' | 'collector' | 'datasets' | 'trainer' | 'files' | 'profile' | 'analytics'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'learning' | 'dictionary' | 'roadmap' | 'collector' | 'datasets' | 'trainer' | 'files' | 'profile' | 'analytics' | 'conversation'>('dashboard');
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
 
@@ -2614,6 +2616,16 @@ export default function App() {
             Practice Dashboard
           </button>
           <button
+            onClick={() => { setActiveTab('conversation'); setMobileMenuOpen(false); }}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
+              activeTab === 'conversation'
+                ? "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white shadow-sm"
+                : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
+            }`}
+          >
+            Continuous Conversation
+          </button>
+          <button
             onClick={() => { setActiveTab('analytics'); setMobileMenuOpen(false); }}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
               activeTab === 'analytics'
@@ -2786,6 +2798,7 @@ export default function App() {
           <div className="grid grid-cols-2 gap-2">
             {[
               { id: 'dashboard', label: 'Practice Dashboard', icon: Camera },
+              { id: 'conversation', label: 'Continuous Conv.', icon: MessageSquare },
               { id: 'analytics', label: 'Analytics Dashboard', icon: Activity },
               { id: 'dictionary', label: 'ASL Dictionary', icon: BookOpen },
               { id: 'learning', label: 'Practice Arena', icon: Sparkles },
@@ -5338,6 +5351,145 @@ export default function App() {
               setActiveTab('dashboard');
             }}
           />
+        )}
+
+        {/* Continuous Conversation Tab View */}
+        {activeTab === 'conversation' && (
+          <div className="space-y-6 animate-fadeIn" id="continuous-conversation-tab">
+            <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-6 shadow-sm space-y-3" id="conversation-intro-hero">
+              <h2 className="text-xl font-bold text-[#2d2d28] dark:text-[#f4f4f5]">Continuous AI Conversation Sandbox</h2>
+              <p className="text-xs text-[#5a5a4a] dark:text-[#cbd5e1] leading-relaxed max-w-3xl">
+                Engage in direct, continuous, hands-free dialogue. The system leverages active frame gesture locks, automatically translating finished phrases on-the-fly and generating complete spoken audio readouts. Play or pause the stream, track exchange loops, and simulate natural two-way conversations.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-12 gap-8" id="conversation-main-grid">
+              
+              {/* Left Side: Camera viewport HUD & active gesture recognizer */}
+              <div className="xl:col-span-5 space-y-6">
+                
+                {/* Webcam box */}
+                <div className="relative aspect-video bg-[#1a1a17] rounded-[32px] shadow-sm overflow-hidden border-[8px] border-white dark:border-[#202023] group" id="conversation-video-frame-container">
+                  {cameraActive ? (
+                    <div className="relative w-full h-full">
+                      <video 
+                        ref={videoRef}
+                        playsInline 
+                        muted 
+                        className="w-full h-full object-cover scale-x-[-1]"
+                        id="webcam-hardware-conversation"
+                      />
+                      <canvas 
+                        ref={landmarkCanvasRef}
+                        className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                        id="landmark-canvas-conversation"
+                      />
+                    </div>
+                  ) : (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-zinc-900" id="conversation-camera-offscreen">
+                      <div className="w-16 h-16 rounded-full bg-[#3a3a35]/45 border-2 border-[#7c8d7c]/40 flex items-center justify-center text-[#7c8d7c] animate-pulse mb-3">
+                        <Video className="w-6 h-6" />
+                      </div>
+                      <h3 className="text-sm font-bold text-white tracking-wide">Webcam Offline</h3>
+                      <p className="text-[11px] text-white/50 max-w-xs mt-1 leading-relaxed">
+                        To sign, toggle your system camera live stream feed below.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* HUD overlays */}
+                  <div className="absolute top-4 left-4 flex flex-wrap gap-2 pointer-events-none">
+                    <span className="px-2.5 py-1 bg-black/40 backdrop-blur-md rounded-lg text-[9px] font-mono tracking-widest text-white border border-white/10 uppercase font-bold">
+                      Gesture Tracker
+                    </span>
+                    {cameraActive && (
+                      <span className="px-2.5 py-1 bg-[#52a447] backdrop-blur-md rounded-lg text-[9px] font-mono tracking-widest text-white border border-white/10 uppercase font-bold">
+                        {liveFps > 0 ? `${liveFps} FPS` : "WAITING FPS..."}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Camera controls panel */}
+                <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-4.5 flex flex-col gap-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <button
+                      onClick={toggleCamera}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold uppercase tracking-wide transition-all cursor-pointer ${
+                        cameraActive 
+                          ? "bg-[#ebdcd1] dark:bg-[#453730] text-[#a36b5e] dark:text-[#ebdcd1] border border-[#ebdcd1] dark:border-[#523d32]" 
+                          : "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white hover:bg-[#7c8d7c]/90"
+                      }`}
+                    >
+                      {cameraActive ? <VideoOff className="w-4 h-4" /> : <Video className="w-4 h-4" />}
+                      {cameraActive ? "Disconnect Camera" : "Enable Camera"}
+                    </button>
+
+                    {videoDevices.length > 0 && (
+                      <select
+                        value={selectedDeviceId}
+                        onChange={handleDeviceChange}
+                        className="bg-[#fdfcf9] dark:bg-[#151518] border border-[#e0e4db] dark:border-[#2d2d32] text-[#4a4a40] dark:text-[#d4d4d8] text-xs font-semibold py-2.5 px-3 rounded-2xl focus:outline-none focus:ring-1 focus:ring-[#7c8d7c] transition-all cursor-pointer shadow-sm"
+                        title="Select camera source"
+                      >
+                        {videoDevices.map((device, idx) => (
+                          <option key={device.deviceId || idx} value={device.deviceId}>
+                            {device.label || `Camera ${idx + 1}`}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+
+                  {/* Active Translation lock panel inside camera column */}
+                  <div className="bg-[#fcfdfa] dark:bg-[#151518] border border-[#e2e2d0] dark:border-[#2d2d32] rounded-2xl p-4 space-y-3.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] uppercase font-bold tracking-widest text-[#9a9a8a] dark:text-[#a1a1aa]">Real-time Live Match</span>
+                      {stabilizedResult ? (
+                        <span className="flex items-center gap-1 text-[9px] font-bold uppercase py-0.5 px-2 bg-[#e2f0d9] dark:bg-[#243e1d] text-[#3d652b] dark:text-emerald-300 border border-[#c0dfad] dark:border-[#385e2b] rounded-md">
+                          Lock Established
+                        </span>
+                      ) : (
+                        <span className="text-[9px] font-bold uppercase py-0.5 px-2 bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border border-amber-100 dark:border-amber-900/50 rounded-md">
+                          No Hand In Frame
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                      <div className="h-14 w-14 bg-[#ebdcd1] dark:bg-[#453730] rounded-2xl flex items-center justify-center border border-[#e2ceb9] dark:border-[#523d32] shrink-0 text-2xl font-black text-[#5c3c35] dark:text-[#ebdcd1]">
+                        {stabilizedResult ? stabilizedResult.predictedChar : "?"}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] uppercase tracking-wide font-bold text-[#4a4a40] dark:text-[#f4f4f5]">Stabilized Gesture</p>
+                        <div className="flex items-baseline gap-1 mt-0.5">
+                          <span className="text-base font-mono font-black text-[#7c8d7c] dark:text-emerald-400">
+                            {stabilizedResult ? `${stabilizedResult.confidence.toFixed(1)}%` : "0.0%"}
+                          </span>
+                          <span className="text-[9px] text-[#9a9a8a] dark:text-[#a1a1aa]">confidence avg</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Right Side: Continuous Conversation Engine */}
+              <div className="xl:col-span-7">
+                <ContinuousConversation 
+                  formedSentence={formedSentence}
+                  setFormedSentence={setFormedSentence}
+                  translationLang={translationLang}
+                  onLogTranslation={logTranslationEvent}
+                  onSpeak={handleSpeak}
+                  cameraActive={cameraActive}
+                  detectedHandsCount={detectedHandsCount}
+                />
+              </div>
+
+            </div>
+          </div>
         )}
 
       </main>
