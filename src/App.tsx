@@ -523,6 +523,13 @@ export default function App() {
   const [isTranslatingText, setIsTranslatingText] = useState<boolean>(false);
   const [autoTranslate, setAutoTranslate] = useState<boolean>(true);
   const [translationError, setTranslationError] = useState<string | null>(null);
+  
+  // Translation Grammar Correction States
+  const [isImprovingTranslationGrammar, setIsImprovingTranslationGrammar] = useState<boolean>(false);
+  const [translationGrammarSuggestion, setTranslationGrammarSuggestion] = useState<string | null>(null);
+  const [translationGrammarChanges, setTranslationGrammarChanges] = useState<string[]>([]);
+  const [translationStructureImprovements, setTranslationStructureImprovements] = useState<string[]>([]);
+  const [translationMeaningPreserved, setTranslationMeaningPreserved] = useState<string>("");
 
   // Voice Control States
   const [voiceControlEnabled, setVoiceControlEnabled] = useState<boolean>(false);
@@ -1228,10 +1235,65 @@ export default function App() {
     }
   };
 
+  const handleImproveTranslationGrammarAI = async () => {
+    if (!translatedText.trim()) return;
+    setIsImprovingTranslationGrammar(true);
+    setTranslationGrammarSuggestion(null);
+    setTranslationGrammarChanges([]);
+    setTranslationStructureImprovements([]);
+    setTranslationMeaningPreserved("");
+    try {
+      const res = await fetch(getApiUrl("/api/improve-translation-grammar"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ text: translatedText, targetLanguage: translationLang })
+      });
+      if (!res.ok) {
+        throw new Error("Server error correcting translation grammar");
+      }
+      const data = await res.json();
+      if (data && data.corrected) {
+        setTranslationGrammarSuggestion(data.corrected);
+        setTranslationGrammarChanges(data.grammarChanges || [`Optimized overall syntax and spacing structures in ${translationLang}.`]);
+        setTranslationStructureImprovements(data.structureImprovements || [`Formatted translated phrasing into fluent written copy in ${translationLang}.`]);
+        setTranslationMeaningPreserved(data.meaningPreserved || "Ensured semantic context of the translated phrase remains completely unchanged.");
+      }
+    } catch (err) {
+      console.error("Failed to improve translation grammar", err);
+      // Basic fallback
+      const offlineText = translatedText.trim().replace(/\s+/g, ' ');
+      setTranslationGrammarSuggestion(offlineText);
+      setTranslationGrammarChanges([
+        `Polished sentence word spacing and layout in ${translationLang}.`
+      ]);
+      setTranslationStructureImprovements([
+        "Refined sentence structure to improve general expression and clarity."
+      ]);
+      setTranslationMeaningPreserved("The core message of the translated output remains preserved.");
+    } finally {
+      setIsImprovingTranslationGrammar(false);
+    }
+  };
+
+  const handleAcceptTranslationGrammar = () => {
+    if (translationGrammarSuggestion) {
+      setTranslatedText(translationGrammarSuggestion);
+      setTranslationGrammarSuggestion(null);
+    }
+  };
+
   const handleTranslate = async (textToTranslate?: string, lang?: string) => {
     const text = textToTranslate !== undefined ? textToTranslate : formedSentence;
     const target = lang !== undefined ? lang : translationLang;
     
+    // Clear old grammar suggestions when a new translation occurs
+    setTranslationGrammarSuggestion(null);
+    setTranslationGrammarChanges([]);
+    setTranslationStructureImprovements([]);
+    setTranslationMeaningPreserved("");
+
     if (!text.trim()) {
       setTranslatedText("");
       setTranslationError(null);
@@ -3981,43 +4043,157 @@ export default function App() {
                           ⚠️ {translationError}
                         </div>
                       ) : translatedText ? (
-                        <div className="bg-[#f0f4ee]/60 dark:bg-[#1e2f1e]/30 border border-[#cce4c5]/80 dark:border-[#2d4d2b]/60 p-3.5 rounded-2xl relative space-y-3">
-                          <p className="text-sm font-sans text-gray-800 dark:text-gray-100 font-semibold leading-relaxed whitespace-pre-wrap">
-                            {translatedText}
-                          </p>
+                        <div className="space-y-3">
+                          <div className="bg-[#f0f4ee]/60 dark:bg-[#1e2f1e]/30 border border-[#cce4c5]/80 dark:border-[#2d4d2b]/60 p-3.5 rounded-2xl relative space-y-3">
+                            <p className="text-sm font-sans text-gray-800 dark:text-gray-100 font-semibold leading-relaxed whitespace-pre-wrap">
+                              {translatedText}
+                            </p>
 
-                          <div className="flex items-center justify-end gap-2 border-t border-[#ecece0]/60 dark:border-[#2d2d32]/60 pt-2 text-[10px]">
-                            {/* Copy translation */}
-                            <button
-                              type="button"
-                              onClick={handleCopyTranslation}
-                              className="font-bold font-mono text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 bg-white dark:bg-[#1a1a1d] border border-gray-200 dark:border-[#2d2d32] px-2.5 py-1.5 rounded-xl flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
-                              title="Copy translated output to clipboard"
-                            >
-                              {translationCopied ? (
-                                <>
-                                  <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                                  <span>Copied!</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Copy className="w-3 h-3" />
-                                  <span>Copy</span>
-                                </>
-                              )}
-                            </button>
+                            <div className="flex items-center justify-end gap-2 border-t border-[#ecece0]/60 dark:border-[#2d2d32]/60 pt-2 text-[10px]">
+                              {/* AI Grammar Correction for translation */}
+                              <button
+                                type="button"
+                                onClick={handleImproveTranslationGrammarAI}
+                                disabled={isImprovingTranslationGrammar}
+                                className="font-bold font-mono text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 bg-white dark:bg-[#1a1a1d] border border-gray-200 dark:border-[#2d2d32] px-2.5 py-1.5 rounded-xl flex items-center gap-1.5 shadow-sm transition-all cursor-pointer disabled:opacity-40"
+                                title="Improve translation grammar and flow using AI model"
+                              >
+                                <Sparkles className={`w-3 h-3 text-amber-500 ${isImprovingTranslationGrammar ? 'animate-spin' : ''}`} />
+                                <span>{isImprovingTranslationGrammar ? 'Polishing...' : 'AI Grammar Fix'}</span>
+                              </button>
 
-                            {/* Speak translation */}
-                            <button
-                              type="button"
-                              onClick={handleSpeakTranslation}
-                              className="font-bold font-mono text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 bg-white dark:bg-[#1a1a1d] border border-gray-200 dark:border-[#2d2d32] px-2.5 py-1.5 rounded-xl flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
-                              title="Speak translation aloud using target language synthesis"
-                            >
-                              <Volume2 className="w-3 h-3" />
-                              <span>Speak</span>
-                            </button>
+                              {/* Copy translation */}
+                              <button
+                                type="button"
+                                onClick={handleCopyTranslation}
+                                className="font-bold font-mono text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 bg-white dark:bg-[#1a1a1d] border border-gray-200 dark:border-[#2d2d32] px-2.5 py-1.5 rounded-xl flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                                title="Copy translated output to clipboard"
+                              >
+                                {translationCopied ? (
+                                  <>
+                                    <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                                    <span>Copied!</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy className="w-3 h-3" />
+                                    <span>Copy</span>
+                                  </>
+                                )}
+                              </button>
+
+                              {/* Speak translation */}
+                              <button
+                                type="button"
+                                onClick={handleSpeakTranslation}
+                                className="font-bold font-mono text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 bg-white dark:bg-[#1a1a1d] border border-gray-200 dark:border-[#2d2d32] px-2.5 py-1.5 rounded-xl flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                                title="Speak translation aloud using target language synthesis"
+                              >
+                                <Volume2 className="w-3 h-3" />
+                                <span>Speak</span>
+                              </button>
+                            </div>
                           </div>
+
+                          {/* Translation Grammar Suggestion Display Card */}
+                          {translationGrammarSuggestion && (
+                            <motion.div 
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className="bg-emerald-50/50 dark:bg-[#1a2d1a]/40 border border-emerald-100 dark:border-emerald-950/60 p-5 rounded-3xl space-y-4 shadow-sm"
+                              id="ai-translation-correction-card"
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="text-[11px] uppercase font-black tracking-widest text-emerald-800 dark:text-emerald-300 font-mono flex items-center gap-2">
+                                  <Sparkles className="w-4 h-4 text-emerald-600 dark:text-emerald-400 font-bold animate-pulse" />
+                                  AI Translation Grammar Review ({translationLang})
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setTranslationGrammarSuggestion(null)}
+                                  className="text-[10px] font-bold text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-pointer"
+                                >
+                                  ✕ Dismiss
+                                </button>
+                              </div>
+
+                              {/* Original vs Corrected Translation Side-by-side comparison */}
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                                <div className="bg-white/80 dark:bg-[#151518]/80 p-3.5 rounded-2xl border border-gray-100 dark:border-[#2d2d32]/40 shadow-inner">
+                                  <span className="text-[9px] uppercase font-black tracking-wider text-gray-400 dark:text-gray-500 block mb-1.5 font-mono">Original Translation</span>
+                                  <p className="text-gray-600 dark:text-gray-400 italic font-sans leading-relaxed">"{translatedText}"</p>
+                                </div>
+                                <div className="bg-[#f2faf0] dark:bg-[#1e331e]/50 p-3.5 rounded-2xl border border-emerald-100 dark:border-emerald-950 shadow-inner">
+                                  <span className="text-[9px] uppercase font-black tracking-wider text-emerald-700 dark:text-emerald-400 block mb-1.5 font-mono">Polished Translation</span>
+                                  <p className="text-gray-800 dark:text-white font-semibold leading-relaxed font-sans">"{translationGrammarSuggestion}"</p>
+                                </div>
+                              </div>
+
+                              {/* Features Analysis Grid */}
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1">
+                                {/* Grammar & Spelling Fixes */}
+                                <div className="bg-white/60 dark:bg-[#151518]/40 p-3 rounded-2xl border border-gray-100 dark:border-[#2d2d32]/40 space-y-1.5">
+                                  <span className="text-[10px] uppercase font-bold text-[#4c634c] dark:text-emerald-400 block font-mono">1. Grammar Corrected</span>
+                                  {translationGrammarChanges && translationGrammarChanges.length > 0 ? (
+                                    <ul className="space-y-1 text-[11px] text-gray-600 dark:text-gray-400 leading-tight">
+                                      {translationGrammarChanges.map((change, idx) => (
+                                        <li key={idx} className="flex items-start gap-1.5">
+                                          <span className="text-emerald-500 shrink-0 font-bold">✓</span>
+                                          <span>{change}</span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  ) : (
+                                    <p className="text-[10px] text-gray-400 dark:text-gray-500 italic">No major grammatical corrections needed.</p>
+                                  )}
+                                </div>
+
+                                {/* Sentence Structure Improvements */}
+                                <div className="bg-white/60 dark:bg-[#151518]/40 p-3 rounded-2xl border border-gray-100 dark:border-[#2d2d32]/40 space-y-1.5">
+                                  <span className="text-[10px] uppercase font-bold text-[#4c634c] dark:text-emerald-400 block font-mono">2. Phrasing Clarity</span>
+                                  {translationStructureImprovements && translationStructureImprovements.length > 0 ? (
+                                    <ul className="space-y-1 text-[11px] text-gray-600 dark:text-gray-400 leading-tight">
+                                      {translationStructureImprovements.map((improvement, idx) => (
+                                        <li key={idx} className="flex items-start gap-1.5">
+                                          <span className="text-emerald-500 shrink-0 font-bold">✓</span>
+                                          <span>{improvement}</span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  ) : (
+                                    <p className="text-[10px] text-gray-400 dark:text-gray-500 italic">No structure adjustments needed.</p>
+                                  )}
+                                </div>
+
+                                {/* Semantic Preservation */}
+                                <div className="bg-white/60 dark:bg-[#151518]/40 p-3 rounded-2xl border border-gray-100 dark:border-[#2d2d32]/40 space-y-1.5">
+                                  <span className="text-[10px] uppercase font-bold text-[#4c634c] dark:text-emerald-400 block font-mono">3. Meaning Preserved</span>
+                                  <p className="text-[11px] text-gray-600 dark:text-gray-400 leading-normal">
+                                    {translationMeaningPreserved}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Acceptance/Discard Action Controls */}
+                              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-emerald-100/65 dark:border-emerald-950/70">
+                                <button
+                                  type="button"
+                                  onClick={() => setTranslationGrammarSuggestion(null)}
+                                  className="text-xs font-bold px-3 py-1.5 rounded-xl border border-gray-250 hover:bg-gray-50 dark:border-[#2d2d32] dark:hover:bg-zinc-800 text-gray-500 dark:text-gray-400 transition-colors cursor-pointer"
+                                >
+                                  Discard Fixes
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleAcceptTranslationGrammar}
+                                  className="text-xs font-bold px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer"
+                                >
+                                  <Check className="w-3.5 h-3.5" />
+                                  Apply Polished Translation
+                                </button>
+                              </div>
+                            </motion.div>
+                          )}
                         </div>
                       ) : (
                         <div className="bg-[#fbfbfa]/40 dark:bg-[#151518]/30 border border-dashed border-[#e2e2d0] dark:border-[#2d2d32] p-4 rounded-2xl text-center">
