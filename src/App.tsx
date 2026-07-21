@@ -531,6 +531,12 @@ export default function App() {
   const [translationStructureImprovements, setTranslationStructureImprovements] = useState<string[]>([]);
   const [translationMeaningPreserved, setTranslationMeaningPreserved] = useState<string>("");
 
+  // Subtitle Configuration States
+  const [subtitlesEnabled, setSubtitlesEnabled] = useState<boolean>(true);
+  const [subtitleFontSize, setSubtitleFontSize] = useState<number>(20);
+  const [subtitleTransparentBg, setSubtitleTransparentBg] = useState<boolean>(false);
+  const [subtitleSource, setSubtitleSource] = useState<"sentence" | "translation" | "both">("both");
+
   // Voice Control States
   const [voiceControlEnabled, setVoiceControlEnabled] = useState<boolean>(false);
   const [voiceTranscript, setVoiceTranscript] = useState<string>("");
@@ -2960,6 +2966,69 @@ export default function App() {
                       className="absolute inset-0 w-full h-full object-cover pointer-events-none"
                       id="landmark-canvas"
                     />
+
+                    {/* Subtitles Overlay */}
+                    {subtitlesEnabled && (
+                      <div 
+                        className={`absolute bottom-6 left-1/2 -translate-x-1/2 max-w-[85%] w-fit text-center pointer-events-none z-10 transition-all px-4 py-2.5 rounded-2xl ${
+                          subtitleTransparentBg 
+                            ? 'bg-transparent text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)]' 
+                            : 'bg-black/75 backdrop-blur-md border border-white/10 text-white shadow-xl'
+                        }`}
+                        style={{ fontSize: `${subtitleFontSize}px` }}
+                        id="live-webcam-subtitles"
+                      >
+                        {(() => {
+                          const hasSentence = formedSentence.trim().length > 0;
+                          const hasTranslation = translatedText.trim().length > 0;
+                          
+                          if (!hasSentence && !hasTranslation) {
+                            return (
+                              <p className="text-white/40 italic font-mono text-[0.85em] tracking-wide">
+                                [Awaiting sign input...]
+                              </p>
+                            );
+                          }
+
+                          if (subtitleSource === 'both') {
+                            return (
+                              <div className="space-y-1">
+                                {hasSentence ? (
+                                  <p className="font-mono text-emerald-300 dark:text-emerald-400 tracking-wider text-[0.85em] uppercase font-bold">
+                                    {formedSentence}
+                                  </p>
+                                ) : (
+                                  <p className="text-white/40 italic font-mono text-[0.85em] tracking-wide">
+                                    [Awaiting sign...]
+                                  </p>
+                                )}
+                                {hasTranslation ? (
+                                  <p className="font-sans text-white font-black leading-tight">
+                                    {translatedText}
+                                  </p>
+                                ) : (
+                                  <p className="text-white/40 italic font-sans text-[0.85em] tracking-wide">
+                                    [Awaiting translation...]
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          } else if (subtitleSource === 'sentence') {
+                            return (
+                              <p className="font-mono text-emerald-300 dark:text-emerald-400 uppercase tracking-wider font-bold">
+                                {formedSentence || "[Awaiting sign...]"}
+                              </p>
+                            );
+                          } else {
+                            return (
+                              <p className="font-sans text-white font-black leading-tight">
+                                {translatedText || "[Awaiting translation...]"}
+                              </p>
+                            );
+                          }
+                        })()}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center" id="camera-offscreen">
@@ -3235,6 +3304,94 @@ export default function App() {
                     }
                   </span>
                 </div>
+              </div>
+
+              {/* Real-time Webcam Subtitles Configuration Control Panel */}
+              <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-5 shadow-sm space-y-4" id="webcam-subtitles-config-card">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-[#f0f2ee] dark:border-[#2d2d32]">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-[#f0f4ee] dark:bg-[#1c2c1c]/50 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+                      <MessageSquare className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-[#2d2d28] dark:text-[#f4f4f5] uppercase tracking-wide">Live Webcam Subtitles</h4>
+                      <p className="text-[10px] text-[#7a7a6a] dark:text-[#a1a1aa] mt-0.5">Overlay real-time ASL signs or language translation directly on video feed</p>
+                    </div>
+                  </div>
+                  
+                  {/* Master Subtitles Toggle Switch */}
+                  <div className="flex items-center gap-2.5 bg-[#fdfcf9] dark:bg-[#151518] px-3.5 py-1.5 rounded-2xl border border-[#ecece0] dark:border-[#2d2d32] w-fit">
+                    <label htmlFor="subtitles-toggle" className="text-[10px] uppercase font-bold tracking-wider text-[#5c6e5a] dark:text-emerald-400 cursor-pointer">
+                      Overlay Subtitles
+                    </label>
+                    <input 
+                      id="subtitles-toggle"
+                      type="checkbox"
+                      checked={subtitlesEnabled}
+                      onChange={(e) => setSubtitlesEnabled(e.target.checked)}
+                      className="w-8 h-4 bg-gray-200 dark:bg-gray-800 rounded-full appearance-none cursor-pointer relative checked:bg-emerald-600 transition-colors duration-200
+                      before:content-[''] before:absolute before:w-3 before:h-3 before:rounded-full before:bg-white before:top-0.5 before:left-0.5 checked:before:translate-x-4 before:transition-transform before:duration-200 border border-gray-300 dark:border-gray-700"
+                    />
+                  </div>
+                </div>
+
+                {subtitlesEnabled && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs pt-1">
+                    {/* Subtitle Source Option Selector */}
+                    <div className="space-y-1.5 bg-[#fdfcf9] dark:bg-[#151518] border border-[#ecece0] dark:border-[#2d2d32] p-3 rounded-2xl">
+                      <label className="text-[9px] uppercase font-black tracking-wider text-gray-400 dark:text-gray-500 block font-mono">Subtitle Display Source</label>
+                      <select
+                        value={subtitleSource}
+                        onChange={(e) => setSubtitleSource(e.target.value as any)}
+                        className="w-full bg-white dark:bg-[#1e1e22] border border-[#e0e4db] dark:border-[#2d2d32] text-gray-700 dark:text-gray-200 text-xs py-2 px-2.5 rounded-xl focus:ring-1 focus:ring-emerald-500 transition-all cursor-pointer"
+                      >
+                        <option value="both">Both (Signs + Translation)</option>
+                        <option value="sentence">Assembled Signs (e.g. H E L L O)</option>
+                        <option value="translation">Target Translation ({translationLang})</option>
+                      </select>
+                    </div>
+
+                    {/* Subtitle Font Size Slider */}
+                    <div className="space-y-1.5 bg-[#fdfcf9] dark:bg-[#151518] border border-[#ecece0] dark:border-[#2d2d32] p-3 rounded-2xl">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[9px] uppercase font-black tracking-wider text-gray-400 dark:text-gray-500 block font-mono">Adjust Font Size</label>
+                        <span className="text-[10px] font-mono font-black text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded-md border border-emerald-100 dark:border-emerald-900">{subtitleFontSize}px</span>
+                      </div>
+                      <div className="flex items-center gap-2 pt-1">
+                        <span className="text-[9px] font-mono text-gray-400">12px</span>
+                        <input 
+                          type="range" 
+                          min="12" 
+                          max="40" 
+                          step="2"
+                          value={subtitleFontSize}
+                          onChange={(e) => setSubtitleFontSize(Number(e.target.value))}
+                          className="w-full h-1.5 bg-[#f0f2ee] dark:bg-[#2d2d32] rounded-lg appearance-none cursor-pointer accent-emerald-600"
+                        />
+                        <span className="text-[9px] font-mono text-gray-400">40px</span>
+                      </div>
+                    </div>
+
+                    {/* Subtitle Background Transparency Toggles */}
+                    <div className="space-y-1.5 bg-[#fdfcf9] dark:bg-[#151518] border border-[#ecece0] dark:border-[#2d2d32] p-3 rounded-2xl flex flex-col justify-center">
+                      <label className="text-[9px] uppercase font-black tracking-wider text-gray-400 dark:text-gray-500 block font-mono mb-1">Background Aesthetics</label>
+                      <label className="flex items-center gap-2.5 cursor-pointer text-xs font-semibold select-none text-gray-600 dark:text-gray-300">
+                        <input 
+                          type="checkbox"
+                          checked={subtitleTransparentBg}
+                          onChange={(e) => setSubtitleTransparentBg(e.target.checked)}
+                          className="rounded border-[#e0e4db] dark:border-[#2d2d32] text-emerald-600 focus:ring-emerald-500 dark:bg-[#121214] w-4 h-4 cursor-pointer"
+                        />
+                        <span>Fully Transparent Background</span>
+                      </label>
+                      <p className="text-[9px] text-gray-400 dark:text-gray-500 leading-tight">
+                        {subtitleTransparentBg 
+                          ? "Displays text alone with high contrast cinematic black text outline." 
+                          : "Adds a semi-transparent dark cinematic safety backdrop to preserve legibility."}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Prediction Smoothing & Stabilization Panel */}
@@ -5560,6 +5717,69 @@ export default function App() {
                         className="absolute inset-0 w-full h-full object-cover pointer-events-none"
                         id="landmark-canvas-conversation"
                       />
+
+                      {/* Subtitles Overlay */}
+                      {subtitlesEnabled && (
+                        <div 
+                          className={`absolute bottom-6 left-1/2 -translate-x-1/2 max-w-[85%] w-fit text-center pointer-events-none z-10 transition-all px-4 py-2.5 rounded-2xl ${
+                            subtitleTransparentBg 
+                              ? 'bg-transparent text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)]' 
+                              : 'bg-black/75 backdrop-blur-md border border-white/10 text-white shadow-xl'
+                          }`}
+                          style={{ fontSize: `${subtitleFontSize}px` }}
+                          id="conversation-webcam-subtitles"
+                        >
+                          {(() => {
+                            const hasSentence = formedSentence.trim().length > 0;
+                            const hasTranslation = translatedText.trim().length > 0;
+                            
+                            if (!hasSentence && !hasTranslation) {
+                              return (
+                                <p className="text-white/40 italic font-mono text-[0.85em] tracking-wide">
+                                  [Awaiting conversation signs...]
+                                </p>
+                              );
+                            }
+
+                            if (subtitleSource === 'both') {
+                              return (
+                                <div className="space-y-1">
+                                  {hasSentence ? (
+                                    <p className="font-mono text-emerald-300 dark:text-emerald-400 tracking-wider text-[0.85em] uppercase font-bold">
+                                      {formedSentence}
+                                    </p>
+                                  ) : (
+                                    <p className="text-white/40 italic font-mono text-[0.85em] tracking-wide">
+                                      [Awaiting sign...]
+                                    </p>
+                                  )}
+                                  {hasTranslation ? (
+                                    <p className="font-sans text-white font-black leading-tight">
+                                      {translatedText}
+                                    </p>
+                                  ) : (
+                                    <p className="text-white/40 italic font-sans text-[0.85em] tracking-wide">
+                                      [Awaiting translation...]
+                                    </p>
+                                  )}
+                                </div>
+                              );
+                            } else if (subtitleSource === 'sentence') {
+                              return (
+                                <p className="font-mono text-emerald-300 dark:text-emerald-400 uppercase tracking-wider font-bold">
+                                  {formedSentence || "[Awaiting sign...]"}
+                                </p>
+                              );
+                            } else {
+                              return (
+                                <p className="font-sans text-white font-black leading-tight">
+                                  {translatedText || "[Awaiting translation...]"}
+                                </p>
+                              );
+                            }
+                          })()}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-zinc-900" id="conversation-camera-offscreen">
