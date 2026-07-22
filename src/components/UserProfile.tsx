@@ -22,9 +22,13 @@ import {
   Camera,
   UserCheck,
   Trash2,
-  Lock
+  Lock,
+  Palette,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { CollectedSample, SessionHistoryItem } from '../types';
+import { ThemeSettings, COLOR_THEMES } from './ThemeCustomizer';
 
 interface UserProfileProps {
   localSessions: SessionHistoryItem[];
@@ -32,6 +36,9 @@ interface UserProfileProps {
   onRestoreSessions: (sessions: SessionHistoryItem[]) => void;
   onRestoreSamples: (samples: CollectedSample[]) => void;
   onSignOut: () => void;
+  themeSettings?: ThemeSettings;
+  onUpdateThemeSettings?: (settings: Partial<ThemeSettings>) => void;
+  onOpenThemeCustomizer?: () => void;
 }
 
 export default function UserProfile({ 
@@ -39,7 +46,10 @@ export default function UserProfile({
   localSamples, 
   onRestoreSessions, 
   onRestoreSamples,
-  onSignOut 
+  onSignOut,
+  themeSettings,
+  onUpdateThemeSettings,
+  onOpenThemeCustomizer
 }: UserProfileProps) {
   const user = auth.currentUser;
   
@@ -490,6 +500,110 @@ export default function UserProfile({
 
             </form>
 
+          </div>
+
+          {/* Visual Theme & Appearance Customization Card */}
+          <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-6 shadow-sm space-y-5" id="profile-theme-settings-card">
+            <div className="border-b border-[#f0f2ee] dark:border-[#2d2d32] pb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-bold text-[#2d2d28] dark:text-[#f4f4f5] flex items-center gap-2">
+                  <Palette className="w-5 h-5 text-[var(--color-primary)]" />
+                  Theme Customization
+                </h2>
+                <p className="text-xs text-[#7a7a6a] dark:text-[#a1a1aa] mt-0.5">Customize dark mode, color palette presets, and UI border styles</p>
+              </div>
+
+              {onOpenThemeCustomizer && (
+                <button
+                  type="button"
+                  onClick={onOpenThemeCustomizer}
+                  className="px-3.5 py-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs font-bold hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
+                >
+                  <Palette className="w-3.5 h-3.5" />
+                  <span>Open Full Customizer</span>
+                </button>
+              )}
+            </div>
+
+            {themeSettings && onUpdateThemeSettings && (
+              <div className="space-y-4">
+                {/* Mode Selector */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-wider text-[#5a5a4a] dark:text-[#cbd5e1] font-mono block">
+                    Appearance Mode
+                  </label>
+                  <div className="grid grid-cols-3 gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => onUpdateThemeSettings({ themeMode: 'light' })}
+                      className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                        themeSettings.themeMode === 'light'
+                          ? 'bg-amber-500/10 border-amber-500 text-amber-900 dark:text-amber-300 shadow-xs'
+                          : 'bg-[#fdfcf9] dark:bg-[#121214] border-[#e0e4db] dark:border-[#2d2d32] text-gray-600 dark:text-gray-400'
+                      }`}
+                    >
+                      <Sun className="w-4 h-4 text-amber-500" />
+                      <span>Light</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => onUpdateThemeSettings({ themeMode: 'dark' })}
+                      className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                        themeSettings.themeMode === 'dark'
+                          ? 'bg-indigo-500/10 border-indigo-500 text-indigo-900 dark:text-indigo-300 shadow-xs'
+                          : 'bg-[#fdfcf9] dark:bg-[#121214] border-[#e0e4db] dark:border-[#2d2d32] text-gray-600 dark:text-gray-400'
+                      }`}
+                    >
+                      <Moon className="w-4 h-4 text-indigo-400" />
+                      <span>Dark</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => onUpdateThemeSettings({ themeMode: 'system' })}
+                      className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                        themeSettings.themeMode === 'system'
+                          ? 'bg-emerald-500/10 border-emerald-500 text-emerald-900 dark:text-emerald-300 shadow-xs'
+                          : 'bg-[#fdfcf9] dark:bg-[#121214] border-[#e0e4db] dark:border-[#2d2d32] text-gray-600 dark:text-gray-400'
+                      }`}
+                    >
+                      <span>System Auto</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Color Palette Quick Swatch */}
+                <div className="space-y-1.5 pt-1">
+                  <label className="text-[10px] font-black uppercase tracking-wider text-[#5a5a4a] dark:text-[#cbd5e1] font-mono block">
+                    Active Color Preset
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {COLOR_THEMES.map((theme) => {
+                      const isSelected = themeSettings.colorTheme === theme.id;
+                      return (
+                        <button
+                          key={theme.id}
+                          type="button"
+                          onClick={() => onUpdateThemeSettings({ colorTheme: theme.id })}
+                          className={`p-2.5 rounded-xl border text-left transition-all flex items-center justify-between gap-2 cursor-pointer ${
+                            isSelected
+                              ? 'bg-white dark:bg-[#121214] border-2 shadow-xs'
+                              : 'bg-[#fdfcf9] dark:bg-[#121214]/60 border-[#e0e4db] dark:border-[#2d2d32] opacity-80 hover:opacity-100'
+                          }`}
+                          style={{ borderColor: isSelected ? theme.primaryColor : undefined }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: theme.primaryColor }} />
+                            <span className="text-xs font-bold text-gray-800 dark:text-gray-200">{theme.name}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Cloud Database Backup & Restore Center */}

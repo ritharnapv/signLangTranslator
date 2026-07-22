@@ -8,3 +8,86 @@
 @utility animate-scan {
   animation: scan 3s ease-in-out infinite;
 }
+
+/* Default Theme Variables */
+:root {
+  --color-primary: #7c8d7c;
+  --color-primary-hover: #687968;
+  --color-secondary: #a36b5e;
+  --color-secondary-hover: #8e584b;
+  --color-accent-light: #f0f2ee;
+  --color-accent-dark: #1f1f22;
+  --radius-custom: 1.5rem;
+}
+
+/* Color Theme Overrides */
+html[data-color-theme="emerald"] {
+  --color-primary: #7c8d7c;
+  --color-primary-hover: #687968;
+  --color-secondary: #a36b5e;
+  --color-secondary-hover: #8e584b;
+  --color-accent-light: #f0f2ee;
+  --color-accent-dark: #1f1f22;
+}
+
+html[data-color-theme="ocean"] {
+  --color-primary: #0284c7;
+  --color-primary-hover: #0369a1;
+  --color-secondary: #2563eb;
+  --color-secondary-hover: #1d4ed8;
+  --color-accent-light: #e0f2fe;
+  --color-accent-dark: #0f1d33;
+}
+
+html[data-color-theme="sunset"] {
+  --color-primary: #e11d48;
+  --color-primary-hover: #be123c;
+  --color-secondary: #ea580c;
+  --color-secondary-hover: #c2410c;
+  --color-accent-light: #ffe4e6;
+  --color-accent-dark: #260f15;
+}
+
+html[data-color-theme="violet"] {
+  --color-primary: #7c3aed;
+  --color-primary-hover: #6d28d9;
+  --color-secondary: #c026d3;
+  --color-secondary-hover: #a21caf;
+  --color-accent-light: #f3e8ff;
+  --color-accent-dark: #1e0f33;
+}
+
+html[data-color-theme="amber"] {
+  --color-primary: #d97706;
+  --color-primary-hover: #b45309;
+  --color-secondary: #ca8a04;
+  --color-secondary-hover: #a16207;
+  --color-accent-light: #fef3c7;
+  --color-accent-dark: #21160a;
+}
+
+html[data-color-theme="onyx"] {
+  --color-primary: #475569;
+  --color-primary-hover: #334155;
+  --color-secondary: #3b82f6;
+  --color-secondary-hover: #2563eb;
+  --color-accent-light: #f1f5f9;
+  --color-accent-dark: #0f172a;
+}
+
+/* Border Radius Overrides */
+html[data-border-radius="crisp"] {
+  --radius-custom: 0.5rem;
+}
+html[data-border-radius="standard"] {
+  --radius-custom: 1rem;
+}
+html[data-border-radius="rounded"] {
+  --radius-custom: 1.75rem;
+}
+
+/* High Contrast Override */
+html[data-high-contrast="true"] {
+  font-weight: 500;
+  filter: contrast(110%);
+}

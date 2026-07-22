@@ -11,9 +11,10 @@ import UserProfile from './components/UserProfile';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
 import TranslationHistory from './components/TranslationHistory';
 import ContinuousConversation from './components/ContinuousConversation';
+import ThemeCustomizer, { ThemeSettings, ColorTheme, ThemeMode, COLOR_THEMES } from './components/ThemeCustomizer';
 import { auth, db } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, getDoc, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import * as tf from '@tensorflow/tfjs';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, Legend, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { 
@@ -49,6 +50,7 @@ import {
   Eraser,
   Sun,
   Moon,
+  Palette,
   Languages,
   MessageSquare,
   Menu,
@@ -122,27 +124,124 @@ const INITIAL_SESSIONS: SessionHistoryItem[] = [
 ];
 
 export default function App() {
-  const [darkMode, setDarkMode] = useState<boolean>(() => {
+  // Comprehensive Theme Customization state with local storage persistence and Firestore synchronization
+  const [themeSettings, setThemeSettings] = useState<ThemeSettings>(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('dark_mode_preference');
-      if (saved !== null) {
-        return saved === 'true';
+      try {
+        const saved = localStorage.getItem('asl_theme_settings');
+        if (saved) {
+          return JSON.parse(saved);
+        }
+        // Legacy dark mode preference fallback
+        const legacyDarkMode = localStorage.getItem('dark_mode_preference');
+        const isDark = legacyDarkMode !== null 
+          ? legacyDarkMode === 'true' 
+          : window.matchMedia('(prefers-color-scheme: dark)').matches;
+        
+        return {
+          themeMode: isDark ? 'dark' : 'light',
+          colorTheme: 'emerald',
+          borderRadius: 'standard',
+          highContrast: false
+        };
+      } catch {
+        // Fallback default
       }
-      return window.matchMedia('(prefers-color-scheme: dark)').matches;
     }
-    return false;
+    return {
+      themeMode: 'light',
+      colorTheme: 'emerald',
+      borderRadius: 'standard',
+      highContrast: false
+    };
   });
 
+  const [themeCustomizerOpen, setThemeCustomizerOpen] = useState<boolean>(false);
+
+  // Compute active dark mode state
+  const [darkMode, setDarkMode] = useState<boolean>(() => {
+    if (themeSettings.themeMode === 'system') {
+      return typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    return themeSettings.themeMode === 'dark';
+  });
+
+  // Apply theme classes, CSS variables, data attributes and save preferences
   useEffect(() => {
+    let activeDark = false;
+    if (themeSettings.themeMode === 'system') {
+      activeDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    } else {
+      activeDark = themeSettings.themeMode === 'dark';
+    }
+    setDarkMode(activeDark);
+
     if (typeof window === 'undefined') return;
     const root = window.document.documentElement;
-    if (darkMode) {
+
+    if (activeDark) {
       root.classList.add('dark');
     } else {
       root.classList.remove('dark');
     }
-    localStorage.setItem('dark_mode_preference', String(darkMode));
-  }, [darkMode]);
+
+    root.setAttribute('data-color-theme', themeSettings.colorTheme);
+    root.setAttribute('data-border-radius', themeSettings.borderRadius);
+    root.setAttribute('data-high-contrast', String(themeSettings.highContrast));
+
+    localStorage.setItem('asl_theme_settings', JSON.stringify(themeSettings));
+    localStorage.setItem('dark_mode_preference', String(activeDark));
+  }, [themeSettings]);
+
+  // Handle system dark mode changes when set to 'system'
+  useEffect(() => {
+    if (themeSettings.themeMode !== 'system' || typeof window === 'undefined') return;
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e: MediaQueryListEvent) => {
+      setDarkMode(e.matches);
+      if (e.matches) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    };
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, [themeSettings.themeMode]);
+
+  const handleUpdateThemeSettings = (newPartial: Partial<ThemeSettings>) => {
+    setThemeSettings(prev => {
+      const updated = { ...prev, ...newPartial };
+      
+      // Save to Firestore if user is authenticated
+      if (currentUser?.uid) {
+        try {
+          setDoc(doc(db, "users", currentUser.uid), {
+            themeSettings: updated,
+            updatedAt: new Date().toISOString()
+          }, { merge: true }).catch(err => console.error("Error saving theme settings to Firestore:", err));
+        } catch (err) {
+          console.error(err);
+        }
+      }
+
+      return updated;
+    });
+  };
+
+  const handleResetThemeSettings = () => {
+    handleUpdateThemeSettings({
+      themeMode: 'light',
+      colorTheme: 'emerald',
+      borderRadius: 'standard',
+      highContrast: false
+    });
+  };
+
+  const toggleDarkModeQuick = () => {
+    const nextMode: ThemeMode = darkMode ? 'light' : 'dark';
+    handleUpdateThemeSettings({ themeMode: nextMode });
+  };
 
   const [activeTab, setActiveTab] = useState<'dashboard' | 'learning' | 'dictionary' | 'roadmap' | 'collector' | 'datasets' | 'trainer' | 'files' | 'profile' | 'analytics' | 'conversation'>('dashboard');
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -2801,10 +2900,22 @@ export default function App() {
             </button>
           )}
 
-          {/* Light/Dark Toggle Button */}
+          {/* Theme Customizer Palette Launcher Button */}
           <button
-            onClick={() => setDarkMode(!darkMode)}
-            className="w-10 h-10 rounded-xl bg-[#f0f2ee] dark:bg-[#1f1f22] border border-[#e0e4db] dark:border-[#2d2d32] flex items-center justify-center text-[#7c8d7c] dark:text-[#a1a1aa] hover:text-[#5c3c35] dark:hover:text-[#ffffff] hover:scale-105 active:scale-95 transition-all shadow-sm"
+            onClick={() => setThemeCustomizerOpen(true)}
+            className="w-10 h-10 rounded-xl bg-[#f0f2ee] dark:bg-[#1f1f22] border border-[#e0e4db] dark:border-[#2d2d32] flex items-center justify-center text-[#7c8d7c] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-[#ffffff] hover:scale-105 active:scale-95 transition-all shadow-sm cursor-pointer relative"
+            title="Customize Theme & Color Palette"
+            id="theme-palette-btn"
+            style={{ minHeight: '40px', minWidth: '40px' }}
+          >
+            <Palette className="w-5 h-5 text-[var(--color-primary)]" />
+            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-[#1a1a1d]" />
+          </button>
+
+          {/* Quick Light/Dark Toggle Button */}
+          <button
+            onClick={toggleDarkModeQuick}
+            className="w-10 h-10 rounded-xl bg-[#f0f2ee] dark:bg-[#1f1f22] border border-[#e0e4db] dark:border-[#2d2d32] flex items-center justify-center text-[#7c8d7c] dark:text-[#a1a1aa] hover:text-[#5c3c35] dark:hover:text-[#ffffff] hover:scale-105 active:scale-95 transition-all shadow-sm cursor-pointer"
             title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
             id="dark-mode-toggle"
             style={{ minHeight: '40px', minWidth: '40px' }}
@@ -5683,6 +5794,9 @@ export default function App() {
             onSignOut={() => {
               setActiveTab('dashboard');
             }}
+            themeSettings={themeSettings}
+            onUpdateThemeSettings={handleUpdateThemeSettings}
+            onOpenThemeCustomizer={() => setThemeCustomizerOpen(true)}
           />
         )}
 
@@ -5901,6 +6015,15 @@ export default function App() {
           <span>© 2026 SignSense Labs</span>
         </div>
       </footer>
+
+      {/* Theme Customization Modal */}
+      <ThemeCustomizer
+        settings={themeSettings}
+        onChange={handleUpdateThemeSettings}
+        onReset={handleResetThemeSettings}
+        isOpen={themeCustomizerOpen}
+        onClose={() => setThemeCustomizerOpen(false)}
+      />
 
     </div>
   );
