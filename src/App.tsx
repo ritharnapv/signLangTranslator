@@ -12,6 +12,7 @@ import AnalyticsDashboard from './components/AnalyticsDashboard';
 import TranslationHistory from './components/TranslationHistory';
 import ContinuousConversation from './components/ContinuousConversation';
 import ThemeCustomizer, { ThemeSettings, ColorTheme, ThemeMode, COLOR_THEMES } from './components/ThemeCustomizer';
+import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
 import { auth, db } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, getDocs, getDoc, doc, setDoc, deleteDoc } from 'firebase/firestore';
@@ -59,7 +60,10 @@ import {
   Smartphone,
   Laptop,
   Mic,
-  MicOff
+  MicOff,
+  Keyboard,
+  Eye,
+  Type
 } from 'lucide-react';
 
 // Production environment configuration helpers
@@ -130,7 +134,11 @@ export default function App() {
       try {
         const saved = localStorage.getItem('asl_theme_settings');
         if (saved) {
-          return JSON.parse(saved);
+          const parsed = JSON.parse(saved);
+          return {
+            textSize: 'standard',
+            ...parsed
+          };
         }
         // Legacy dark mode preference fallback
         const legacyDarkMode = localStorage.getItem('dark_mode_preference');
@@ -142,7 +150,8 @@ export default function App() {
           themeMode: isDark ? 'dark' : 'light',
           colorTheme: 'emerald',
           borderRadius: 'standard',
-          highContrast: false
+          highContrast: false,
+          textSize: 'standard'
         };
       } catch {
         // Fallback default
@@ -152,11 +161,20 @@ export default function App() {
       themeMode: 'light',
       colorTheme: 'emerald',
       borderRadius: 'standard',
-      highContrast: false
+      highContrast: false,
+      textSize: 'standard'
     };
   });
 
   const [themeCustomizerOpen, setThemeCustomizerOpen] = useState<boolean>(false);
+  const [keyboardShortcutsOpen, setKeyboardShortcutsOpen] = useState<boolean>(false);
+  const [srAnnouncement, setSrAnnouncement] = useState<string>('');
+
+  // Screen Reader live announcement helper
+  const announceToSR = (message: string) => {
+    setSrAnnouncement(message);
+    setTimeout(() => setSrAnnouncement(''), 3000);
+  };
 
   // Compute active dark mode state
   const [darkMode, setDarkMode] = useState<boolean>(() => {
@@ -188,6 +206,7 @@ export default function App() {
     root.setAttribute('data-color-theme', themeSettings.colorTheme);
     root.setAttribute('data-border-radius', themeSettings.borderRadius);
     root.setAttribute('data-high-contrast', String(themeSettings.highContrast));
+    root.setAttribute('data-text-size', themeSettings.textSize || 'standard');
 
     localStorage.setItem('asl_theme_settings', JSON.stringify(themeSettings));
     localStorage.setItem('dark_mode_preference', String(activeDark));
@@ -850,6 +869,104 @@ export default function App() {
       clearInterval(syncInterval);
     };
   }, [useAiTts]);
+
+  // Global Keyboard Shortcuts Event Handler for Accessibility
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Escape key closes open modals regardless of input focus
+      if (e.key === 'Escape') {
+        if (themeCustomizerOpen) {
+          setThemeCustomizerOpen(false);
+          announceToSR("Theme customizer closed");
+        }
+        if (keyboardShortcutsOpen) {
+          setKeyboardShortcutsOpen(false);
+          announceToSR("Keyboard shortcuts guide closed");
+        }
+        return;
+      }
+
+      // Check if focus is currently inside an input/textarea element
+      const activeEl = document.activeElement;
+      const isInput = activeEl && (
+        activeEl.tagName === 'INPUT' || 
+        activeEl.tagName === 'TEXTAREA' || 
+        activeEl.tagName === 'SELECT' || 
+        (activeEl as HTMLElement).isContentEditable
+      );
+
+      // Require Alt key or Shift+? for shortcuts
+      if (e.altKey || (e.shiftKey && (e.key === '?' || e.key === '/'))) {
+        const key = e.key.toLowerCase();
+
+        if (key === 'k' || key === '?' || key === '/') {
+          e.preventDefault();
+          setKeyboardShortcutsOpen(prev => {
+            const next = !prev;
+            announceToSR(next ? "Keyboard shortcuts guide opened" : "Keyboard shortcuts guide closed");
+            return next;
+          });
+        } else if (key === 'h') {
+          e.preventDefault();
+          const nextHc = !themeSettings.highContrast;
+          handleUpdateThemeSettings({ highContrast: nextHc });
+          announceToSR(nextHc ? "High contrast mode enabled" : "High contrast mode disabled");
+        } else if (key === 't') {
+          e.preventDefault();
+          const sizes: Array<'standard' | 'large' | 'extra-large'> = ['standard', 'large', 'extra-large'];
+          const currIdx = sizes.indexOf(themeSettings.textSize || 'standard');
+          const nextSize = sizes[(currIdx + 1) % sizes.length];
+          handleUpdateThemeSettings({ textSize: nextSize });
+          announceToSR(`Text size set to ${nextSize.replace('-', ' ')}`);
+        } else if (key === 'd') {
+          e.preventDefault();
+          toggleDarkModeQuick();
+          announceToSR("Appearance mode changed");
+        } else if (key === 'p') {
+          e.preventDefault();
+          setThemeCustomizerOpen(prev => {
+            const next = !prev;
+            announceToSR(next ? "Theme customizer opened" : "Theme customizer closed");
+            return next;
+          });
+        } else if (key === 'c') {
+          e.preventDefault();
+          setCameraActive(prev => {
+            const next = !prev;
+            announceToSR(next ? "Camera started" : "Camera stopped");
+            return next;
+          });
+        } else if (key === 'v') {
+          e.preventDefault();
+          const textToVoice = translatedText || formedSentence;
+          if (textToVoice) {
+            handleSpeak(textToVoice);
+            announceToSR("Reading sentence aloud");
+          } else {
+            announceToSR("No sentence text to speak");
+          }
+        } else if (key === 'x') {
+          e.preventDefault();
+          setFormedSentence("");
+          setTranslatedText("");
+          announceToSR("Sentence cleared");
+        } else if (['1', '2', '3', '4', '5', '6', '7', '8'].includes(key)) {
+          e.preventDefault();
+          const tabs: Array<'dashboard' | 'learning' | 'dictionary' | 'conversation' | 'collector' | 'trainer' | 'analytics' | 'profile'> = [
+            'dashboard', 'learning', 'dictionary', 'conversation', 'collector', 'trainer', 'analytics', 'profile'
+          ];
+          const tabIndex = parseInt(key) - 1;
+          if (tabs[tabIndex]) {
+            setActiveTab(tabs[tabIndex]);
+            announceToSR(`Switched to ${tabs[tabIndex]} tab`);
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [themeSettings, darkMode, themeCustomizerOpen, keyboardShortcutsOpen, cameraActive, formedSentence, translatedText]);
 
   const handleLocalSpeak = (textToSpeak: string, languageOverride?: string) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
@@ -2745,6 +2862,25 @@ export default function App() {
   return (
     <div className="bg-[#fdfcf9] dark:bg-[#121214] text-[#4a4a40] dark:text-[#d4d4d8] min-h-screen flex flex-col font-sans selection:bg-[#7c8d7c]/20" id="main-container">
       
+      {/* Screen Reader Skip Link */}
+      <a 
+        href="#main-content" 
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:px-4 focus:py-2.5 focus:bg-emerald-600 focus:text-white focus:rounded-xl focus:shadow-2xl focus:outline-none font-bold text-xs uppercase tracking-wider"
+      >
+        Skip to main content
+      </a>
+
+      {/* Screen Reader Live Announcement Region */}
+      <div 
+        id="sr-live-region" 
+        aria-live="polite" 
+        aria-atomic="true" 
+        className="sr-only" 
+        role="status"
+      >
+        {srAnnouncement}
+      </div>
+      
       {/* Dynamic Dev Notice Header Banner */}
       <div className="bg-[#7c8d7c] dark:bg-[#2e3b2e] text-white text-xs px-6 py-2.5 flex items-center justify-between gap-4 font-sans" id="header-notice">
         <div className="flex items-center gap-2">
@@ -2900,11 +3036,76 @@ export default function App() {
             </button>
           )}
 
+          {/* Keyboard Shortcuts Guide Hotkey Button */}
+          <button
+            onClick={() => {
+              setKeyboardShortcutsOpen(true);
+              announceToSR("Opened keyboard shortcuts guide");
+            }}
+            className="w-10 h-10 rounded-xl bg-[#f0f2ee] dark:bg-[#1f1f22] border border-[#e0e4db] dark:border-[#2d2d32] flex items-center justify-center text-[#7c8d7c] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-[#ffffff] hover:scale-105 active:scale-95 transition-all shadow-sm cursor-pointer focus-visible:ring-2 focus-visible:ring-emerald-500"
+            title="Keyboard Shortcuts Guide (Alt + K)"
+            aria-label="Keyboard Shortcuts Guide (Alt + K)"
+            id="header-shortcuts-btn"
+            style={{ minHeight: '40px', minWidth: '40px' }}
+          >
+            <Keyboard className="w-5 h-5 text-sky-600 dark:text-sky-400" />
+          </button>
+
+          {/* Quick Text Size Selector Button */}
+          <button
+            onClick={() => {
+              const sizes: Array<'standard' | 'large' | 'extra-large'> = ['standard', 'large', 'extra-large'];
+              const currIdx = sizes.indexOf(themeSettings.textSize || 'standard');
+              const nextSize = sizes[(currIdx + 1) % sizes.length];
+              handleUpdateThemeSettings({ textSize: nextSize });
+              announceToSR(`Text size set to ${nextSize.replace('-', ' ')}`);
+            }}
+            className={`h-10 px-2.5 rounded-xl border flex items-center gap-1.5 transition-all cursor-pointer shadow-sm text-xs font-bold focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+              themeSettings.textSize && themeSettings.textSize !== 'standard'
+                ? 'bg-emerald-500/15 border-emerald-500 text-emerald-900 dark:text-emerald-300'
+                : 'bg-[#f0f2ee] dark:bg-[#1f1f22] border-[#e0e4db] dark:border-[#2d2d32] text-[#7c8d7c] dark:text-[#a1a1aa]'
+            }`}
+            title={`Text Scaling: ${themeSettings.textSize || 'standard'} (Click or press Alt + T to cycle)`}
+            aria-label={`Current text size ${themeSettings.textSize || 'standard'}. Click to change text size.`}
+            id="header-text-size-btn"
+            style={{ minHeight: '40px' }}
+          >
+            <Type className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <span className="hidden sm:inline uppercase text-[10px] font-black font-mono">
+              {themeSettings.textSize === 'extra-large' ? '125%' : themeSettings.textSize === 'large' ? '115%' : '100%'}
+            </span>
+          </button>
+
+          {/* High Contrast Quick Toggle Button */}
+          <button
+            onClick={() => {
+              const nextHc = !themeSettings.highContrast;
+              handleUpdateThemeSettings({ highContrast: nextHc });
+              announceToSR(nextHc ? "High contrast mode enabled" : "High contrast mode disabled");
+            }}
+            className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-all cursor-pointer shadow-sm relative focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+              themeSettings.highContrast
+                ? 'bg-amber-500/20 border-amber-500 text-amber-900 dark:text-amber-300 ring-2 ring-amber-500/30'
+                : 'bg-[#f0f2ee] dark:bg-[#1f1f22] border-[#e0e4db] dark:border-[#2d2d32] text-[#7c8d7c] dark:text-[#a1a1aa]'
+            }`}
+            title={`High Contrast Mode: ${themeSettings.highContrast ? 'ON' : 'OFF'} (Alt + H)`}
+            aria-label={`Toggle High Contrast Mode. Currently ${themeSettings.highContrast ? 'Enabled' : 'Disabled'}`}
+            aria-pressed={themeSettings.highContrast}
+            id="header-high-contrast-btn"
+            style={{ minHeight: '40px', minWidth: '40px' }}
+          >
+            <Eye className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+            {themeSettings.highContrast && (
+              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-500 ring-2 ring-white dark:ring-[#1a1a1d]" />
+            )}
+          </button>
+
           {/* Theme Customizer Palette Launcher Button */}
           <button
             onClick={() => setThemeCustomizerOpen(true)}
             className="w-10 h-10 rounded-xl bg-[#f0f2ee] dark:bg-[#1f1f22] border border-[#e0e4db] dark:border-[#2d2d32] flex items-center justify-center text-[#7c8d7c] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-[#ffffff] hover:scale-105 active:scale-95 transition-all shadow-sm cursor-pointer relative"
-            title="Customize Theme & Color Palette"
+            title="Customize Theme & Color Palette (Alt + P)"
+            aria-label="Open Theme and Color Palette Customizer"
             id="theme-palette-btn"
             style={{ minHeight: '40px', minWidth: '40px' }}
           >
@@ -2916,7 +3117,8 @@ export default function App() {
           <button
             onClick={toggleDarkModeQuick}
             className="w-10 h-10 rounded-xl bg-[#f0f2ee] dark:bg-[#1f1f22] border border-[#e0e4db] dark:border-[#2d2d32] flex items-center justify-center text-[#7c8d7c] dark:text-[#a1a1aa] hover:text-[#5c3c35] dark:hover:text-[#ffffff] hover:scale-105 active:scale-95 transition-all shadow-sm cursor-pointer"
-            title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+            title={darkMode ? "Switch to Light Mode (Alt + D)" : "Switch to Dark Mode (Alt + D)"}
+            aria-label={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
             id="dark-mode-toggle"
             style={{ minHeight: '40px', minWidth: '40px' }}
           >
@@ -3029,7 +3231,7 @@ export default function App() {
       )}
 
       {/* Main Responsive Grid Layout */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-8" id="viewport-workspace">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-8" id="main-content" tabIndex={-1}>
         
         {/* Dynamic Sandbox Status Banner if Secrets/AI represents simulated mode */}
         {isSandboxMode && (
@@ -6023,6 +6225,13 @@ export default function App() {
         onReset={handleResetThemeSettings}
         isOpen={themeCustomizerOpen}
         onClose={() => setThemeCustomizerOpen(false)}
+        onOpenShortcuts={() => setKeyboardShortcutsOpen(true)}
+      />
+
+      {/* Keyboard Shortcuts Guide Modal */}
+      <KeyboardShortcutsModal
+        isOpen={keyboardShortcutsOpen}
+        onClose={() => setKeyboardShortcutsOpen(false)}
       />
 
     </div>

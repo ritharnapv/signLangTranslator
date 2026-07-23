@@ -11,18 +11,22 @@ import {
   RotateCcw, 
   Sparkles,
   Eye,
-  CheckCircle2
+  CheckCircle2,
+  Type,
+  Keyboard
 } from 'lucide-react';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 export type ColorTheme = 'emerald' | 'ocean' | 'sunset' | 'violet' | 'amber' | 'onyx';
 export type BorderRadiusOption = 'crisp' | 'standard' | 'rounded';
+export type TextSizeOption = 'standard' | 'large' | 'extra-large';
 
 export interface ThemeSettings {
   themeMode: ThemeMode;
   colorTheme: ColorTheme;
   borderRadius: BorderRadiusOption;
   highContrast: boolean;
+  textSize: TextSizeOption;
 }
 
 export interface ThemePreset {
@@ -105,6 +109,7 @@ interface ThemeCustomizerProps {
   onReset: () => void;
   isOpen: boolean;
   onClose: () => void;
+  onOpenShortcuts?: () => void;
 }
 
 export default function ThemeCustomizer({
@@ -112,7 +117,8 @@ export default function ThemeCustomizer({
   onChange,
   onReset,
   isOpen,
-  onClose
+  onClose,
+  onOpenShortcuts
 }: ThemeCustomizerProps) {
   if (!isOpen) return null;
 
@@ -341,24 +347,116 @@ export default function ThemeCustomizer({
               </div>
             </div>
 
-            {/* Section 4: Accessibility High Contrast Switch */}
-            <div className="bg-gray-50 dark:bg-[#202024] border border-gray-200 dark:border-[#2e2e33] p-4 rounded-2xl flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-xl bg-gray-200 dark:bg-[#2e2e33] flex items-center justify-center text-gray-700 dark:text-gray-200">
-                  <Eye className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="text-xs font-bold text-gray-900 dark:text-white">High Contrast Mode</h4>
-                  <p className="text-[11px] text-gray-500 dark:text-gray-400">Increases text contrast and border outlines for maximum readability</p>
-                </div>
+            {/* Section 4: Typography Text Size (Large Text Option) */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-black uppercase tracking-wider text-gray-400 dark:text-gray-500 font-mono block">
+                  4. Text Scaling & Legibility
+                </label>
+                <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">
+                  Adjust interface font size
+                </span>
               </div>
 
-              <input
-                type="checkbox"
-                checked={settings.highContrast}
-                onChange={(e) => onChange({ highContrast: e.target.checked })}
-                className="w-5 h-5 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-              />
+              <div className="grid grid-cols-3 gap-3">
+                <button
+                  type="button"
+                  onClick={() => onChange({ textSize: 'standard' })}
+                  className={`p-3.5 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center gap-1 ${
+                    (settings.textSize || 'standard') === 'standard'
+                      ? 'bg-emerald-500/10 border-emerald-500 text-emerald-900 dark:text-emerald-300 font-bold shadow-xs'
+                      : 'bg-gray-50 dark:bg-[#202024] border-gray-200 dark:border-[#2e2e33] text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#27272a]'
+                  }`}
+                  aria-label="Set standard text size 100%"
+                >
+                  <Type className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <span className="text-xs font-bold">Standard (100%)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onChange({ textSize: 'large' })}
+                  className={`p-3.5 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center gap-1 ${
+                    settings.textSize === 'large'
+                      ? 'bg-emerald-500/10 border-emerald-500 text-emerald-900 dark:text-emerald-300 font-bold shadow-xs'
+                      : 'bg-gray-50 dark:bg-[#202024] border-gray-200 dark:border-[#2e2e33] text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#27272a]'
+                  }`}
+                  aria-label="Set large text size 115%"
+                >
+                  <Type className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                  <span className="text-xs font-bold">Large (115%)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onChange({ textSize: 'extra-large' })}
+                  className={`p-3.5 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center gap-1 ${
+                    settings.textSize === 'extra-large'
+                      ? 'bg-emerald-500/10 border-emerald-500 text-emerald-900 dark:text-emerald-300 font-bold shadow-xs'
+                      : 'bg-gray-50 dark:bg-[#202024] border-gray-200 dark:border-[#2e2e33] text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#27272a]'
+                  }`}
+                  aria-label="Set extra large text size 125%"
+                >
+                  <Type className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+                  <span className="text-xs font-bold">Extra Large (125%)</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Section 5: Accessibility Modes & Keyboard Shortcuts */}
+            <div className="space-y-3">
+              <label className="text-xs font-black uppercase tracking-wider text-gray-400 dark:text-gray-500 font-mono block">
+                5. Accessibility Enhancements
+              </label>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* High Contrast Toggle */}
+                <div className="bg-gray-50 dark:bg-[#202024] border border-gray-200 dark:border-[#2e2e33] p-4 rounded-2xl flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-gray-200 dark:bg-[#2e2e33] flex items-center justify-center text-gray-700 dark:text-gray-200 shrink-0">
+                      <Eye className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-gray-900 dark:text-white">High Contrast Mode</h4>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400">Crisp borders & high readability</p>
+                    </div>
+                  </div>
+
+                  <input
+                    type="checkbox"
+                    checked={settings.highContrast}
+                    onChange={(e) => onChange({ highContrast: e.target.checked })}
+                    className="w-5 h-5 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer shrink-0"
+                    aria-label="Toggle High Contrast Mode"
+                  />
+                </div>
+
+                {/* Keyboard Shortcuts Launcher */}
+                {onOpenShortcuts && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onOpenShortcuts();
+                    }}
+                    className="bg-sky-50/80 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800/80 hover:bg-sky-100 dark:hover:bg-sky-900/50 p-4 rounded-2xl flex items-center justify-between gap-3 text-left transition-all cursor-pointer group"
+                    aria-label="Open Keyboard Shortcuts Guide"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-xl bg-sky-200/80 dark:bg-sky-900/60 flex items-center justify-center text-sky-800 dark:text-sky-200 shrink-0">
+                        <Keyboard className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-sky-900 dark:text-sky-200 group-hover:underline">Keyboard Hotkeys</h4>
+                        <p className="text-[11px] text-sky-700/80 dark:text-sky-300/80">View all Alt + key controls</p>
+                      </div>
+                    </div>
+                    <span className="text-xs font-mono font-black text-sky-600 dark:text-sky-400 px-2 py-0.5 rounded bg-white dark:bg-[#202024] border border-sky-200 dark:border-sky-800">
+                      Alt+K
+                    </span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 

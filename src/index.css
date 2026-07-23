@@ -86,8 +86,30 @@ html[data-border-radius="rounded"] {
   --radius-custom: 1.75rem;
 }
 
-/* High Contrast Override */
+/* Text Size Scaling Overrides */
+html[data-text-size="large"] {
+  font-size: 112.5%; /* 18px base rem scaling */
+}
+
+html[data-text-size="extra-large"] {
+  font-size: 125%; /* 20px base rem scaling */
+}
+
+/* High Contrast & Focus Indicator Accessibility Overrides */
 html[data-high-contrast="true"] {
   font-weight: 500;
-  filter: contrast(110%);
+  filter: contrast(115%);
+}
+
+html[data-high-contrast="true"] button,
+html[data-high-contrast="true"] input,
+html[data-high-contrast="true"] select,
+html[data-high-contrast="true"] textarea {
+  border-width: 2px !important;
+}
+
+/* High contrast mode focus ring clarity */
+*:focus-visible {
+  outline: 2px solid var(--color-primary, #0284c7) !important;
+  outline-offset: 2px !important;
 }
