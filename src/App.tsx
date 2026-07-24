@@ -568,6 +568,10 @@ export default function App() {
   const landmarksHistoryRef = useRef<number[][]>([]);
   const rawLandmarksHistoryRef = useRef<any[][]>([]);
   const leftLandmarksHistoryRef = useRef<number[][]>([]);
+  const isProcessingFrameRef = useRef<boolean>(false);
+  const lastProcessedTimeRef = useRef<number>(0);
+  const lastFpsUpdateRef = useRef<number>(0);
+  const lastSamplesUpdateRef = useRef<number>(0);
   const rightLandmarksHistoryRef = useRef<number[][]>([]);
   const rawLeftHistoryRef = useRef<any[][]>([]);
   const rawRightHistoryRef = useRef<any[][]>([]);
@@ -1748,14 +1752,21 @@ export default function App() {
 
   // MediaPipe hands results handler callback
   const onHandsResults = (results: any) => {
-    // 1. Compute rolling FPS
+    // 1. Compute rolling FPS with throttled state updates to prevent React re-render thrashing
     const now = performance.now();
     lastFrameTimesRef.current.push(now);
     lastFrameTimesRef.current = lastFrameTimesRef.current.filter(t => now - t < 1000);
-    setLiveFps(lastFrameTimesRef.current.length);
+    
+    if (now - lastFpsUpdateRef.current >= 400) {
+      lastFpsUpdateRef.current = now;
+      setLiveFps(lastFrameTimesRef.current.length);
+    }
 
     const handsFound = results.multiHandLandmarks ? results.multiHandLandmarks.length : 0;
-    setDetectedHandsCount(handsFound);
+    if (detectedHandsCountRef.current !== handsFound) {
+      detectedHandsCountRef.current = handsFound;
+      setDetectedHandsCount(handsFound);
+    }
     
     // Separate Left and Right hands correctly using multiHandedness
     let leftLandmarks: any[] = [];
@@ -1773,14 +1784,21 @@ export default function App() {
       });
     }
 
-    setLeftHandSample(leftLandmarks);
-    setRightHandSample(rightLandmarks);
+    leftHandSampleRef.current = leftLandmarks;
+    rightHandSampleRef.current = rightLandmarks;
 
     // Keep handLandmarksSample for compatibility and visualization
     const primaryLandmarks = results.multiHandLandmarks && results.multiHandLandmarks.length > 0 
       ? results.multiHandLandmarks[0] 
       : [];
-    setHandLandmarksSample(primaryLandmarks);
+    handLandmarksSampleRef.current = primaryLandmarks;
+
+    if (now - lastSamplesUpdateRef.current >= 100) {
+      lastSamplesUpdateRef.current = now;
+      setLeftHandSample(leftLandmarks);
+      setRightHandSample(rightLandmarks);
+      setHandLandmarksSample(primaryLandmarks);
+    }
 
     const preprocessSingleHand = (handLms: any[]) => {
       if (!handLms || handLms.length === 0) return new Array(63).fill(0);
@@ -2160,9 +2178,9 @@ export default function App() {
         });
         handsInstance.setOptions({
           maxNumHands: 2,
-          modelComplexity: 1,
-          minDetectionConfidence: 0.55,
-          minTrackingConfidence: 0.55
+          modelComplexity: 0, // Lite Model for 3x faster inference & low CPU utilization
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5
         });
         handsInstance.onResults(onHandsResults);
         handsRef.current = handsInstance;
@@ -2193,19 +2211,31 @@ export default function App() {
       if (!active || !cameraActive || !videoRef.current || !handsRef.current) {
         return;
       }
-      const video = videoRef.current;
-      if (video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
-        try {
-          const canvas = landmarkCanvasRef.current;
-          if (canvas && (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight)) {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
+
+      // Throttle frame submissions to target ~30 FPS (33ms interval) and skip if previous frame is still processing in WASM/WebGL
+      const now = performance.now();
+      const timeSinceLast = now - lastProcessedTimeRef.current;
+
+      if (!isProcessingFrameRef.current && timeSinceLast >= 32) {
+        const video = videoRef.current;
+        if (video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
+          isProcessingFrameRef.current = true;
+          lastProcessedTimeRef.current = now;
+          try {
+            const canvas = landmarkCanvasRef.current;
+            if (canvas && (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight)) {
+              canvas.width = video.videoWidth;
+              canvas.height = video.videoHeight;
+            }
+            await handsRef.current.send({ image: video });
+          } catch (err) {
+            // Soft ignore transient pipeline errors
+          } finally {
+            isProcessingFrameRef.current = false;
           }
-          await handsRef.current.send({ image: video });
-        } catch (err) {
-          // Soft ignore transient pipeline errors
         }
       }
+
       if (active && cameraActive) {
         localFrameId = requestAnimationFrame(processFrame);
       }
@@ -2502,6 +2532,30 @@ export default function App() {
     };
   }, [wsStreaming]);
 
+  const captureCompressedFrame = (video: HTMLVideoElement, canvas: HTMLCanvasElement, maxWidth: number = 480, quality: number = 0.72): string => {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return "";
+    
+    const videoW = video.videoWidth || 640;
+    const videoH = video.videoHeight || 480;
+    const aspectRatio = videoW / videoH;
+    
+    const targetW = Math.min(maxWidth, videoW);
+    const targetH = Math.round(targetW / aspectRatio);
+    
+    if (canvas.width !== targetW || canvas.height !== targetH) {
+      canvas.width = targetW;
+      canvas.height = targetH;
+    }
+    
+    ctx.translate(targetW, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, 0, 0, targetW, targetH);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    
+    return canvas.toDataURL('image/jpeg', quality);
+  };
+
   // Real-time camera capture loop for WebSockets
   useEffect(() => {
     if (wsStreaming && wsConnected && cameraActive) {
@@ -2512,21 +2566,9 @@ export default function App() {
         
         let base64Image = "";
         
-        // Capture frame from canvas
+        // Capture frame from canvas with compression
         if (cameraActive && videoRef.current && canvasRef.current) {
-          const video = videoRef.current;
-          const canvas = canvasRef.current;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            canvas.width = video.videoWidth || 640;
-            canvas.height = video.videoHeight || 480;
-            ctx.translate(canvas.width, 0);
-            ctx.scale(-1, 1);
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            ctx.setTransform(1, 0, 0, 1, 0, 0);
-            
-            base64Image = canvas.toDataURL('image/jpeg', 0.85);
-          }
+          base64Image = captureCompressedFrame(videoRef.current, canvasRef.current, 480, 0.72);
         } else {
           base64Image = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/";
         }
@@ -2686,21 +2728,7 @@ export default function App() {
 
       // Check if we can capture from video
       if (cameraActive && videoRef.current && canvasRef.current) {
-        const video = videoRef.current;
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          canvas.width = video.videoWidth || 640;
-          canvas.height = video.videoHeight || 480;
-          // Draw video flipped horizontally for comfortable mirror experience
-          ctx.translate(canvas.width, 0);
-          ctx.scale(-1, 1);
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          // Set back matrices
-          ctx.setTransform(1, 0, 0, 1, 0, 0);
-          
-          base64Image = canvas.toDataURL('image/jpeg', 0.85);
-        }
+        base64Image = captureCompressedFrame(videoRef.current, canvasRef.current, 512, 0.75);
       } else {
         // Mock capture helper base64 if no physical camera or simulator running
         base64Image = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/";

@@ -411,10 +411,12 @@ export default function ModelTrainer({
             const newMetricsObj = { epoch: epochNum, accuracy, loss, valAccuracy, valLoss };
             localHistory.push(newMetricsObj);
             
-            // Set React visual states
-            setCurrentEpoch(epochNum);
-            setCurrentMetrics({ accuracy, loss, valAccuracy, valLoss });
-            setTrainingHistory([...localHistory]);
+            // Set React visual states (throttled to avoid chart thrashing)
+            if (epochNum % 2 === 0 || epochNum === epochs) {
+              setCurrentEpoch(epochNum);
+              setCurrentMetrics({ accuracy, loss, valAccuracy, valLoss });
+              setTrainingHistory([...localHistory]);
+            }
 
             // Give frame rate back to browser layout to prevent locks
             await tf.nextFrame();
@@ -427,6 +429,16 @@ export default function ModelTrainer({
       ys.dispose();
 
       if (!stopTrainingRef.current) {
+        // Model Warmup: run a dummy prediction so WebGL shaders / kernels are compiled
+        try {
+          tf.tidy(() => {
+            const dummyInput = tf.zeros([1, 10, 126]);
+            model.predict(dummyInput);
+          });
+        } catch (warmupErr) {
+          console.warn("Model warmup note:", warmupErr);
+        }
+
         setActiveModel(model);
         setTrainedClasses(sortedLabels);
         

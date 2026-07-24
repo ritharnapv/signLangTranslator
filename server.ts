@@ -41,6 +41,29 @@ function getAiClient(): any {
   return aiClient;
 }
 
+// High-performance in-memory LRU Cache for AI model inference responses
+const apiCache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10-minute cache TTL
+
+function getCachedData(key: string): any | null {
+  const item = apiCache.get(key);
+  if (item && Date.now() - item.timestamp < CACHE_TTL_MS) {
+    return item.data;
+  }
+  if (item) {
+    apiCache.delete(key);
+  }
+  return null;
+}
+
+function setCachedData(key: string, data: any): void {
+  if (apiCache.size >= 300) {
+    const oldestKey = apiCache.keys().next().value;
+    if (oldestKey) apiCache.delete(oldestKey);
+  }
+  apiCache.set(key, { data, timestamp: Date.now() });
+}
+
 // Lazy-loaded Firebase Admin to support custom token generation and secure face verification
 let adminApp: any = null;
 function getFirebaseAdmin() {
@@ -396,6 +419,8 @@ async function runPrediction(image: string, targetGesture?: string): Promise<any
     model: "gemini-3.5-flash",
     contents: { parts: [imagePart, textPart] },
     config: {
+      temperature: 0.1,
+      maxOutputTokens: 250,
       systemInstruction: "You are a professional sign language feedback and facial sentiment AI. Analyze the uploaded image containing a sign language hand shape and face expression, output the correct letter/word, a numeric confidence score, a visual outline description, a list of 2 or 3 corrective hand-placement improvement tips, and the detected facial emotion ('happy', 'sad', 'angry', 'neutral'). You must return EXACTLY valid JSON matching the schema.",
       responseMimeType: "application/json",
       responseSchema: {
@@ -892,6 +917,12 @@ app.post("/api/translate", async (req, res): Promise<any> => {
       return res.status(400).json({ error: "Missing target language" });
     }
 
+    const cacheKey = `trans:${targetLanguage.toLowerCase()}:${text.toLowerCase().trim()}`;
+    const cached = getCachedData(cacheKey);
+    if (cached) {
+      return res.json({ ...cached, cached: true });
+    }
+
     const ai = getAiClient();
     if (!ai) {
       // Offline fallback dictionary translation for common words if offline/no key
@@ -992,12 +1023,14 @@ Translated ${targetLanguage} text:`;
     });
 
     const translated = (response.text || "").trim();
-    res.json({
+    const resultPayload = {
       original: text,
       translated: translated,
       targetLanguage,
       simulated: false
-    });
+    };
+    setCachedData(cacheKey, resultPayload);
+    res.json(resultPayload);
 
   } catch (error: any) {
     console.error("Translation error:", error);
