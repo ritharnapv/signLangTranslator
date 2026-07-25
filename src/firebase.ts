@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { initializeFirestore } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 
 // Configuration injected by Firebase Setup
 const firebaseConfig = {
@@ -18,7 +18,20 @@ const app = initializeApp(firebaseConfig);
 // Initialize Authentication
 export const auth = getAuth(app);
 
-// Initialize Firestore
-export const db = initializeFirestore(app, {});
+// Initialize Firestore with Persistent Local Cache for offline mode & sync
+let dbInstance;
+try {
+  dbInstance = initializeFirestore(app, {
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager()
+    })
+  });
+} catch (e) {
+  console.warn("Falling back to default Firestore initialization:", e);
+  dbInstance = initializeFirestore(app, {});
+}
+
+export const db = dbInstance;
 
 export default app;
+

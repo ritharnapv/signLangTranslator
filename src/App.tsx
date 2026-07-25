@@ -11,6 +11,9 @@ import UserProfile from './components/UserProfile';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
 import TranslationHistory from './components/TranslationHistory';
 import ContinuousConversation from './components/ContinuousConversation';
+import OfflineModeManager from './components/OfflineModeManager';
+import { ensureBaselineModelCached } from './lib/offlineModelCache';
+import { getOfflineSyncQueue, syncOfflineDataToCloud } from './lib/offlineSync';
 import ThemeCustomizer, { ThemeSettings, ColorTheme, ThemeMode, COLOR_THEMES } from './components/ThemeCustomizer';
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
 import { auth, db } from './firebase';
@@ -63,7 +66,10 @@ import {
   MicOff,
   Keyboard,
   Eye,
-  Type
+  Type,
+  Wifi,
+  WifiOff,
+  HardDrive
 } from 'lucide-react';
 
 // Production environment configuration helpers
@@ -262,7 +268,10 @@ export default function App() {
     handleUpdateThemeSettings({ themeMode: nextMode });
   };
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'learning' | 'dictionary' | 'roadmap' | 'collector' | 'datasets' | 'trainer' | 'files' | 'profile' | 'analytics' | 'conversation'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'learning' | 'dictionary' | 'roadmap' | 'collector' | 'datasets' | 'trainer' | 'files' | 'profile' | 'analytics' | 'conversation' | 'offline'>('dashboard');
+  const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
+  const [forcedOffline, setForcedOffline] = useState<boolean>(false);
+  const [pendingSyncCount, setPendingSyncCount] = useState<number>(() => getOfflineSyncQueue().length);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
 
@@ -1120,10 +1129,36 @@ export default function App() {
     return () => clearTimeout(delayDebounce);
   }, [formedSentence, autoDetectLanguage]);
 
-  // Attempt to auto-restores saved TF.js model from browser local IndexedDB on startup
+  // Network status listener and auto offline cloud synchronization
+  useEffect(() => {
+    const handleOnline = async () => {
+      setIsOnline(true);
+      try {
+        const res = await syncOfflineDataToCloud();
+        setPendingSyncCount(getOfflineSyncQueue().length);
+      } catch (e) {
+        console.warn("Auto-sync on network reconnect note:", e);
+      }
+    };
+
+    const handleOffline = () => {
+      setIsOnline(false);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Auto-restore or initialize saved TF.js model from browser local IndexedDB on startup
   useEffect(() => {
     const autoLoadSavedModel = async () => {
       try {
+        await ensureBaselineModelCached(false);
         const classesStored = localStorage.getItem('asl_trained_classes');
         if (classesStored) {
           const classes = JSON.parse(classesStored);
@@ -1131,15 +1166,15 @@ export default function App() {
           setTrainedClientModel(loaded);
           setTrainedClasses(classes);
           setPredictionSource('tensorflow');
-          console.log("Successfully restored your custom TF.js model from local IndexedDB.");
+          console.log("Successfully loaded local TF.js model from browser IndexedDB.");
         }
       } catch (e) {
-        console.log("No custom TF.js model found or configured in IndexedDB yet.");
+        console.log("Baseline model storage auto-load check complete.");
       }
     };
     
     // Tiny delay to make sure TF.js has cleanly initialized
-    setTimeout(autoLoadSavedModel, 800);
+    setTimeout(autoLoadSavedModel, 600);
   }, []);
 
   useEffect(() => {
@@ -3037,6 +3072,22 @@ export default function App() {
             Sandbox File System
           </button>
           <button
+            onClick={() => { setActiveTab('offline'); setMobileMenuOpen(false); }}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all flex items-center gap-1.5 ${
+              activeTab === 'offline'
+                ? "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white shadow-sm"
+                : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
+            }`}
+            id="tab-offline-btn"
+          >
+            {!isOnline || forcedOffline ? (
+              <WifiOff className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
+            ) : (
+              <Wifi className="w-3.5 h-3.5 text-emerald-500" />
+            )}
+            <span>Offline & Sync</span>
+          </button>
+          <button
             onClick={() => { setActiveTab('profile'); setMobileMenuOpen(false); }}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
               activeTab === 'profile'
@@ -3167,6 +3218,33 @@ export default function App() {
             <span>{health.status === "connected" ? "API CONNECTED" : "SANDBOX LOCAL"}</span>
           </div>
 
+          {/* Quick Offline Status & Sync Manager Launcher Badge */}
+          <button
+            onClick={() => setActiveTab('offline')}
+            className={`hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-full border text-xs font-bold leading-none transition-all cursor-pointer ${
+              !isOnline || forcedOffline
+                ? "bg-amber-100 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 border-amber-300 dark:border-amber-800"
+                : pendingSyncCount > 0
+                ? "bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800"
+                : "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60"
+            }`}
+            title="Open Offline Mode & Cloud Sync Hub"
+            id="header-offline-badge"
+          >
+            {!isOnline || forcedOffline ? (
+              <WifiOff className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 animate-pulse" />
+            ) : (
+              <Wifi className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+            )}
+            <span>
+              {!isOnline || forcedOffline 
+                ? "OFFLINE MODE" 
+                : pendingSyncCount > 0 
+                ? `SYNC (${pendingSyncCount})` 
+                : "OFFLINE SYNC"}
+            </span>
+          </button>
+
           <button 
             onClick={() => { setActiveTab('profile'); setMobileMenuOpen(false); }}
             className={`w-10 h-10 rounded-full px-1 border flex items-center justify-center text-xs font-bold tracking-wider relative uppercase transition-all duration-300 cursor-pointer ${
@@ -3216,6 +3294,7 @@ export default function App() {
               { id: 'datasets', label: 'Datasets Hub', icon: Database },
               { id: 'trainer', label: 'Gesture AI Trainer', icon: Cpu },
               { id: 'files', label: 'Sandbox Files', icon: FileCode },
+              { id: 'offline', label: 'Offline Mode & Sync', icon: WifiOff },
               { id: 'profile', label: 'Account Settings', icon: Settings },
             ].map((tab) => {
               const Icon = tab.icon;
@@ -6009,6 +6088,17 @@ export default function App() {
               URL.revokeObjectURL(url);
             }}
           />
+        )}
+
+        {/* Offline Mode & Sync Manager Tab View */}
+        {activeTab === 'offline' && (
+          <div className="space-y-6 animate-fadeIn" id="offline-mode-tab">
+            <OfflineModeManager
+              isOnline={isOnline}
+              forcedOffline={forcedOffline}
+              onSimulateOfflineToggle={setForcedOffline}
+            />
+          </div>
         )}
 
         {/* User Profile Tab View */}
