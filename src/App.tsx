@@ -69,7 +69,9 @@ import {
   Type,
   Wifi,
   WifiOff,
-  HardDrive
+  HardDrive,
+  GraduationCap,
+  Zap
 } from 'lucide-react';
 
 // Production environment configuration helpers
@@ -519,6 +521,18 @@ export default function App() {
   const [isSandboxMode, setIsSandboxMode] = useState<boolean>(false);
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
+  const [torchOn, setTorchOn] = useState<boolean>(false);
+  const [isMobileDevice, setIsMobileDevice] = useState<boolean>(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobileDevice(window.innerWidth < 768 || 'ontouchstart' in window);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
   
   // Real-time WebSocket streaming states
   const [wsStreaming, setWsStreaming] = useState<boolean>(false);
@@ -2386,35 +2400,114 @@ export default function App() {
     }
   };
 
-  // Turn on/off webcam stream
+  // Turn on/off webcam stream with mobile resilience and fallback
   const toggleCamera = async () => {
     if (cameraActive) {
       stopCamera();
     } else {
       try {
         setCameraError(null);
-        // Request frame and video permission scopes dynamically
-        const constraints: MediaStreamConstraints = {
-          video: selectedDeviceId 
-            ? { deviceId: { exact: selectedDeviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }
-            : { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
-          audio: false
-        };
-        const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+        let constraints: MediaStreamConstraints;
+        if (selectedDeviceId) {
+          constraints = {
+            video: { deviceId: { exact: selectedDeviceId }, width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: false
+          };
+        } else {
+          constraints = {
+            video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: facingMode },
+            audio: false
+          };
+        }
+        
+        let mediaStream: MediaStream;
+        try {
+          mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (primaryErr) {
+          console.warn("Primary camera constraints failed, attempting basic mobile fallback:", primaryErr);
+          mediaStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: facingMode },
+            audio: false
+          });
+        }
+
         setStream(mediaStream);
         setCameraActive(true);
         if (videoRef.current) {
           videoRef.current.srcObject = mediaStream;
           videoRef.current.play().catch(err => console.error("Error playing video:", err));
         }
-        // Enumeration succeeds once permission has been authorized by user
         setTimeout(updateAvailableDevices, 500);
       } catch (err: any) {
         console.error("Camera access failed:", err);
-        setCameraError(err.message || "Camera access denied. Please ensure your device has a functional camera module and the AI Studio platform permission popup isn't blocked.");
+        setCameraError(err.message || "Camera access denied. Please ensure your device has a functional camera module and permissions are granted.");
         setCameraActive(false);
-        setIsSandboxMode(true); // fall back seamlessly to mock image scanner helper
+        setIsSandboxMode(true);
       }
+    }
+  };
+
+  // Switch between front/selfie camera and rear/back camera on mobile devices
+  const toggleFacingMode = async () => {
+    const nextMode = facingMode === 'user' ? 'environment' : 'user';
+    setFacingMode(nextMode);
+    setSelectedDeviceId(''); // clear exact device id so facingMode takes precedence
+
+    if (cameraActive) {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+      try {
+        setCameraError(null);
+        let mediaStream: MediaStream;
+        try {
+          mediaStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { exact: nextMode }, width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: false
+          });
+        } catch (e1) {
+          mediaStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: nextMode },
+            audio: false
+          });
+        }
+
+        setStream(mediaStream);
+        setCameraActive(true);
+        if (videoRef.current) {
+          videoRef.current.srcObject = mediaStream;
+          videoRef.current.play().catch(err => console.error("Error playing video:", err));
+        }
+        setTimeout(updateAvailableDevices, 500);
+      } catch (err: any) {
+        console.error("Error switching facing mode:", err);
+        if (videoDevices.length > 1) {
+          handleFlipCamera();
+        } else {
+          setCameraError("Could not switch camera facing mode.");
+        }
+      }
+    }
+  };
+
+  // Toggle mobile device flashlight / camera torch if supported
+  const toggleTorch = async () => {
+    if (!stream) return;
+    const track = stream.getVideoTracks()[0];
+    if (!track) return;
+    try {
+      const caps = track.getCapabilities ? (track.getCapabilities() as any) : {};
+      if (caps && caps.torch) {
+        const nextState = !torchOn;
+        await track.applyConstraints({
+          advanced: [{ torch: nextState }]
+        } as any);
+        setTorchOn(nextState);
+      } else {
+        alert("Flashlight / Torch control is not supported by your camera hardware module.");
+      }
+    } catch (err) {
+      console.warn("Could not toggle camera torch:", err);
     }
   };
 
@@ -2434,13 +2527,16 @@ export default function App() {
 
   // Flip or cycle active cameras for mobile-friendly stream switching
   const handleFlipCamera = async () => {
-    if (videoDevices.length <= 1) return;
-    const currentIndex = videoDevices.findIndex(d => d.deviceId === selectedDeviceId);
-    const nextIndex = (currentIndex + 1) % videoDevices.length;
-    const nextDevice = videoDevices[nextIndex];
-    if (nextDevice) {
-      await handleDeviceChange({ target: { value: nextDevice.deviceId } } as any);
+    if (videoDevices.length > 1) {
+      const currentIndex = videoDevices.findIndex(d => d.deviceId === selectedDeviceId);
+      const nextIndex = (currentIndex + 1) % videoDevices.length;
+      const nextDevice = videoDevices[nextIndex];
+      if (nextDevice) {
+        await handleDeviceChange({ target: { value: nextDevice.deviceId } } as any);
+        return;
+      }
     }
+    await toggleFacingMode();
   };
 
   const handleDeviceChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -2923,7 +3019,7 @@ export default function App() {
   }
 
   return (
-    <div className="bg-[#fdfcf9] dark:bg-[#121214] text-[#4a4a40] dark:text-[#d4d4d8] min-h-screen flex flex-col font-sans selection:bg-[#7c8d7c]/20" id="main-container">
+    <div className="bg-[#fdfcf9] dark:bg-[#121214] text-[#4a4a40] dark:text-[#d4d4d8] min-h-screen flex flex-col font-sans selection:bg-[#7c8d7c]/20 pb-20 sm:pb-8" id="main-container">
       
       {/* Screen Reader Skip Link */}
       <a 
@@ -3378,7 +3474,7 @@ export default function App() {
                       ref={videoRef}
                       playsInline 
                       muted 
-                      className="w-full h-full object-cover scale-x-[-1]"
+                      className={`w-full h-full object-cover ${facingMode === 'user' ? 'scale-x-[-1]' : 'scale-x-1'}`}
                       id="webcam-hardware"
                     />
                     <canvas 
@@ -3566,27 +3662,53 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Hardware & Sandbox Frame Controls */}
-              <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4" id="scanner-controls-card">
-                <div className="flex flex-wrap items-center gap-3">
+              {/* Hardware & Sandbox Frame Controls with Mobile Support */}
+              <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm" id="scanner-controls-card">
+                <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
                   <button
                     onClick={toggleCamera}
-                    className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-bold uppercase tracking-wide transition-all ${
+                    className={`flex items-center justify-center gap-2 px-5 py-3 rounded-2xl text-xs font-bold uppercase tracking-wide transition-all min-h-[44px] touch-manipulation active:scale-95 ${
                       cameraActive 
                         ? "bg-[#ebdcd1] dark:bg-[#453730] text-[#a36b5e] dark:text-[#ebdcd1] border border-[#ebdcd1] dark:border-[#523d32]" 
-                        : "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white hover:bg-[#7c8d7c]/90 dark:hover:bg-[#4a5c4e]/90"
+                        : "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white hover:bg-[#7c8d7c]/90 dark:hover:bg-[#4a5c4e]/90 shadow-sm"
                     }`}
                     id="toggle-hardware"
                   >
                     {cameraActive ? <VideoOff className="w-4 h-4" /> : <Video className="w-4 h-4" />}
-                    {cameraActive ? "Disconnect Camera" : "Enable Camera Feed"}
+                    <span>{cameraActive ? "Disconnect" : "Enable Camera"}</span>
                   </button>
+
+                  <button
+                    onClick={toggleFacingMode}
+                    className="flex items-center justify-center gap-1.5 px-3.5 py-3 bg-[#f0f2ee] dark:bg-[#1f1f22] border border-[#e0e4db] dark:border-[#2d2d32] text-[#4a4a40] dark:text-[#d4d4d8] hover:bg-[#e0e4db]/40 dark:hover:bg-white/5 rounded-2xl text-xs font-bold transition-all min-h-[44px] touch-manipulation active:scale-95"
+                    title="Switch between Front selfie camera and Rear environment camera"
+                    id="toggle-facing-mode-btn"
+                  >
+                    <FlipHorizontal className="w-4 h-4 text-[#7c8d7c] dark:text-[#a1a1aa]" />
+                    <span className="capitalize">{facingMode === 'user' ? 'Front Cam' : 'Rear Cam'}</span>
+                  </button>
+
+                  {cameraActive && (
+                    <button
+                      onClick={toggleTorch}
+                      className={`flex items-center justify-center gap-1.5 px-3 py-3 rounded-2xl text-xs font-bold transition-all min-h-[44px] touch-manipulation active:scale-95 ${
+                        torchOn 
+                          ? "bg-amber-400 text-amber-950 border border-amber-500 shadow-sm" 
+                          : "bg-[#f0f2ee] dark:bg-[#1f1f22] border border-[#e0e4db] dark:border-[#2d2d32] text-[#4a4a40] dark:text-[#d4d4d8]"
+                      }`}
+                      title="Toggle Camera Flashlight / Torch"
+                      id="toggle-torch-btn"
+                    >
+                      <Zap className={`w-4 h-4 ${torchOn ? 'text-amber-950' : 'text-amber-500'}`} />
+                      <span>{torchOn ? 'Torch On' : 'Torch'}</span>
+                    </button>
+                  )}
 
                   {videoDevices.length > 0 && (
                     <select
                       value={selectedDeviceId}
                       onChange={handleDeviceChange}
-                      className="bg-[#fdfcf9] dark:bg-[#151518] border border-[#e0e4db] dark:border-[#2d2d32] text-[#4a4a40] dark:text-[#d4d4d8] text-xs font-semibold py-2.5 px-3 rounded-2xl focus:outline-none focus:ring-1 focus:ring-[#7c8d7c] transition-all cursor-pointer shadow-sm hover:bg-[#f0f2ee] dark:hover:bg-[#1f1f22]"
+                      className="bg-[#fdfcf9] dark:bg-[#151518] border border-[#e0e4db] dark:border-[#2d2d32] text-[#4a4a40] dark:text-[#d4d4d8] text-xs font-semibold py-3 px-3 rounded-2xl focus:outline-none focus:ring-1 focus:ring-[#7c8d7c] transition-all cursor-pointer shadow-sm hover:bg-[#f0f2ee] dark:hover:bg-[#1f1f22] min-h-[44px]"
                       id="camera-select"
                       title="Select camera source"
                     >
@@ -3598,26 +3720,14 @@ export default function App() {
                     </select>
                   )}
 
-                  {videoDevices.length > 1 && (
-                    <button
-                      onClick={handleFlipCamera}
-                      className="flex md:hidden items-center justify-center w-10 h-10 bg-[#f0f2ee] dark:bg-[#1f1f22] border border-[#e0e4db] dark:border-[#2d2d32] text-[#7c8d7c] dark:text-[#a1a1aa] hover:bg-[#e0e4db]/30 dark:hover:bg-white/5 rounded-2xl transition-all shadow-sm shrink-0"
-                      title="Flip Camera Input"
-                      aria-label="Flip Camera Input"
-                      style={{ minHeight: '40px', minWidth: '40px' }}
-                    >
-                      <FlipHorizontal className="w-5 h-5 text-[#7c8d7c]" />
-                    </button>
-                  )}
-
                   <button
                     onClick={captureAndTranslate}
                     disabled={isTranslating}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-[#f0f2ee] dark:bg-[#1f1f22] border border-[#e0e4db] dark:border-[#2d2d32] text-[#4a4a40] dark:text-[#d4d4d8] hover:bg-[#e0e4db]/40 dark:hover:bg-white/5 rounded-2xl text-xs font-bold uppercase tracking-wide transition-all disabled:opacity-40"
+                    className="flex items-center justify-center gap-2 px-5 py-3 bg-[#f0f2ee] dark:bg-[#1f1f22] border border-[#e0e4db] dark:border-[#2d2d32] text-[#4a4a40] dark:text-[#d4d4d8] hover:bg-[#e0e4db]/40 dark:hover:bg-white/5 rounded-2xl text-xs font-bold uppercase tracking-wide transition-all disabled:opacity-40 min-h-[44px] touch-manipulation active:scale-95"
                     id="trigger-snapshot"
                   >
                     {isTranslating ? <RefreshCw className="w-4 h-4 animate-spin text-[#7c8d7c]" /> : <Camera className="w-4 h-4 text-[#7c8d7c]" />}
-                    {isTranslating ? "AI Recognizer Thinking..." : "Capture Frame"}
+                    <span>{isTranslating ? "Analyzing..." : "Capture Frame"}</span>
                   </button>
                 </div>
 
@@ -6351,6 +6461,40 @@ export default function App() {
         isOpen={keyboardShortcutsOpen}
         onClose={() => setKeyboardShortcutsOpen(false)}
       />
+
+      {/* Mobile Fixed Bottom Navigation Bar (Touch-Optimized) */}
+      <div className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#18181b]/95 backdrop-blur-md border-t border-[#e0e4db] dark:border-[#2d2d32] px-1 py-1 shadow-2xl flex items-center justify-around" id="mobile-bottom-dock">
+        {[
+          { id: 'dashboard', label: 'Practice', icon: Video },
+          { id: 'learning', label: 'Learn', icon: GraduationCap },
+          { id: 'dictionary', label: 'Dictionary', icon: BookOpen },
+          { id: 'conversation', label: 'Live Chat', icon: MessageSquare },
+          { id: 'offline', label: 'Sync', icon: WifiOff },
+          { id: 'profile', label: 'Profile', icon: Settings },
+        ].map((item) => {
+          const Icon = item.icon;
+          const isActive = activeTab === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => {
+                setActiveTab(item.id);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl transition-all min-h-[44px] min-w-[44px] touch-manipulation active:scale-90 ${
+                isActive 
+                  ? 'text-[#7c8d7c] dark:text-[#a1a1aa] font-black' 
+                  : 'text-[#6a6a5d] dark:text-[#71717a]'
+              }`}
+              id={`mobile-nav-${item.id}`}
+            >
+              <Icon className={`w-5 h-5 ${isActive ? 'scale-110 text-[#7c8d7c] dark:text-[#ebdcd1]' : ''}`} />
+              <span className="text-[10px] tracking-tight mt-0.5 font-bold">{item.label}</span>
+              {isActive && <span className="w-1 h-1 rounded-full bg-[#7c8d7c] dark:bg-[#ebdcd1] mt-0.5" />}
+            </button>
+          );
+        })}
+      </div>
 
     </div>
   );
