@@ -12,6 +12,7 @@ import AnalyticsDashboard from './components/AnalyticsDashboard';
 import TranslationHistory from './components/TranslationHistory';
 import ContinuousConversation from './components/ContinuousConversation';
 import OfflineModeManager from './components/OfflineModeManager';
+import AdminDashboard from './components/AdminDashboard';
 import { ensureBaselineModelCached } from './lib/offlineModelCache';
 import { getOfflineSyncQueue, syncOfflineDataToCloud } from './lib/offlineSync';
 import ThemeCustomizer, { ThemeSettings, ColorTheme, ThemeMode, COLOR_THEMES } from './components/ThemeCustomizer';
@@ -71,7 +72,8 @@ import {
   WifiOff,
   HardDrive,
   GraduationCap,
-  Zap
+  Zap,
+  ShieldCheck
 } from 'lucide-react';
 
 // Production environment configuration helpers
@@ -270,7 +272,7 @@ export default function App() {
     handleUpdateThemeSettings({ themeMode: nextMode });
   };
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'learning' | 'dictionary' | 'roadmap' | 'collector' | 'datasets' | 'trainer' | 'files' | 'profile' | 'analytics' | 'conversation' | 'offline'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'learning' | 'dictionary' | 'roadmap' | 'collector' | 'datasets' | 'trainer' | 'files' | 'profile' | 'analytics' | 'conversation' | 'offline' | 'admin'>('dashboard');
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [forcedOffline, setForcedOffline] = useState<boolean>(false);
   const [pendingSyncCount, setPendingSyncCount] = useState<number>(() => getOfflineSyncQueue().length);
@@ -3194,6 +3196,18 @@ export default function App() {
           >
             Account Profile
           </button>
+          <button
+            onClick={() => { setActiveTab('admin'); setMobileMenuOpen(false); }}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold tracking-wide transition-all flex items-center gap-1.5 ${
+              activeTab === 'admin'
+                ? "bg-purple-700 dark:bg-purple-800 text-white shadow-sm ring-1 ring-purple-400"
+                : "bg-purple-500/10 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 hover:bg-purple-500/20"
+            }`}
+            id="tab-admin-btn"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-purple-600 dark:text-purple-300" />
+            <span>Admin Console</span>
+          </button>
         </div>
 
         {/* Right Nav-bar: Dark mode switcher & status indicators & Mobile Menu Burger Button */}
@@ -3392,6 +3406,7 @@ export default function App() {
               { id: 'files', label: 'Sandbox Files', icon: FileCode },
               { id: 'offline', label: 'Offline Mode & Sync', icon: WifiOff },
               { id: 'profile', label: 'Account Settings', icon: Settings },
+              { id: 'admin', label: 'Admin Console', icon: ShieldCheck },
             ].map((tab) => {
               const Icon = tab.icon;
               const isSelected = activeTab === tab.id;
@@ -6200,6 +6215,13 @@ export default function App() {
           />
         )}
 
+        {/* Admin Console Tab View */}
+        {activeTab === 'admin' && (
+          <div className="space-y-6 animate-fadeIn" id="admin-console-tab">
+            <AdminDashboard />
+          </div>
+        )}
+
         {/* Offline Mode & Sync Manager Tab View */}
         {activeTab === 'offline' && (
           <div className="space-y-6 animate-fadeIn" id="offline-mode-tab">
@@ -6470,6 +6492,7 @@ export default function App() {
           { id: 'dictionary', label: 'Dictionary', icon: BookOpen },
           { id: 'conversation', label: 'Live Chat', icon: MessageSquare },
           { id: 'offline', label: 'Sync', icon: WifiOff },
+          { id: 'admin', label: 'Admin', icon: ShieldCheck },
           { id: 'profile', label: 'Profile', icon: Settings },
         ].map((item) => {
           const Icon = item.icon;
