@@ -13,6 +13,7 @@ import TranslationHistory from './components/TranslationHistory';
 import ContinuousConversation from './components/ContinuousConversation';
 import OfflineModeManager from './components/OfflineModeManager';
 import AdminDashboard from './components/AdminDashboard';
+import DatasetLabelingTool from './components/DatasetLabelingTool';
 import { ensureBaselineModelCached } from './lib/offlineModelCache';
 import { getOfflineSyncQueue, syncOfflineDataToCloud } from './lib/offlineSync';
 import ThemeCustomizer, { ThemeSettings, ColorTheme, ThemeMode, COLOR_THEMES } from './components/ThemeCustomizer';
@@ -73,7 +74,8 @@ import {
   HardDrive,
   GraduationCap,
   Zap,
-  ShieldCheck
+  ShieldCheck,
+  Tag
 } from 'lucide-react';
 
 // Production environment configuration helpers
@@ -272,7 +274,7 @@ export default function App() {
     handleUpdateThemeSettings({ themeMode: nextMode });
   };
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'learning' | 'dictionary' | 'roadmap' | 'collector' | 'datasets' | 'trainer' | 'files' | 'profile' | 'analytics' | 'conversation' | 'offline' | 'admin'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'learning' | 'dictionary' | 'roadmap' | 'collector' | 'datasets' | 'labeler' | 'trainer' | 'files' | 'profile' | 'analytics' | 'conversation' | 'offline' | 'admin'>('dashboard');
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [forcedOffline, setForcedOffline] = useState<boolean>(false);
   const [pendingSyncCount, setPendingSyncCount] = useState<number>(() => getOfflineSyncQueue().length);
@@ -3150,6 +3152,18 @@ export default function App() {
             Datasets Hub
           </button>
           <button
+            onClick={() => { setActiveTab('labeler'); setMobileMenuOpen(false); }}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all flex items-center gap-1.5 ${
+              activeTab === 'labeler'
+                ? "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white shadow-sm ring-1 ring-[#7c8d7c]"
+                : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
+            }`}
+            id="tab-labeler-btn"
+          >
+            <Tag className="w-3.5 h-3.5 text-amber-500" />
+            <span>Dataset Labeler</span>
+          </button>
+          <button
             onClick={() => { setActiveTab('trainer'); setMobileMenuOpen(false); }}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
               activeTab === 'trainer'
@@ -3402,6 +3416,7 @@ export default function App() {
               { id: 'roadmap', label: '30-Day Roadmap', icon: FileText },
               { id: 'collector', label: 'Recording Desk', icon: Video },
               { id: 'datasets', label: 'Datasets Hub', icon: Database },
+              { id: 'labeler', label: 'Dataset Labeler', icon: Tag },
               { id: 'trainer', label: 'Gesture AI Trainer', icon: Cpu },
               { id: 'files', label: 'Sandbox Files', icon: FileCode },
               { id: 'offline', label: 'Offline Mode & Sync', icon: WifiOff },
@@ -6006,15 +6021,25 @@ export default function App() {
                         {collectedSamples.length} ITEMS
                       </span>
                     </h3>
-                    {collectedSamples.length > 0 && (
+                    <div className="flex items-center gap-3">
                       <button
-                        onClick={handleClearAllSamples}
+                        onClick={() => setActiveTab('labeler')}
                         type="button"
-                        className="text-[10px] font-mono font-black tracking-wider text-[#a36b5e] uppercase hover:underline"
+                        className="flex items-center gap-1.5 px-3 py-1 bg-[#7c8d7c] hover:bg-[#6c7d6c] text-white text-[10px] font-mono font-bold uppercase rounded-lg shadow-sm transition-all"
                       >
-                        Clear Buffer
+                        <Tag className="w-3 h-3" />
+                        <span>Open Labeling Tool</span>
                       </button>
-                    )}
+                      {collectedSamples.length > 0 && (
+                        <button
+                          onClick={handleClearAllSamples}
+                          type="button"
+                          className="text-[10px] font-mono font-black tracking-wider text-[#a36b5e] uppercase hover:underline"
+                        >
+                          Clear Buffer
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
@@ -6219,6 +6244,20 @@ export default function App() {
         {activeTab === 'admin' && (
           <div className="space-y-6 animate-fadeIn" id="admin-console-tab">
             <AdminDashboard />
+          </div>
+        )}
+
+        {/* Dataset Labeling & Quality Tool Tab View */}
+        {activeTab === 'labeler' && (
+          <div className="space-y-6 animate-fadeIn" id="dataset-labeler-tab">
+            <DatasetLabelingTool
+              collectedSamples={collectedSamples}
+              currentUser={currentUser}
+              onUpdateSamples={(updatedSamples) => {
+                setCollectedSamples(updatedSamples);
+                localStorage.setItem('asl_collected_samples', JSON.stringify(updatedSamples));
+              }}
+            />
           </div>
         )}
 
