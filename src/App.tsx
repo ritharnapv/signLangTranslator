@@ -14,6 +14,7 @@ import ContinuousConversation from './components/ContinuousConversation';
 import OfflineModeManager from './components/OfflineModeManager';
 import AdminDashboard from './components/AdminDashboard';
 import DatasetLabelingTool from './components/DatasetLabelingTool';
+import GestureReplaySystem from './components/GestureReplaySystem';
 import { ensureBaselineModelCached } from './lib/offlineModelCache';
 import { getOfflineSyncQueue, syncOfflineDataToCloud } from './lib/offlineSync';
 import ThemeCustomizer, { ThemeSettings, ColorTheme, ThemeMode, COLOR_THEMES } from './components/ThemeCustomizer';
@@ -75,7 +76,8 @@ import {
   GraduationCap,
   Zap,
   ShieldCheck,
-  Tag
+  Tag,
+  Film
 } from 'lucide-react';
 
 // Production environment configuration helpers
@@ -274,7 +276,7 @@ export default function App() {
     handleUpdateThemeSettings({ themeMode: nextMode });
   };
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'learning' | 'dictionary' | 'roadmap' | 'collector' | 'datasets' | 'labeler' | 'trainer' | 'files' | 'profile' | 'analytics' | 'conversation' | 'offline' | 'admin'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'learning' | 'dictionary' | 'roadmap' | 'collector' | 'datasets' | 'labeler' | 'replay' | 'trainer' | 'files' | 'profile' | 'analytics' | 'conversation' | 'offline' | 'admin'>('dashboard');
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [forcedOffline, setForcedOffline] = useState<boolean>(false);
   const [pendingSyncCount, setPendingSyncCount] = useState<number>(() => getOfflineSyncQueue().length);
@@ -3164,6 +3166,18 @@ export default function App() {
             <span>Dataset Labeler</span>
           </button>
           <button
+            onClick={() => { setActiveTab('replay'); setMobileMenuOpen(false); }}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all flex items-center gap-1.5 ${
+              activeTab === 'replay'
+                ? "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white shadow-sm ring-1 ring-[#7c8d7c]"
+                : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
+            }`}
+            id="tab-replay-btn"
+          >
+            <Film className="w-3.5 h-3.5 text-emerald-500" />
+            <span>Gesture Replay</span>
+          </button>
+          <button
             onClick={() => { setActiveTab('trainer'); setMobileMenuOpen(false); }}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
               activeTab === 'trainer'
@@ -3417,6 +3431,7 @@ export default function App() {
               { id: 'collector', label: 'Recording Desk', icon: Video },
               { id: 'datasets', label: 'Datasets Hub', icon: Database },
               { id: 'labeler', label: 'Dataset Labeler', icon: Tag },
+              { id: 'replay', label: 'Gesture Replay System', icon: Film },
               { id: 'trainer', label: 'Gesture AI Trainer', icon: Cpu },
               { id: 'files', label: 'Sandbox Files', icon: FileCode },
               { id: 'offline', label: 'Offline Mode & Sync', icon: WifiOff },
@@ -6258,6 +6273,13 @@ export default function App() {
                 localStorage.setItem('asl_collected_samples', JSON.stringify(updatedSamples));
               }}
             />
+          </div>
+        )}
+
+        {/* Gesture Replay & Motion Analysis System Tab View */}
+        {activeTab === 'replay' && (
+          <div className="space-y-6 animate-fadeIn" id="gesture-replay-tab">
+            <GestureReplaySystem currentUser={currentUser} />
           </div>
         )}
 

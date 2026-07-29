@@ -59,3 +59,28 @@ export interface TranslationLogItem {
   translatedText: string;
   targetLanguage: string;
 }
+
+export interface GestureFrame {
+  frameIndex: number;
+  timestampOffsetMs: number;
+  landmarks: Array<{ x: number; y: number; z: number }>;
+  leftHandLandmarks?: Array<{ x: number; y: number; z: number }>;
+  rightHandLandmarks?: Array<{ x: number; y: number; z: number }>;
+  predictedChar?: string;
+  confidence?: number;
+  notes?: string;
+}
+
+export interface GestureRecording {
+  id: string;
+  title: string;
+  label: string;
+  description?: string;
+  createdAt: string;
+  durationMs: number;
+  fps: number;
+  frames: GestureFrame[];
+  handType?: 'Right' | 'Left' | 'Both' | string;
+  category?: string;
+  author?: string;
+}
