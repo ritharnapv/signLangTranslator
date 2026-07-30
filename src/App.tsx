@@ -15,6 +15,8 @@ import OfflineModeManager from './components/OfflineModeManager';
 import AdminDashboard from './components/AdminDashboard';
 import DatasetLabelingTool from './components/DatasetLabelingTool';
 import GestureReplaySystem from './components/GestureReplaySystem';
+import PredictionCorrectionModal from './components/PredictionCorrectionModal';
+import PredictionFeedbackManager from './components/PredictionFeedbackManager';
 import { ensureBaselineModelCached } from './lib/offlineModelCache';
 import { getOfflineSyncQueue, syncOfflineDataToCloud } from './lib/offlineSync';
 import ThemeCustomizer, { ThemeSettings, ColorTheme, ThemeMode, COLOR_THEMES } from './components/ThemeCustomizer';
@@ -29,6 +31,7 @@ import {
   Video, 
   VideoOff,
   ShieldAlert, 
+  AlertTriangle,
   Volume2, 
   Cpu, 
   History, 
@@ -276,7 +279,26 @@ export default function App() {
     handleUpdateThemeSettings({ themeMode: nextMode });
   };
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'learning' | 'dictionary' | 'roadmap' | 'collector' | 'datasets' | 'labeler' | 'replay' | 'trainer' | 'files' | 'profile' | 'analytics' | 'conversation' | 'offline' | 'admin'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'learning' | 'dictionary' | 'roadmap' | 'collector' | 'datasets' | 'labeler' | 'replay' | 'corrections' | 'trainer' | 'files' | 'profile' | 'analytics' | 'conversation' | 'offline' | 'admin'>('dashboard');
+
+  // Prediction Correction Modal State
+  const [isCorrectionModalOpen, setIsCorrectionModalOpen] = useState<boolean>(false);
+  const [correctionTarget, setCorrectionTarget] = useState<{
+    predictedChar: string;
+    confidence: number;
+    source: string;
+    landmarks?: Array<{x: number, y: number, z: number}>;
+  }>({ predictedChar: '', confidence: 0, source: 'TF.js Neural Net' });
+
+  const handleOpenCorrectionModal = (
+    predictedChar: string,
+    confidence: number = 0,
+    source: string = 'TF.js Neural Net',
+    landmarks?: Array<{x: number, y: number, z: number}>
+  ) => {
+    setCorrectionTarget({ predictedChar, confidence, source, landmarks });
+    setIsCorrectionModalOpen(true);
+  };
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [forcedOffline, setForcedOffline] = useState<boolean>(false);
   const [pendingSyncCount, setPendingSyncCount] = useState<number>(() => getOfflineSyncQueue().length);
@@ -3178,6 +3200,18 @@ export default function App() {
             <span>Gesture Replay</span>
           </button>
           <button
+            onClick={() => { setActiveTab('corrections'); setMobileMenuOpen(false); }}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all flex items-center gap-1.5 ${
+              activeTab === 'corrections'
+                ? "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white shadow-sm ring-1 ring-[#7c8d7c]"
+                : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
+            }`}
+            id="tab-corrections-btn"
+          >
+            <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
+            <span>Model Corrections</span>
+          </button>
+          <button
             onClick={() => { setActiveTab('trainer'); setMobileMenuOpen(false); }}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
               activeTab === 'trainer'
@@ -3432,6 +3466,7 @@ export default function App() {
               { id: 'datasets', label: 'Datasets Hub', icon: Database },
               { id: 'labeler', label: 'Dataset Labeler', icon: Tag },
               { id: 'replay', label: 'Gesture Replay System', icon: Film },
+              { id: 'corrections', label: 'Model Corrections', icon: AlertTriangle },
               { id: 'trainer', label: 'Gesture AI Trainer', icon: Cpu },
               { id: 'files', label: 'Sandbox Files', icon: FileCode },
               { id: 'offline', label: 'Offline Mode & Sync', icon: WifiOff },
@@ -4037,14 +4072,31 @@ export default function App() {
                         <div className="h-16 w-16 bg-[#ebdcd1] dark:bg-[#453730] rounded-2xl flex items-center justify-center border border-[#e2ceb9] dark:border-[#523d32] shrink-0 text-3xl font-black text-[#5c3c35] dark:text-[#ebdcd1]">
                           {stabilizedResult ? stabilizedResult.predictedChar : "?"}
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[11px] uppercase tracking-wide font-bold text-[#4a4a40] dark:text-[#f4f4f5]">Smoothed Gesture</p>
-                          <div className="flex items-baseline gap-1 mt-0.5">
-                            <span className="text-lg font-mono font-black text-[#7c8d7c] dark:text-emerald-400">
-                              {stabilizedResult ? `${stabilizedResult.confidence.toFixed(1)}%` : "0.0%"}
-                            </span>
-                            <span className="text-[10px] text-[#9a9a8a] dark:text-[#a1a1aa]">confidence avg</span>
+                        <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
+                          <div>
+                            <p className="text-[11px] uppercase tracking-wide font-bold text-[#4a4a40] dark:text-[#f4f4f5]">Smoothed Gesture</p>
+                            <div className="flex items-baseline gap-1 mt-0.5">
+                              <span className="text-lg font-mono font-black text-[#7c8d7c] dark:text-emerald-400">
+                                {stabilizedResult ? `${stabilizedResult.confidence.toFixed(1)}%` : "0.0%"}
+                              </span>
+                              <span className="text-[10px] text-[#9a9a8a] dark:text-[#a1a1aa]">confidence avg</span>
+                            </div>
                           </div>
+
+                          {(stabilizedResult || latestResult) && (
+                            <button
+                              onClick={() => handleOpenCorrectionModal(
+                                stabilizedResult ? stabilizedResult.predictedChar : (latestResult ? latestResult.predictedChar : '?'),
+                                stabilizedResult ? stabilizedResult.confidence : (latestResult ? latestResult.confidence : 0),
+                                `Realtime (${predictionSource})`
+                              )}
+                              className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/50 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900/50 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1 shadow-sm"
+                              title="Mark AI prediction wrong & submit ground-truth label"
+                            >
+                              <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
+                              <span>Mark Wrong</span>
+                            </button>
+                          )}
                         </div>
                       </div>
 
@@ -5234,6 +5286,7 @@ export default function App() {
                 onClearHistory={handleClearTranslations}
                 onSpeak={handleSpeak}
                 currentUser={currentUser}
+                onOpenCorrectionModal={handleOpenCorrectionModal}
               />
 
             </div>
@@ -6279,7 +6332,14 @@ export default function App() {
         {/* Gesture Replay & Motion Analysis System Tab View */}
         {activeTab === 'replay' && (
           <div className="space-y-6 animate-fadeIn" id="gesture-replay-tab">
-            <GestureReplaySystem currentUser={currentUser} />
+            <GestureReplaySystem currentUser={currentUser} onOpenCorrectionModal={handleOpenCorrectionModal} />
+          </div>
+        )}
+
+        {/* Prediction Feedback & Corrections Dashboard Tab View */}
+        {activeTab === 'corrections' && (
+          <div className="space-y-6 animate-fadeIn" id="prediction-corrections-tab">
+            <PredictionFeedbackManager currentUser={currentUser} />
           </div>
         )}
 
@@ -6543,6 +6603,17 @@ export default function App() {
       <KeyboardShortcutsModal
         isOpen={keyboardShortcutsOpen}
         onClose={() => setKeyboardShortcutsOpen(false)}
+      />
+
+      {/* Ground-Truth Prediction Correction Modal */}
+      <PredictionCorrectionModal
+        isOpen={isCorrectionModalOpen}
+        onClose={() => setIsCorrectionModalOpen(false)}
+        predictedChar={correctionTarget.predictedChar}
+        confidence={correctionTarget.confidence}
+        predictionSource={correctionTarget.source}
+        currentUser={currentUser}
+        landmarksSnapshot={correctionTarget.landmarks}
       />
 
       {/* Mobile Fixed Bottom Navigation Bar (Touch-Optimized) */}

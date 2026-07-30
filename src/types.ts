@@ -84,3 +84,18 @@ export interface GestureRecording {
   category?: string;
   author?: string;
 }
+
+export interface PredictionFeedback {
+  id: string;
+  predictedChar: string;
+  correctLabel: string;
+  confidence?: number;
+  predictionSource?: string;
+  notes?: string;
+  createdAt: string;
+  userId?: string;
+  userEmail?: string;
+  status: 'pending_review' | 'corrected' | 'applied';
+  landmarksSnapshot?: Array<{ x: number; y: number; z: number }>;
+}
+

@@ -147,9 +147,58 @@
           "description": "ISO timestamp of face enrollment"
         }
       }
+    },
+    "predictionFeedback": {
+      "title": "PredictionFeedback",
+      "description": "User corrections and feedback for wrong AI gesture predictions",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "predictedChar": {
+          "type": "string",
+          "description": "The incorrect AI prediction label"
+        },
+        "correctLabel": {
+          "type": "string",
+          "description": "The correct human ground-truth label"
+        },
+        "confidence": {
+          "type": "number",
+          "description": "AI confidence score percentage"
+        },
+        "predictionSource": {
+          "type": "string",
+          "description": "Source engine (e.g. tensorflow, heuristics, simulated)"
+        },
+        "notes": {
+          "type": "string",
+          "description": "User notes or description of wrong prediction context"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "userEmail": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending_review", "corrected", "applied"]
+        }
+      },
+      "required": ["id", "predictedChar", "correctLabel", "createdAt"]
     }
   },
   "firestore": {
+    "prediction_feedback/{feedbackId}": {
+      "schema": "predictionFeedback",
+      "description": "Global collection for user-submitted gesture prediction feedback and corrections"
+    },
     "users/{userId}": {
       "schema": "user",
       "description": "Root user settings profiles"
@@ -169,6 +218,10 @@
     "users/{userId}/gestures/{gestureId}": {
       "schema": "customGesture",
       "description": "Saved user-created customized gestures and postures labels"
+    },
+    "users/{userId}/prediction_feedback/{feedbackId}": {
+      "schema": "predictionFeedback",
+      "description": "User specific submitted prediction corrections and feedback"
     }
   }
 }

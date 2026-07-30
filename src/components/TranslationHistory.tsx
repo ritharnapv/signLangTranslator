@@ -12,7 +12,8 @@ import {
   FileJson,
   FileSpreadsheet,
   FileText,
-  Calendar
+  Calendar,
+  AlertTriangle
 } from 'lucide-react';
 import { TranslationLogItem } from '../types';
 import { jsPDF } from 'jspdf';
@@ -23,6 +24,7 @@ interface TranslationHistoryProps {
   onClearHistory: () => void;
   onSpeak: (text: string, lang: string) => void;
   currentUser?: any;
+  onOpenCorrectionModal?: (predictedChar: string, confidence?: number, source?: string) => void;
 }
 
 export default function TranslationHistory({
@@ -31,6 +33,7 @@ export default function TranslationHistory({
   onClearHistory,
   onSpeak,
   currentUser,
+  onOpenCorrectionModal
 }: TranslationHistoryProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLanguage, setSelectedLanguage] = useState('All');
@@ -412,6 +415,18 @@ export default function TranslationHistory({
 
                 {/* Individual item micro-actions */}
                 <div className="flex sm:flex-col gap-2 w-full sm:w-auto self-stretch sm:self-center justify-end sm:justify-center border-t sm:border-t-0 border-[#f0f2ee] dark:border-[#2d2d32] pt-3 sm:pt-0">
+                  {/* Mark Prediction Wrong */}
+                  {onOpenCorrectionModal && (
+                    <button
+                      onClick={() => onOpenCorrectionModal(item.inputText || '?', 92.0, 'Translation Log Archive')}
+                      className="p-2 border border-amber-200 dark:border-amber-900/50 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/20 rounded-xl text-xs transition-all cursor-pointer flex-1 sm:flex-none flex items-center justify-center gap-1"
+                      title="Flag wrong prediction & submit correction"
+                    >
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      <span className="sm:hidden font-bold uppercase tracking-wider font-mono text-[9px]">Flag</span>
+                    </button>
+                  )}
+
                   {/* Speak */}
                   <button
                     onClick={() => onSpeak(item.translatedText, item.targetLanguage)}

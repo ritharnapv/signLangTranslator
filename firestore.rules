@@ -20,6 +20,15 @@ service cloud.firestore {
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
+    // Global prediction feedback & corrections collection
+    match /prediction_feedback/{feedbackId} {
+      allow read: if true;
+      allow create: if request.resource.data.predictedChar is string
+        && request.resource.data.correctLabel is string
+        && request.resource.data.correctLabel.size() <= 100;
+      allow update, delete: if isSignedIn();
+    }
+
     // User profiles path
     match /users/{userId} {
       allow read: if isOwner(userId);
@@ -27,6 +36,12 @@ service cloud.firestore {
         && request.resource.data.displayName is string 
         && request.resource.data.displayName.size() <= 100;
       allow delete: if false; // Profiles cannot be self-deleted from browser
+
+      // Prediction feedback sub-collection
+      match /prediction_feedback/{feedbackId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId);
+      }
 
       // Backups sub-collection
       match /backups/{backupId} {

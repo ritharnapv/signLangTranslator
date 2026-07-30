@@ -54,6 +54,7 @@ import { doc, setDoc } from 'firebase/firestore';
 interface GestureReplaySystemProps {
   currentUser?: any;
   onSelectFrameSample?: (frame: GestureFrame) => void;
+  onOpenCorrectionModal?: (predictedChar: string, confidence?: number, source?: string) => void;
 }
 
 // MediaPipe 21 Joint Connections for hand skeleton
@@ -147,7 +148,7 @@ function generateSampleRecording(id: string, title: string, label: string, gestu
   };
 }
 
-export default function GestureReplaySystem({ currentUser, onSelectFrameSample }: GestureReplaySystemProps) {
+export default function GestureReplaySystem({ currentUser, onSelectFrameSample, onOpenCorrectionModal }: GestureReplaySystemProps) {
   // Demo Seeded Recordings
   const defaultRecordings = useMemo(() => [
     generateSampleRecording('rec_hello_01', 'Wave Greeting "HELLO"', 'HELLO', 'HELLO'),
@@ -904,10 +905,23 @@ export default function GestureReplaySystem({ currentUser, onSelectFrameSample }
                   <span>Frame #{currentFrameIndex + 1} / {activeRecording.frames.length}</span>
                 </div>
                 {currentFrame?.predictedChar && (
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-600/80 backdrop-blur-md text-white font-mono text-xs font-bold border border-emerald-400">
-                    <span>Recognized:</span>
-                    <span className="text-amber-300 font-extrabold text-sm">{currentFrame.predictedChar}</span>
-                    <span className="text-[10px] text-emerald-100">({Math.round((currentFrame.confidence || 0.9) * 100)}%)</span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-600/80 backdrop-blur-md text-white font-mono text-xs font-bold border border-emerald-400">
+                      <span>Recognized:</span>
+                      <span className="text-amber-300 font-extrabold text-sm">{currentFrame.predictedChar}</span>
+                      <span className="text-[10px] text-emerald-100">({Math.round((currentFrame.confidence || 0.9) * 100)}%)</span>
+                    </div>
+
+                    {onOpenCorrectionModal && (
+                      <button
+                        onClick={() => onOpenCorrectionModal(currentFrame.predictedChar || activeRecording?.label || '?', Math.round((currentFrame.confidence || 0.9) * 100), 'Gesture Replay System')}
+                        className="px-2.5 py-1 rounded-xl bg-rose-600/90 hover:bg-rose-600 backdrop-blur-md text-white font-mono text-xs font-bold border border-rose-400 cursor-pointer transition-all flex items-center gap-1 shadow-md"
+                        title="Mark AI Prediction Wrong & Submit Correction"
+                      >
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        <span>Mark Wrong</span>
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
