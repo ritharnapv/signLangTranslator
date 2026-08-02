@@ -21,6 +21,8 @@ import { ensureBaselineModelCached } from './lib/offlineModelCache';
 import { getOfflineSyncQueue, syncOfflineDataToCloud } from './lib/offlineSync';
 import ThemeCustomizer, { ThemeSettings, ColorTheme, ThemeMode, COLOR_THEMES } from './components/ThemeCustomizer';
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
+import { useLanguage } from './context/LanguageContext';
+import LanguageSelector from './components/LanguageSelector';
 import { auth, db } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, getDocs, getDoc, doc, setDoc, deleteDoc } from 'firebase/firestore';
@@ -145,6 +147,7 @@ const INITIAL_SESSIONS: SessionHistoryItem[] = [
 ];
 
 export default function App() {
+  const { t, language } = useLanguage();
   // Comprehensive Theme Customization state with local storage persistence and Firestore synchronization
   const [themeSettings, setThemeSettings] = useState<ThemeSettings>(() => {
     if (typeof window !== 'undefined') {
@@ -3088,8 +3091,8 @@ export default function App() {
             <Cpu className="w-5 h-5" />
           </div>
           <div className="text-left">
-            <h1 className="text-sm sm:text-lg font-bold tracking-tight text-[#2d2d28] dark:text-[#f4f4f5] font-sans">SignSense AI</h1>
-            <p className="text-[9px] sm:text-[10px] text-[#7a7a6a] dark:text-[#a1a1aa] uppercase font-bold tracking-widest font-mono">30-Day ASL Framework</p>
+            <h1 className="text-sm sm:text-lg font-bold tracking-tight text-[#2d2d28] dark:text-[#f4f4f5] font-sans">{t('appTitle')}</h1>
+            <p className="text-[9px] sm:text-[10px] text-[#7a7a6a] dark:text-[#a1a1aa] uppercase font-bold tracking-widest font-mono">{t('tagline')}</p>
           </div>
         </div>
 
@@ -3103,7 +3106,7 @@ export default function App() {
                 : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
             }`}
           >
-            Practice Dashboard
+            {t('liveTranslator')}
           </button>
           <button
             onClick={() => { setActiveTab('conversation'); setMobileMenuOpen(false); }}
@@ -3113,7 +3116,7 @@ export default function App() {
                 : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
             }`}
           >
-            Continuous Conversation
+            {t('continuousConversation')}
           </button>
           <button
             onClick={() => { setActiveTab('analytics'); setMobileMenuOpen(false); }}
@@ -3123,7 +3126,7 @@ export default function App() {
                 : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
             }`}
           >
-            Analytics Dashboard
+            {t('analytics')}
           </button>
           <button
             onClick={() => { setActiveTab('dictionary'); setMobileMenuOpen(false); }}
@@ -3133,7 +3136,7 @@ export default function App() {
                 : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
             }`}
           >
-            ASL Dictionary
+            {t('aslDictionary')}
           </button>
           <button
             onClick={() => { setActiveTab('learning'); setMobileMenuOpen(false); }}
@@ -3143,7 +3146,7 @@ export default function App() {
                 : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
             }`}
           >
-            Practice Arena
+            {t('interactiveLearning')}
           </button>
           <button
             onClick={() => { setActiveTab('roadmap'); setMobileMenuOpen(false); }}
@@ -3153,7 +3156,7 @@ export default function App() {
                 : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
             }`}
           >
-            30-Day Roadmap Plan
+            {t('roadmap')}
           </button>
           <button
             onClick={() => { setActiveTab('collector'); setMobileMenuOpen(false); }}
@@ -3163,7 +3166,7 @@ export default function App() {
                 : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
             }`}
           >
-            Recording Dashboard
+            {t('gestureCollector')}
           </button>
           <button
             onClick={() => { setActiveTab('datasets'); setMobileMenuOpen(false); }}
@@ -3173,7 +3176,7 @@ export default function App() {
                 : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
             }`}
           >
-            Datasets Hub
+            {t('datasetsHub')}
           </button>
           <button
             onClick={() => { setActiveTab('labeler'); setMobileMenuOpen(false); }}
@@ -3185,7 +3188,7 @@ export default function App() {
             id="tab-labeler-btn"
           >
             <Tag className="w-3.5 h-3.5 text-amber-500" />
-            <span>Dataset Labeler</span>
+            <span>{t('datasetLabeler')}</span>
           </button>
           <button
             onClick={() => { setActiveTab('replay'); setMobileMenuOpen(false); }}
@@ -3197,7 +3200,7 @@ export default function App() {
             id="tab-replay-btn"
           >
             <Film className="w-3.5 h-3.5 text-emerald-500" />
-            <span>Gesture Replay</span>
+            <span>{t('gestureReplay')}</span>
           </button>
           <button
             onClick={() => { setActiveTab('corrections'); setMobileMenuOpen(false); }}
@@ -3209,7 +3212,7 @@ export default function App() {
             id="tab-corrections-btn"
           >
             <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
-            <span>Model Corrections</span>
+            <span>{t('modelCorrections')}</span>
           </button>
           <button
             onClick={() => { setActiveTab('trainer'); setMobileMenuOpen(false); }}
@@ -3219,7 +3222,7 @@ export default function App() {
                 : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
             }`}
           >
-            Gesture AI Trainer
+            {t('gestureTrainer')}
           </button>
           <button
             onClick={() => { setActiveTab('files'); setMobileMenuOpen(false); }}
@@ -3229,7 +3232,7 @@ export default function App() {
                 : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
             }`}
           >
-            Sandbox File System
+            Sandbox Files
           </button>
           <button
             onClick={() => { setActiveTab('offline'); setMobileMenuOpen(false); }}
@@ -3245,7 +3248,7 @@ export default function App() {
             ) : (
               <Wifi className="w-3.5 h-3.5 text-emerald-500" />
             )}
-            <span>Offline & Sync</span>
+            <span>{t('offlineMode')}</span>
           </button>
           <button
             onClick={() => { setActiveTab('profile'); setMobileMenuOpen(false); }}
@@ -3256,7 +3259,7 @@ export default function App() {
             }`}
             id="tab-profile-btn"
           >
-            Account Profile
+            {t('profile')}
           </button>
           <button
             onClick={() => { setActiveTab('admin'); setMobileMenuOpen(false); }}
@@ -3268,12 +3271,14 @@ export default function App() {
             id="tab-admin-btn"
           >
             <ShieldCheck className="w-3.5 h-3.5 text-purple-600 dark:text-purple-300" />
-            <span>Admin Console</span>
+            <span>{t('admin')}</span>
           </button>
         </div>
 
-        {/* Right Nav-bar: Dark mode switcher & status indicators & Mobile Menu Burger Button */}
+        {/* Right Nav-bar: Language Switcher, Dark mode switcher, status indicators & Mobile Menu Burger Button */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          {/* Prominent UI Language Selector */}
+          <LanguageSelector variant="dropdown" />
           {/* PWA Install Button (Displays on any screen when ready) */}
           {installPrompt && (
             <button
@@ -3454,24 +3459,29 @@ export default function App() {
           className="lg:hidden border-b border-[#ecece0] dark:border-[#2a2a2f] bg-[#fdfcf9] dark:bg-[#121214] p-4 flex flex-col gap-2 shadow-inner z-25 sticky top-20 max-h-[calc(100vh-5rem)] overflow-y-auto"
           id="mobile-nav-drawer"
         >
+          <div className="p-2 bg-white dark:bg-[#1c1c1f] rounded-2xl border border-[#ecece0] dark:border-[#2d2d32] mb-2 space-y-1.5">
+            <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-stone-400">UI Language / ಭಾಷೆ / भाषा / ഭാഷ / மொழி</p>
+            <LanguageSelector variant="pills" />
+          </div>
+
           <div className="grid grid-cols-2 gap-2">
             {[
-              { id: 'dashboard', label: 'Practice Dashboard', icon: Camera },
-              { id: 'conversation', label: 'Continuous Conv.', icon: MessageSquare },
-              { id: 'analytics', label: 'Analytics Dashboard', icon: Activity },
-              { id: 'dictionary', label: 'ASL Dictionary', icon: BookOpen },
-              { id: 'learning', label: 'Practice Arena', icon: Sparkles },
-              { id: 'roadmap', label: '30-Day Roadmap', icon: FileText },
-              { id: 'collector', label: 'Recording Desk', icon: Video },
-              { id: 'datasets', label: 'Datasets Hub', icon: Database },
-              { id: 'labeler', label: 'Dataset Labeler', icon: Tag },
-              { id: 'replay', label: 'Gesture Replay System', icon: Film },
-              { id: 'corrections', label: 'Model Corrections', icon: AlertTriangle },
-              { id: 'trainer', label: 'Gesture AI Trainer', icon: Cpu },
+              { id: 'dashboard', label: t('liveTranslator'), icon: Camera },
+              { id: 'conversation', label: t('continuousConversation'), icon: MessageSquare },
+              { id: 'analytics', label: t('analytics'), icon: Activity },
+              { id: 'dictionary', label: t('aslDictionary'), icon: BookOpen },
+              { id: 'learning', label: t('interactiveLearning'), icon: Sparkles },
+              { id: 'roadmap', label: t('roadmap'), icon: FileText },
+              { id: 'collector', label: t('gestureCollector'), icon: Video },
+              { id: 'datasets', label: t('datasetsHub'), icon: Database },
+              { id: 'labeler', label: t('datasetLabeler'), icon: Tag },
+              { id: 'replay', label: t('gestureReplay'), icon: Film },
+              { id: 'corrections', label: t('modelCorrections'), icon: AlertTriangle },
+              { id: 'trainer', label: t('gestureTrainer'), icon: Cpu },
               { id: 'files', label: 'Sandbox Files', icon: FileCode },
-              { id: 'offline', label: 'Offline Mode & Sync', icon: WifiOff },
-              { id: 'profile', label: 'Account Settings', icon: Settings },
-              { id: 'admin', label: 'Admin Console', icon: ShieldCheck },
+              { id: 'offline', label: t('offlineMode'), icon: WifiOff },
+              { id: 'profile', label: t('profile'), icon: Settings },
+              { id: 'admin', label: t('admin'), icon: ShieldCheck },
             ].map((tab) => {
               const Icon = tab.icon;
               const isSelected = activeTab === tab.id;
@@ -4764,14 +4774,15 @@ export default function App() {
                   <div className="space-y-3">
                     {/* Language selection pills */}
                     <div className="space-y-1.5">
-                      <label className="text-[9px] uppercase font-black tracking-wider text-gray-400 dark:text-gray-500 block font-mono">Select Target Language</label>
+                      <label className="text-[9px] uppercase font-black tracking-wider text-gray-400 dark:text-gray-500 block font-mono">{t('targetLanguage')}</label>
                       <div className="flex flex-wrap gap-1.5">
-                        {["English", "Hindi", "Kannada", "Malayalam"].map((lang) => {
+                        {["English", "Hindi", "Kannada", "Malayalam", "Tamil"].map((lang) => {
                           const flags: Record<string, string> = {
                             "English": "🇬🇧",
                             "Hindi": "🇮🇳",
                             "Kannada": "🇮🇳",
-                            "Malayalam": "🇮🇳"
+                            "Malayalam": "🇮🇳",
+                            "Tamil": "🇮🇳"
                           };
                           const isSelected = translationLang === lang;
                           return (

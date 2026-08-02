@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import LanguageSelector from './LanguageSelector';
 import { 
   Palette, 
   Sun, 
@@ -13,7 +14,8 @@ import {
   Eye,
   CheckCircle2,
   Type,
-  Keyboard
+  Keyboard,
+  Globe
 } from 'lucide-react';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
@@ -456,6 +458,26 @@ export default function ThemeCustomizer({
                     </span>
                   </button>
                 )}
+              </div>
+            </div>
+
+            {/* Section 6: Interface Translation Language */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-black uppercase tracking-wider text-gray-400 dark:text-gray-500 font-mono block flex items-center gap-1.5">
+                  <Globe className="w-3.5 h-3.5 text-emerald-600" />
+                  6. Interface UI Language / ಭಾಷೆ / भाषा
+                </label>
+                <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">
+                  Select UI translation
+                </span>
+              </div>
+
+              <div className="bg-gray-50/80 dark:bg-[#202024] border border-gray-200 dark:border-[#2e2e33] p-4 rounded-2xl space-y-3">
+                <p className="text-xs text-stone-600 dark:text-stone-300">
+                  Translate the entire application interface into your preferred language:
+                </p>
+                <LanguageSelector variant="pills" />
               </div>
             </div>
           </div>

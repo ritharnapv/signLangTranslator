@@ -361,6 +361,7 @@ export default function TranslationHistory({
             <option value="Hindi">🇮🇳 Hindi</option>
             <option value="Kannada">🇮🇳 Kannada</option>
             <option value="Malayalam">🇮🇳 Malayalam</option>
+            <option value="Tamil">🇮🇳 Tamil</option>
           </select>
         </div>
       </div>
@@ -373,7 +374,8 @@ export default function TranslationHistory({
               "English": "🇬🇧",
               "Hindi": "🇮🇳",
               "Kannada": "🇮🇳",
-              "Malayalam": "🇮🇳"
+              "Malayalam": "🇮🇳",
+              "Tamil": "🇮🇳"
             };
             return (
               <div 

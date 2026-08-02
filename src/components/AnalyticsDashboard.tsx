@@ -564,6 +564,7 @@ export default function AnalyticsDashboard({
                 <option value="Hindi">Hindi</option>
                 <option value="Kannada">Kannada</option>
                 <option value="Malayalam">Malayalam</option>
+                <option value="Tamil">Tamil</option>
               </select>
             )}
 
