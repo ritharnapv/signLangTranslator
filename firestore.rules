@@ -49,6 +49,12 @@ service cloud.firestore {
         allow write: if isOwner(userId);
       }
 
+      // Devices sub-collection for multi-device heartbeat sync
+      match /devices/{deviceId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId);
+      }
+
       // Datasets sub-collection
       match /datasets/{datasetId} {
         allow read: if isOwner(userId);

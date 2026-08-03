@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { auth, db } from '../firebase';
+import CloudAutoBackupSync from './CloudAutoBackupSync';
 import { updateProfile, updatePassword, signOut } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { 
@@ -608,64 +609,18 @@ export default function UserProfile({
 
           {/* Cloud Database Backup & Restore Center */}
           <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-6 shadow-sm space-y-5" id="profile-cloud-persistence">
-            <div className="border-b border-[#f0f2ee] dark:border-[#2d2d32] pb-4">
-              <h2 className="text-base font-bold text-[#2d2d28] dark:text-[#f4f4f5] flex items-center gap-2">
-                <CloudUpload className="w-5 h-5 text-[#a36b5e]" />
-                Durable Cloud Persistence Center
-              </h2>
-              <p className="text-xs text-[#7a7a6a] dark:text-[#a1a1aa] mt-0.5">Securely backup and synchronize local workspace practice sheets, sessions logging, and recorded custom landmarks.</p>
-            </div>
-
-            {backupStatus && (
-              <div className="bg-[#fcf7f2] dark:bg-[#2b1f1a]/40 border border-[#ebdcd1]/60 dark:border-amber-900/40 text-[#a36b5e] dark:text-amber-400 p-3 rounded-xl text-xs font-medium animate-fadeIn">
-                {backupStatus}
-              </div>
-            )}
-
-            {loadStatus && (
-              <div className="bg-blue-50 dark:bg-blue-950/25 border border-blue-100 dark:border-blue-900/40 text-blue-800 dark:text-blue-300 p-3 rounded-xl text-xs font-medium animate-fadeIn">
-                {loadStatus}
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              
-              {/* Backup Card block */}
-              <div className="p-4 bg-[#fdfcf9] dark:bg-[#151518]/50 border border-[#e8e4db] dark:border-[#2d2d32] rounded-2xl space-y-3 flex flex-col justify-between" id="backup-action-block">
-                <div>
-                  <h3 className="text-xs font-bold text-[#2d2d28] dark:text-[#cbd5e1] uppercase tracking-wide">Sync State to Cloud</h3>
-                  <p className="text-[11px] text-[#5c5c50] dark:text-[#a1a1aa] leading-relaxed mt-1">
-                    Push your existing local workspace logs ({localSessions.length} sessions and {localSamples.length} recorded landmarks) to active Firestore storage.
-                  </p>
-                </div>
-                <button
-                  onClick={handleCloudBackup}
-                  className="py-2.5 px-4 bg-[#ebdcd1] dark:bg-[#453730] text-[#a36b5e] dark:text-[#ebdcd1] hover:bg-[#a36b5e] hover:text-white dark:hover:bg-[#a36b5e] rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer border border-[#ebdcd1] dark:border-[#2d2d32]"
-                >
-                  <CloudUpload className="w-4 h-4" />
-                  <span>Backup State</span>
-                </button>
-              </div>
-
-              {/* Restore Card block */}
-              <div className="p-4 bg-[#fdfcf9] dark:bg-[#151518]/50 border border-[#e8e4db] dark:border-[#2d2d32] rounded-2xl space-y-3 flex flex-col justify-between" id="restore-action-block">
-                <div>
-                  <h3 className="text-xs font-bold text-[#2d2d28] dark:text-[#cbd5e1] uppercase tracking-wide">Restore State from Cloud</h3>
-                  <p className="text-[11px] text-[#5c5c50] dark:text-[#a1a1aa] leading-relaxed mt-1">
-                    Restore previously backed up practice sheets and custom training landmarks. This action replaces current browser temporary cached structures.
-                  </p>
-                </div>
-                <button
-                  onClick={handleCloudRestore}
-                  className="py-2.5 px-4 bg-[#f0f2ee] dark:bg-[#1f221f] text-[#7c8d7c] dark:text-[#cbdcbc] hover:bg-[#7c8d7c] hover:text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer border border-[#e0e4db] dark:border-[#2d2d32]"
-                >
-                  <CloudDownload className="w-4 h-4" />
-                  <span>Restore Backup</span>
-                </button>
-              </div>
-
-            </div>
-
+            <CloudAutoBackupSync
+              user={user}
+              localSessions={localSessions}
+              localSamples={localSamples}
+              themeSettings={themeSettings}
+              onRestoreData={(snapshot) => {
+                if (snapshot.data) {
+                  if (snapshot.data.sessions) onRestoreSessions(snapshot.data.sessions);
+                  if (snapshot.data.samples) onRestoreSamples(snapshot.data.samples);
+                }
+              }}
+            />
           </div>
 
           {/* Secure Biometric Face ID Configuration Card */}

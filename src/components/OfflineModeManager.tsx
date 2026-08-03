@@ -16,17 +16,31 @@ import {
   getLastSyncedAt, 
   OfflineQueueItem 
 } from '../lib/offlineSync';
+import CloudAutoBackupSync from './CloudAutoBackupSync';
+import { auth } from '../firebase';
 
 interface OfflineModeManagerProps {
   isOnline: boolean;
   onSimulateOfflineToggle?: (forcedOffline: boolean) => void;
   forcedOffline?: boolean;
+  localSessions?: any[];
+  localSamples?: any[];
+  localGestures?: any[];
+  translationHistory?: any[];
+  themeSettings?: any;
+  onRestoreData?: (snapshot: any) => void;
 }
 
 export default function OfflineModeManager({
   isOnline,
   onSimulateOfflineToggle,
-  forcedOffline = false
+  forcedOffline = false,
+  localSessions = [],
+  localSamples = [],
+  localGestures = [],
+  translationHistory = [],
+  themeSettings,
+  onRestoreData
 }: OfflineModeManagerProps) {
   const [modelDetails, setModelDetails] = useState<ModelCacheStatus | null>(null);
   const [queue, setQueue] = useState<OfflineQueueItem[]>([]);
@@ -350,6 +364,19 @@ export default function OfflineModeManager({
             </div>
           </div>
         )}
+      </div>
+
+      {/* Cross-Device Cloud Storage, Auto Backup & Secure Sync Hub */}
+      <div className="pt-4 border-t border-neutral-200 dark:border-neutral-800">
+        <CloudAutoBackupSync
+          user={auth.currentUser}
+          localSessions={localSessions}
+          localSamples={localSamples}
+          localGestures={localGestures}
+          translationHistory={translationHistory}
+          themeSettings={themeSettings}
+          onRestoreData={onRestoreData}
+        />
       </div>
 
       {/* Offline Capabilities Overview */}

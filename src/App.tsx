@@ -19,6 +19,8 @@ import PredictionCorrectionModal from './components/PredictionCorrectionModal';
 import PredictionFeedbackManager from './components/PredictionFeedbackManager';
 import { ensureBaselineModelCached } from './lib/offlineModelCache';
 import { getOfflineSyncQueue, syncOfflineDataToCloud } from './lib/offlineSync';
+import { getLocalAutoBackupSettings, createCloudBackupSnapshot } from './lib/cloudAutoBackup';
+import { subscribeToUserDataAcrossDevices, subscribeToUserGesturesAcrossDevices } from './lib/cloudDataSync';
 import ThemeCustomizer, { ThemeSettings, ColorTheme, ThemeMode, COLOR_THEMES } from './components/ThemeCustomizer';
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
 import { useLanguage } from './context/LanguageContext';
@@ -1198,6 +1200,38 @@ export default function App() {
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+
+  // Background Auto-Backup periodic runner effect
+  useEffect(() => {
+    if (!currentUser || !isOnline) return;
+
+    const autoBackupTimer = setInterval(async () => {
+      try {
+        const settings = getLocalAutoBackupSettings();
+        if (!settings.enabled) return;
+
+        const intervalMs = (settings.intervalMinutes || 5) * 60 * 1000;
+        const lastBackupMs = settings.lastBackupTime ? new Date(settings.lastBackupTime).getTime() : 0;
+        const now = Date.now();
+
+        if (now - lastBackupMs >= intervalMs) {
+          console.log("[Auto Backup Engine] Triggering scheduled cloud backup snapshot...");
+          const backupPayload = {
+            sessions: settings.backupHistory ? sessions : [],
+            samples: settings.backupDatasets ? collectedSamples : [],
+            gestures: settings.backupGestures ? customGestures : [],
+            translationHistory: settings.backupHistory ? translations : [],
+            themeSettings: settings.backupSettings ? themeSettings : null
+          };
+          await createCloudBackupSnapshot(currentUser.uid, backupPayload, true);
+        }
+      } catch (err) {
+        console.warn("[Auto Backup Engine] Background auto-backup interval note:", err);
+      }
+    }, 30000); // Check every 30s
+
+    return () => clearInterval(autoBackupTimer);
+  }, [currentUser, isOnline, sessions, collectedSamples, customGestures, translations, themeSettings]);
 
   // Auto-restore or initialize saved TF.js model from browser local IndexedDB on startup
   useEffect(() => {
@@ -6361,6 +6395,20 @@ export default function App() {
               isOnline={isOnline}
               forcedOffline={forcedOffline}
               onSimulateOfflineToggle={setForcedOffline}
+              localSessions={sessions}
+              localSamples={collectedSamples}
+              localGestures={customGestures}
+              translationHistory={translations}
+              themeSettings={themeSettings}
+              onRestoreData={(snapshot) => {
+                if (snapshot.data) {
+                  if (snapshot.data.sessions) setSessions(snapshot.data.sessions);
+                  if (snapshot.data.samples) setCollectedSamples(snapshot.data.samples);
+                  if (snapshot.data.gestures) setCustomGestures(snapshot.data.gestures);
+                  if (snapshot.data.translationHistory) setTranslations(snapshot.data.translationHistory);
+                  if (snapshot.data.themeSettings) setThemeSettings(snapshot.data.themeSettings);
+                }
+              }}
             />
           </div>
         )}
