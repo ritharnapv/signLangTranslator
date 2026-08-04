@@ -1,0 +1,30 @@
+{
+  "id": "dataset_1785855772118_5940",
+  "name": "API Test Dataset",
+  "description": "Uploaded via curl",
+  "createdAt": "2026-08-04T15:02:52.118Z",
+  "samples": [
+    {
+      "label": "A",
+      "landmarks": [],
+      "id": "sample_dataset_1785855772118_5940_0",
+      "timestamp": "2026-08-04T15:02:52.118Z"
+    },
+    {
+      "label": "B",
+      "landmarks": [],
+      "id": "sample_dataset_1785855772118_5940_1",
+      "timestamp": "2026-08-04T15:02:52.118Z"
+    }
+  ],
+  "categories": [
+    "A",
+    "B"
+  ],
+  "sampleStatistics": {
+    "A": 1,
+    "B": 1
+  },
+  "size": "0.4 KB",
+  "source": "REST API Upload"
+}

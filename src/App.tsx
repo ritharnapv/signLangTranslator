@@ -17,6 +17,7 @@ import DatasetLabelingTool from './components/DatasetLabelingTool';
 import GestureReplaySystem from './components/GestureReplaySystem';
 import PredictionCorrectionModal from './components/PredictionCorrectionModal';
 import PredictionFeedbackManager from './components/PredictionFeedbackManager';
+import RestApiDocs from './components/RestApiDocs';
 import { ensureBaselineModelCached } from './lib/offlineModelCache';
 import { getOfflineSyncQueue, syncOfflineDataToCloud } from './lib/offlineSync';
 import { getLocalAutoBackupSettings, createCloudBackupSnapshot } from './lib/cloudAutoBackup';
@@ -50,6 +51,7 @@ import {
   Sliders, 
   HelpCircle, 
   Activity, 
+  Code,
   FileCode,
   Flame,
   CheckCircle2,
@@ -284,7 +286,7 @@ export default function App() {
     handleUpdateThemeSettings({ themeMode: nextMode });
   };
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'learning' | 'dictionary' | 'roadmap' | 'collector' | 'datasets' | 'labeler' | 'replay' | 'corrections' | 'trainer' | 'files' | 'profile' | 'analytics' | 'conversation' | 'offline' | 'admin'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'learning' | 'dictionary' | 'roadmap' | 'collector' | 'datasets' | 'labeler' | 'replay' | 'corrections' | 'trainer' | 'files' | 'profile' | 'analytics' | 'conversation' | 'offline' | 'admin' | 'api-docs'>('dashboard');
 
   // Prediction Correction Modal State
   const [isCorrectionModalOpen, setIsCorrectionModalOpen] = useState<boolean>(false);
@@ -3306,6 +3308,18 @@ export default function App() {
           >
             <ShieldCheck className="w-3.5 h-3.5 text-purple-600 dark:text-purple-300" />
             <span>{t('admin')}</span>
+          </button>
+          <button
+            onClick={() => { setActiveTab('api-docs'); setMobileMenuOpen(false); }}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold tracking-wide transition-all flex items-center gap-1.5 ${
+              activeTab === 'api-docs'
+                ? "bg-emerald-700 dark:bg-emerald-800 text-white shadow-sm ring-1 ring-emerald-400"
+                : "bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20"
+            }`}
+            id="tab-api-docs-btn"
+          >
+            <Code className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-300" />
+            <span>REST API</span>
           </button>
         </div>
 
@@ -6357,6 +6371,13 @@ export default function App() {
         {activeTab === 'admin' && (
           <div className="space-y-6 animate-fadeIn" id="admin-console-tab">
             <AdminDashboard />
+          </div>
+        )}
+
+        {/* REST API Center Tab View */}
+        {activeTab === 'api-docs' && (
+          <div className="space-y-6 animate-fadeIn" id="rest-api-docs-tab">
+            <RestApiDocs currentUserId={currentUser?.uid} />
           </div>
         )}
 
