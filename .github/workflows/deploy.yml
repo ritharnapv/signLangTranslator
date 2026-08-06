@@ -28,6 +28,9 @@ jobs:
       - name: Run Linter
         run: npm run lint
 
+      - name: Run Automated Tests
+        run: npm test
+
       - name: Build React Production Package
         run: npm run build
         env:

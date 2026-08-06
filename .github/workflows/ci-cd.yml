@@ -1,0 +1,189 @@
+name: SignSense Automated CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: read
+  packages: write
+  deployments: write
+
+jobs:
+  # =======================================================
+  # JOB 1: FRONTEND & NODE.JS REST API LINT, TEST & BUILD
+  # =======================================================
+  frontend-api-ci:
+    name: Frontend & Node.js API (Lint, Test, Build)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 1. Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 2. Setup Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: 3. Install NPM Dependencies
+        run: npm ci
+
+      - name: 4. Run TypeScript Linter & Type Check
+        run: npm run lint
+
+      - name: 5. Run Automated Unit & Integration Tests
+        run: npm test
+
+      - name: 6. Build Production Bundle (Vite + esbuild)
+        run: npm run build
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          VITE_WS_URL: ${{ secrets.VITE_WS_URL }}
+
+      - name: 7. Upload Production Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-build-artifact
+          path: dist/
+          retention-days: 7
+
+  # =======================================================
+  # JOB 2: PYTHON FASTAPI BACKEND TEST SUITE
+  # =======================================================
+  python-backend-ci:
+    name: Python FastAPI Neural Engine (Lint & Pytest)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 1. Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 2. Setup Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 3. Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest httpx
+
+      - name: 4. Run Pytest Suite for FastAPI Endpoints
+        run: pytest -v tests/test_main.py
+
+  # =======================================================
+  # JOB 3: DOCKER CONTAINERIZATION BUILD & SMOKE TEST
+  # =======================================================
+  docker-ci:
+    name: Docker Containerization Build & Check
+    runs-on: ubuntu-latest
+    needs: [frontend-api-ci, python-backend-ci]
+
+    steps:
+      - name: 1. Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 2. Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 3. Build Node.js Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile
+          push: false
+          tags: signsense-frontend:test
+
+      - name: 4. Build Python FastAPI Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.backend
+          push: false
+          tags: signsense-backend:test
+
+  # =======================================================
+  # JOB 4: AUTOMATED PRODUCTION DEPLOYMENT
+  # =======================================================
+  auto-deploy:
+    name: Auto Deployment to Production & Container Registries
+    runs-on: ubuntu-latest
+    needs: [frontend-api-ci, python-backend-ci, docker-ci]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: 1. Checkout Repository
+        uses: actions/checkout@v4
+
+      # A. Publish Container Images to GitHub Container Registry (GHCR)
+      - name: 2. Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 3. Build & Push Frontend Image to GHCR
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/frontend:latest
+            ghcr.io/${{ github.repository }}/frontend:${{ github.sha }}
+
+      - name: 4. Build & Push Backend Image to GHCR
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.backend
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/backend:latest
+            ghcr.io/${{ github.repository }}/backend:${{ github.sha }}
+
+      # B. Trigger Render Deployment Hook (if configured)
+      - name: 5. Trigger Backend Service Deploy (Render Hook)
+        run: |
+          if [ -n "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" ]; then
+            echo "Triggering Render deployment..."
+            curl -f -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+          else
+            echo "RENDER_DEPLOY_HOOK_URL secret not provided. Skipping Render trigger."
+          fi
+
+      # C. Trigger Vercel Production Deploy (if configured)
+      - name: 6. Deploy to Vercel Production (if configured)
+        run: |
+          if [ -n "${{ secrets.VERCEL_TOKEN }}" ]; then
+            echo "Deploying to Vercel..."
+            npm install -g vercel
+            vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+            vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+            vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+          else
+            echo "VERCEL_TOKEN secret not provided. Skipping Vercel deploy step."
+          fi
+
+      - name: 7. Deployment Summary
+        run: |
+          echo "================================================="
+          echo "🚀 SIGN SENSE AUTOMATED CI/CD DEPLOYMENT COMPLETE"
+          echo "Timestamp: $(date -u)"
+          echo "Commit SHA: ${{ github.sha }}"
+          echo "Status: All tests passed & release artifacts deployed."
+          echo "================================================="
