@@ -17,6 +17,15 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 
+// Production Security Headers & CORS Guard Middleware
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-XSS-Protection", "1; mode=block");
+  res.setHeader("Referrer-Policy", "no-referrer-when-downgrade");
+  res.setHeader("X-Powered-By", "SignSense Neural Engine v1.0");
+  next();
+});
+
 // Set up large JSON limit to allow base64 webcam frame uploads
 app.use(express.json({ limit: "15mb" }));
 

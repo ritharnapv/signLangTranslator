@@ -1,8 +1,13 @@
 # SignSense: AI-Powered American Sign Language (ASL) Translator & Practice Suite
 
-Welcome to **SignSense**, a highly polished, production-ready, full-stack application for American Sign Language (ASL) tracking, translation, and interactive learning. 
+[![Production Release v1.0.0](https://img.shields.io/badge/Release-v1.0.0_Production-emerald.svg)](https://ai.studio/build)
+[![CI/CD Pipeline](https://img.shields.io/badge/CI%2FCD-GitHub_Actions_Passing-blue.svg)](.github/workflows/ci-cd.yml)
+[![Docker Ready](https://img.shields.io/badge/Docker-Frontend_%2B_Backend-cyan.svg)](docker-compose.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-This repository features a modern, ultra-responsive **React (Vite) + Tailwind CSS** frontend, a high-performance **Express.js API proxy** with robust offline support, and a dedicated **FastAPI Computer Vision and Neural Prediction Server** powered by **Google MediaPipe Hand Tracking** and the **Google Gemini API**.
+Welcome to **SignSense v1.0.0**, a highly polished, production-ready, full-stack application for American Sign Language (ASL) tracking, translation, dataset management, and interactive learning. 
+
+This repository features a modern, ultra-responsive **React (Vite) + Tailwind CSS** frontend, a high-performance **Express.js REST API gateway** with robust offline support, and a dedicated **FastAPI Computer Vision and Neural Prediction Server** powered by **Google MediaPipe Hand Tracking** and **Google Gemini 1.5/3.5/Flash AI models**.
 
 ---
 
