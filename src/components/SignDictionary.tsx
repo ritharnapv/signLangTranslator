@@ -536,6 +536,277 @@ const DICTIONARY_GESTURES: ASLGesture[] = [
   }
 ];
 
+// Indian Sign Language (ISL) Reference Database
+const ISL_GESTURES: ASLGesture[] = [
+  {
+    id: "sign_isl_namaste",
+    char: "Namaste",
+    description: "Press both palms flat together in front of your chest in the traditional Anjali Mudra posture with a gentle bow.",
+    category: "isl-greeting",
+    signLanguage: "ISL",
+    isTwoHanded: true,
+    visualTip: "Joined palms centered at chest height, forearms parallel to ground with slight forward head nod.",
+    meaning: "Traditional Indian Sign Language greeting representing respect, welcome, and peaceful homage ('I bow to the divine in you').",
+    synonyms: ["Greetings", "Welcome", "Namaskar", "Respectful Salute", "Pranam"],
+    difficulty: "easy",
+    grammaticalRole: "ISL Cultural Greeting",
+    steps: [
+      "Bring both open palms together directly in front of your upper chest.",
+      "Press the pads of fingers and palms firmly against each other (Anjali Mudra).",
+      "Tilt your head slightly forward in a respectful bow motion."
+    ]
+  },
+  {
+    id: "sign_isl_dhanyawad",
+    char: "Dhanyawad (Thank You)",
+    description: "Touch your open flat hand to your forehead or chin, then move your palm forward and downward towards the recipient.",
+    category: "isl-greeting",
+    signLanguage: "ISL",
+    isTwoHanded: false,
+    visualTip: "Flat open hand sweeping gently outward from forehead/chin region with open upward-facing palm.",
+    meaning: "Expression of deep gratitude, thankfulness, and appreciation in Indian Sign Language.",
+    synonyms: ["Thank You", "Thanks", "Gratitude", "Dhanyavada", "Shukriya"],
+    difficulty: "easy",
+    grammaticalRole: "ISL Politeness Formula",
+    steps: [
+      "Place fingertips of your flat open dominant hand lightly against your forehead or chin.",
+      "Extend your arm forward towards the person with palm opening upwards.",
+      "Nod slightly with a appreciative smile."
+    ]
+  },
+  {
+    id: "sign_isl_swagatam",
+    char: "Swagatam (Welcome)",
+    description: "Hold both open palms facing upward, then curve both hands gracefully inward toward your chest.",
+    category: "isl-greeting",
+    signLanguage: "ISL",
+    isTwoHanded: true,
+    visualTip: "Both palms open facing upward, moving inward together toward center chest.",
+    meaning: "Warm gesture of welcome and hospitable reception in ISL.",
+    synonyms: ["Welcome", "Swagat", "Hospitable", "Please enter"],
+    difficulty: "easy",
+    grammaticalRole: "ISL Greeting",
+    steps: [
+      "Extend both hands forward with open palms facing upward at waist height.",
+      "Draw both hands gracefully inward toward your chest simultaneously."
+    ]
+  },
+  {
+    id: "sign_isl_kripya",
+    char: "Kripya (Please)",
+    description: "Place your flat open dominant palm against the center of your chest and rub in gentle circular clockwise motions.",
+    category: "isl-common",
+    signLanguage: "ISL",
+    isTwoHanded: false,
+    visualTip: "Open flat palm rubbing over heart region in circular loop.",
+    meaning: "Polite request accompaniment in Indian Sign Language.",
+    synonyms: ["Please", "Kindly", "Dayavittu", "Aavedan"],
+    difficulty: "easy",
+    grammaticalRole: "ISL Common Word",
+    steps: [
+      "Place your open flat palm over your heart area.",
+      "Rub gently in a clockwise circle twice."
+    ]
+  },
+  {
+    id: "sign_isl_madad",
+    char: "Madad (Help)",
+    description: "Form a closed fist or thumbs-up with dominant hand, place on top of open flat non-dominant palm, and lift upward together.",
+    category: "isl-common",
+    signLanguage: "ISL",
+    isTwoHanded: true,
+    visualTip: "Fist resting on flat palm platform, lifting as a unified unit.",
+    meaning: "Requesting or offering assistance, rescue, or support in ISL.",
+    synonyms: ["Help", "Assistance", "Sahaya", "Support", "Madadh"],
+    difficulty: "medium",
+    grammaticalRole: "ISL Common Word",
+    steps: [
+      "Place your open non-dominant palm flat facing upward.",
+      "Place your closed dominant fist on top of the palm.",
+      "Lift both hands upward together in a steady vertical motion."
+    ]
+  },
+  {
+    id: "sign_isl_pani",
+    char: "Pani (Water)",
+    description: "Extend your index and middle fingers (or form a W-shape) and tap your lower lip or chin region twice.",
+    category: "isl-common",
+    signLanguage: "ISL",
+    isTwoHanded: false,
+    visualTip: "Finger tips tapping chin/lip region twice.",
+    meaning: "Representing water, drink, or thirst in Indian Sign Language.",
+    synonyms: ["Water", "Neeru", "Jal", "Thirst", "Drink"],
+    difficulty: "easy",
+    grammaticalRole: "ISL Common Noun",
+    steps: [
+      "Extend index and middle fingers together or form W shape.",
+      "Tap fingertips against chin/lower lip twice."
+    ]
+  },
+  {
+    id: "sign_isl_khana",
+    char: "Khana (Food / Eat)",
+    description: "Gather all fingertips together (mudra position) and bring them to touch your mouth or lips twice.",
+    category: "isl-common",
+    signLanguage: "ISL",
+    isTwoHanded: false,
+    visualTip: "Clustered fingertips brought to mouth twice in eating motion.",
+    meaning: "Indicating food, meal, eating, or hunger in ISL.",
+    synonyms: ["Food", "Eat", "Meal", "Bhojan", "Oota"],
+    difficulty: "easy",
+    grammaticalRole: "ISL Common Verb/Noun",
+    steps: [
+      "Bring all five fingertips together into a cluster.",
+      "Touch clustered tips to your lips twice."
+    ]
+  },
+  {
+    id: "sign_isl_parivar",
+    char: "Parivar (Family)",
+    description: "Form circles with index and thumb on both hands, start with hands touching at front, then sweep outward in a circular arc meeting at the back.",
+    category: "isl-common",
+    signLanguage: "ISL",
+    isTwoHanded: true,
+    visualTip: "Both hands forming F/O shapes sweeping outward in a wide circle.",
+    meaning: "Representing family, household, or family members in ISL.",
+    synonyms: ["Family", "Kutumba", "Household", "Relatives"],
+    difficulty: "medium",
+    grammaticalRole: "ISL Common Noun",
+    steps: [
+      "Form circles with index and thumb on both hands.",
+      "Start with hands touching in front of chest.",
+      "Move both hands outward in a wide horizontal circle until wrists meet at back."
+    ]
+  },
+  {
+    id: "sign_isl_dost",
+    char: "Dost (Friend)",
+    description: "Hook curved index fingers of both hands together gently.",
+    category: "isl-common",
+    signLanguage: "ISL",
+    isTwoHanded: true,
+    visualTip: "Two curved index fingers interlocked together.",
+    meaning: "Companion, friend, or pal in Indian Sign Language.",
+    synonyms: ["Friend", "Sneathita", "Mitra", "Pal"],
+    difficulty: "easy",
+    grammaticalRole: "ISL Common Noun",
+    steps: [
+      "Curve index fingers on both hands.",
+      "Interlock the two index fingers together securely."
+    ]
+  },
+  {
+    id: "sign_isl_pyaar",
+    char: "Pyaar (Love)",
+    description: "Cross both arms over your chest with wrists crossing over your heart area.",
+    category: "isl-common",
+    signLanguage: "ISL",
+    isTwoHanded: true,
+    visualTip: "Crossed forearms pressed over heart.",
+    meaning: "Deep affection, love, or care in ISL.",
+    synonyms: ["Love", "Preethi", "Affection", "Pyar"],
+    difficulty: "easy",
+    grammaticalRole: "ISL Expression",
+    steps: [
+      "Cross forearms over chest in an X shape.",
+      "Press hands gently over upper chest."
+    ]
+  },
+  {
+    id: "sign_isl_aap_kaise_hain",
+    char: "Aap Kaise Hain? (How are you?)",
+    description: "Hold both open palms facing upward, move them outward slightly with an inquisitive facial expression.",
+    category: "isl-greeting",
+    signLanguage: "ISL",
+    isTwoHanded: true,
+    visualTip: "Open upward palms moving outward with raised eyebrows.",
+    meaning: "Inquiring about wellbeing in Indian Sign Language.",
+    synonyms: ["How are you?", "How do you do?", "Kaisey ho?", "Yellara Channagiddira?"],
+    difficulty: "easy",
+    grammaticalRole: "ISL Question",
+    steps: [
+      "Hold both hands at waist level with open palms facing up.",
+      "Move hands slightly forward and outward while raising eyebrows."
+    ]
+  },
+  {
+    id: "sign_isl_a",
+    char: "ISL 'A'",
+    description: "Extend non-dominant index finger horizontally and place dominant index finger vertically on top forming an apex cross.",
+    category: "isl-alphabet",
+    signLanguage: "ISL",
+    isTwoHanded: true,
+    visualTip: "Two index fingers forming an A-frame apex structure.",
+    meaning: "The letter 'A' in the Indian Sign Language (ISL) two-handed manual alphabet.",
+    synonyms: ["ISL Letter A", "ISL Alphabet A"],
+    difficulty: "medium",
+    grammaticalRole: "ISL Alphabet",
+    steps: [
+      "Extend non-dominant index finger horizontally.",
+      "Touch dominant index finger to top forming an 'A' frame apex."
+    ]
+  },
+  {
+    id: "sign_isl_b",
+    char: "ISL 'B'",
+    description: "Curve fingers and thumb on both hands to form two circular loops pressed together vertically, mimicking the letter 'B'.",
+    category: "isl-alphabet",
+    signLanguage: "ISL",
+    isTwoHanded: true,
+    visualTip: "Two curved hands forming two stacked circular loops.",
+    meaning: "The letter 'B' in Indian Sign Language (ISL).",
+    synonyms: ["ISL Letter B"],
+    difficulty: "medium",
+    grammaticalRole: "ISL Alphabet",
+    steps: [
+      "Curve fingers and thumb of right hand into a semi-circle.",
+      "Curve fingers and thumb of left hand into a semi-circle below/beside it."
+    ]
+  },
+  {
+    id: "sign_isl_c",
+    char: "ISL 'C'",
+    description: "Curve all four fingers and thumb on dominant hand into a clear C semi-circle.",
+    category: "isl-alphabet",
+    signLanguage: "ISL",
+    isTwoHanded: false,
+    visualTip: "Single curved hand in C shape.",
+    meaning: "The letter 'C' in Indian Sign Language.",
+    synonyms: ["ISL Letter C"],
+    difficulty: "easy",
+    grammaticalRole: "ISL Alphabet",
+    steps: ["Curve fingers and thumb into C profile."]
+  },
+  {
+    id: "sign_isl_1",
+    char: "ISL 1",
+    description: "Extend dominant index finger vertically.",
+    category: "isl-number",
+    signLanguage: "ISL",
+    isTwoHanded: false,
+    visualTip: "Single index finger pointing up.",
+    meaning: "The number 1 in Indian Sign Language.",
+    synonyms: ["ISL Digit 1", "Ek"],
+    difficulty: "easy",
+    grammaticalRole: "ISL Number",
+    steps: ["Extend index finger vertically."]
+  },
+  {
+    id: "sign_isl_5",
+    char: "ISL 5",
+    description: "Extend all five fingers of dominant hand spread wide.",
+    category: "isl-number",
+    signLanguage: "ISL",
+    isTwoHanded: false,
+    visualTip: "Open hand with 5 extended fingers.",
+    meaning: "The number 5 in Indian Sign Language.",
+    synonyms: ["ISL Digit 5", "Paanch"],
+    difficulty: "easy",
+    grammaticalRole: "ISL Number",
+    steps: ["Spread all five fingers open."]
+  }
+];
+
 // Connection lines for the hand skeleton
 const SKELETON_CONNECTIONS = [
   // Thumb
@@ -716,15 +987,37 @@ interface SignDictionaryProps {
   onSelectGesture: (gesture: ASLGesture) => void;
   activeGesture: ASLGesture | null;
   customGestures?: ASLGesture[];
+  activeSignLanguage?: string;
+  onSignLanguageChange?: (lang: string) => void;
 }
 
-export default function SignDictionary({ onSelectGesture, activeGesture, customGestures = [] }: SignDictionaryProps) {
+export default function SignDictionary({ 
+  onSelectGesture, 
+  activeGesture, 
+  customGestures = [],
+  activeSignLanguage = 'ALL',
+  onSignLanguageChange
+}: SignDictionaryProps) {
   // State variables for filter and layout configuration
-  const [activeCategory, setActiveCategory] = useState<'all' | 'alphabet' | 'numbers' | 'greeting' | 'common' | 'custom' | 'bookmarked'>('all');
+  const [activeCategory, setActiveCategory] = useState<string>('all');
+  const [activeSignLanguageSystem, setActiveSignLanguageSystem] = useState<string>(activeSignLanguage || 'ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDifficulty, setSelectedDifficulty] = useState<'all' | 'easy' | 'medium' | 'hard'>('all');
   const [animateSkeleton, setAnimateSkeleton] = useState(true);
   const [showJointLabels, setShowJointLabels] = useState(false);
+
+  useEffect(() => {
+    if (activeSignLanguage && activeSignLanguage !== activeSignLanguageSystem) {
+      setActiveSignLanguageSystem(activeSignLanguage);
+    }
+  }, [activeSignLanguage]);
+
+  const handleLanguageSwitch = (lang: string) => {
+    setActiveSignLanguageSystem(lang);
+    if (onSignLanguageChange) {
+      onSignLanguageChange(lang);
+    }
+  };
   
   // Bookmarks loaded from local storage
   const [bookmarkedIds, setBookmarkedIds] = useState<string[]>(() => {
@@ -765,7 +1058,7 @@ export default function SignDictionary({ onSelectGesture, activeGesture, customG
       return;
     }
 
-    const textToSpeak = `Sign for ${gesture.char}. Grammatical role is ${gesture.grammaticalRole || gesture.category}. Meaning: ${gesture.meaning || gesture.description}. Formed with a ${gesture.difficulty} difficulty posture.`;
+    const textToSpeak = `Sign for ${gesture.char}. System is ${gesture.signLanguage || 'ASL'}. Grammatical role is ${gesture.grammaticalRole || gesture.category}. Meaning: ${gesture.meaning || gesture.description}. Formed with a ${gesture.difficulty} difficulty posture.`;
     const utterance = new SpeechSynthesisUtterance(textToSpeak);
     utterance.rate = 0.95;
     
@@ -785,15 +1078,20 @@ export default function SignDictionary({ onSelectGesture, activeGesture, customG
   }, [inspectedGesture]);
 
   const allGestures = useMemo(() => {
+    const aslAnnotated = DICTIONARY_GESTURES.map(g => ({
+      ...g,
+      signLanguage: g.signLanguage || 'ASL'
+    }));
     const customWithCategory = customGestures.map(g => ({
       ...g,
       category: 'custom',
+      signLanguage: g.signLanguage || 'ASL',
       meaning: g.meaning || "Custom registered gesture sample captured in workspace dataset.",
       difficulty: g.difficulty || 'medium',
       steps: g.steps || ["Lock the pose in webcam scanner", "Perform hand calibration matching joint landmarks"],
       grammaticalRole: g.grammaticalRole || 'Custom Sign'
     }));
-    return [...DICTIONARY_GESTURES, ...customWithCategory];
+    return [...aslAnnotated, ...ISL_GESTURES, ...customWithCategory];
   }, [customGestures]);
 
   // Set default inspected gesture on load
@@ -809,6 +1107,12 @@ export default function SignDictionary({ onSelectGesture, activeGesture, customG
   // 1. Filtered and searched list of gestures
   const filteredGestures = useMemo(() => {
     return allGestures.filter(gesture => {
+      // Language System Filter
+      const gestureLang = gesture.signLanguage || 'ASL';
+      const matchesLanguage = 
+        activeSignLanguageSystem === 'ALL' || 
+        gestureLang === activeSignLanguageSystem;
+
       // Category filter
       const matchesCategory = 
         activeCategory === 'all' || 
@@ -828,9 +1132,9 @@ export default function SignDictionary({ onSelectGesture, activeGesture, customG
         (gesture.meaning && gesture.meaning.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (gesture.synonyms && gesture.synonyms.some(s => s.toLowerCase().includes(searchQuery.toLowerCase())));
 
-      return matchesCategory && matchesDifficulty && matchesSearch;
+      return matchesLanguage && matchesCategory && matchesDifficulty && matchesSearch;
     });
-  }, [allGestures, activeCategory, selectedDifficulty, searchQuery, bookmarkedIds]);
+  }, [allGestures, activeSignLanguageSystem, activeCategory, selectedDifficulty, searchQuery, bookmarkedIds]);
 
   // Get procedural joints for inspected gesture
   const handLandmarks = useMemo(() => {
@@ -842,9 +1146,16 @@ export default function SignDictionary({ onSelectGesture, activeGesture, customG
   const categoryStats = useMemo(() => {
     const stats = {
       all: allGestures.length,
+      asl: allGestures.filter(g => (g.signLanguage || 'ASL') === 'ASL').length,
+      isl: allGestures.filter(g => g.signLanguage === 'ISL').length,
       alphabet: allGestures.filter(g => g.category === 'alphabet').length,
+      numbers: allGestures.filter(g => g.category === 'numbers').length,
       greeting: allGestures.filter(g => g.category === 'greeting').length,
       common: allGestures.filter(g => g.category === 'common').length,
+      islGreeting: allGestures.filter(g => g.category === 'isl-greeting').length,
+      islCommon: allGestures.filter(g => g.category === 'isl-common').length,
+      islAlphabet: allGestures.filter(g => g.category === 'isl-alphabet').length,
+      islNumber: allGestures.filter(g => g.category === 'isl-number').length,
       custom: allGestures.filter(g => g.category === 'custom').length,
       bookmarked: bookmarkedIds.length
     };
@@ -864,11 +1175,54 @@ export default function SignDictionary({ onSelectGesture, activeGesture, customG
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <BookOpen className="w-5 h-5 text-[#7c8d7c] dark:text-[#a8baa8]" />
-              <h3 className="text-sm font-bold text-[#2d2d28] dark:text-[#f4f4f5] uppercase tracking-wide">ASL Dictionary Explorer</h3>
+              <h3 className="text-sm font-bold text-[#2d2d28] dark:text-[#f4f4f5] uppercase tracking-wide">Sign Dictionary Explorer</h3>
             </div>
             <span className="text-[10px] font-mono bg-gray-50 dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 px-2 py-1 rounded-lg text-gray-500 dark:text-zinc-400 font-bold">
               Showing {filteredGestures.length} of {allGestures.length} signs
             </span>
+          </div>
+
+          {/* Sign Language System Selector Tabs */}
+          <div className="p-1 bg-[#f4f6f1] dark:bg-[#151518] border border-[#e4e8e0] dark:border-[#2a2a2e] rounded-2xl flex items-center justify-between gap-1 overflow-x-auto">
+            <button
+              type="button"
+              onClick={() => handleLanguageSwitch('ALL')}
+              className={`flex-1 min-w-[90px] py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                activeSignLanguageSystem === 'ALL'
+                  ? 'bg-white dark:bg-[#25252a] text-[#2d2d28] dark:text-white shadow-xs border border-[#e2e2d8] dark:border-[#38383e]'
+                  : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
+              }`}
+            >
+              <span>🌐</span>
+              <span>All Systems</span>
+              <span className="text-[10px] font-mono opacity-60">({categoryStats.all})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleLanguageSwitch('ISL')}
+              className={`flex-1 min-w-[100px] py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                activeSignLanguageSystem === 'ISL'
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'text-stone-600 dark:text-stone-300 hover:bg-amber-50 dark:hover:bg-amber-950/30'
+              }`}
+            >
+              <span>🇮🇳</span>
+              <span>ISL (Indian)</span>
+              <span className="text-[10px] font-mono opacity-80 bg-black/15 px-1.5 py-0.5 rounded-md">({categoryStats.isl})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleLanguageSwitch('ASL')}
+              className={`flex-1 min-w-[100px] py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                activeSignLanguageSystem === 'ASL'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'text-stone-600 dark:text-stone-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30'
+              }`}
+            >
+              <span>🇺🇸</span>
+              <span>ASL (American)</span>
+              <span className="text-[10px] font-mono opacity-80 bg-black/15 px-1.5 py-0.5 rounded-md">({categoryStats.asl})</span>
+            </button>
           </div>
 
           {/* Search bar input with clear button */}
@@ -878,7 +1232,7 @@ export default function SignDictionary({ onSelectGesture, activeGesture, customG
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search signs, translations, synonyms, meanings..."
+              placeholder="Search Indian (ISL) or American (ASL) signs, Namaste, Water, Food..."
               className="w-full bg-[#fdfcf9] dark:bg-[#131316] border border-[#ecece0] dark:border-[#2d2d32] focus:border-[#7c8d7c] focus:ring-1 focus:ring-[#7c8d7c]/30 rounded-xl py-2.5 pl-11 pr-10 text-xs text-[#2d2d28] dark:text-[#f4f4f5] placeholder-[#9a9a8a] outline-none transition-all font-sans"
             />
             {searchQuery && (
@@ -892,7 +1246,7 @@ export default function SignDictionary({ onSelectGesture, activeGesture, customG
             )}
           </div>
 
-          {/* Category Filters row (all, alphabet, greeting, common, custom, bookmarked) */}
+          {/* Category Filters row (all, alphabet, greeting, common, isl-greeting, isl-common, custom, bookmarked) */}
           <div className="flex flex-wrap items-center gap-1.5" id="category-navigation">
             <button
               onClick={() => setActiveCategory('all')}
@@ -902,53 +1256,85 @@ export default function SignDictionary({ onSelectGesture, activeGesture, customG
                   : "bg-gray-50/50 dark:bg-zinc-900/40 text-[#7a7a6a] hover:text-[#2d2d28] dark:hover:text-white border border-gray-100 dark:border-zinc-800"
               }`}
             >
-              All
-              <span className="text-[9px] opacity-70 font-mono">({categoryStats.all})</span>
+              All Categories
             </button>
-            <button
-              onClick={() => setActiveCategory('alphabet')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                activeCategory === 'alphabet'
-                  ? "bg-[#7c8d7c] text-white shadow-sm"
-                  : "bg-gray-50/50 dark:bg-zinc-900/40 text-[#7a7a6a] hover:text-[#2d2d28] dark:hover:text-white border border-gray-100 dark:border-zinc-800"
-              }`}
-            >
-              A-Z Alphabets
-              <span className="text-[9px] opacity-70 font-mono">({categoryStats.alphabet})</span>
-            </button>
-            <button
-              onClick={() => setActiveCategory('numbers')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                activeCategory === 'numbers'
-                  ? "bg-[#7c8d7c] text-white shadow-sm"
-                  : "bg-gray-50/50 dark:bg-zinc-900/40 text-[#7a7a6a] hover:text-[#2d2d28] dark:hover:text-white border border-gray-100 dark:border-zinc-800"
-              }`}
-            >
-              Numbers 0–9
-              <span className="text-[9px] opacity-70 font-mono">({categoryStats.numbers})</span>
-            </button>
-            <button
-              onClick={() => setActiveCategory('greeting')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                activeCategory === 'greeting'
-                  ? "bg-[#7c8d7c] text-white shadow-sm"
-                  : "bg-gray-50/50 dark:bg-zinc-900/40 text-[#7a7a6a] hover:text-[#2d2d28] dark:hover:text-white border border-gray-100 dark:border-zinc-800"
-              }`}
-            >
-              Greetings
-              <span className="text-[9px] opacity-70 font-mono">({categoryStats.greeting})</span>
-            </button>
-            <button
-              onClick={() => setActiveCategory('common')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                activeCategory === 'common'
-                  ? "bg-[#7c8d7c] text-white shadow-sm"
-                  : "bg-gray-50/50 dark:bg-zinc-900/40 text-[#7a7a6a] hover:text-[#2d2d28] dark:hover:text-white border border-gray-100 dark:border-zinc-800"
-              }`}
-            >
-              Words
-              <span className="text-[9px] opacity-70 font-mono">({categoryStats.common})</span>
-            </button>
+            
+            {(activeSignLanguageSystem === 'ALL' || activeSignLanguageSystem === 'ISL') && (
+              <>
+                <button
+                  onClick={() => setActiveCategory('isl-greeting')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                    activeCategory === 'isl-greeting'
+                      ? "bg-amber-600 text-white shadow-sm"
+                      : "bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900/40"
+                  }`}
+                >
+                  🇮🇳 ISL Greetings
+                  <span className="text-[9px] opacity-70 font-mono">({categoryStats.islGreeting})</span>
+                </button>
+                <button
+                  onClick={() => setActiveCategory('isl-common')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                    activeCategory === 'isl-common'
+                      ? "bg-amber-600 text-white shadow-sm"
+                      : "bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900/40"
+                  }`}
+                >
+                  🇮🇳 ISL Words
+                  <span className="text-[9px] opacity-70 font-mono">({categoryStats.islCommon})</span>
+                </button>
+                <button
+                  onClick={() => setActiveCategory('isl-alphabet')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                    activeCategory === 'isl-alphabet'
+                      ? "bg-amber-600 text-white shadow-sm"
+                      : "bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900/40"
+                  }`}
+                >
+                  🇮🇳 ISL Alphabets
+                  <span className="text-[9px] opacity-70 font-mono">({categoryStats.islAlphabet})</span>
+                </button>
+              </>
+            )}
+
+            {(activeSignLanguageSystem === 'ALL' || activeSignLanguageSystem === 'ASL') && (
+              <>
+                <button
+                  onClick={() => setActiveCategory('alphabet')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                    activeCategory === 'alphabet'
+                      ? "bg-[#7c8d7c] text-white shadow-sm"
+                      : "bg-gray-50/50 dark:bg-zinc-900/40 text-[#7a7a6a] hover:text-[#2d2d28] dark:hover:text-white border border-gray-100 dark:border-zinc-800"
+                  }`}
+                >
+                  ASL Alphabets
+                  <span className="text-[9px] opacity-70 font-mono">({categoryStats.alphabet})</span>
+                </button>
+                <button
+                  onClick={() => setActiveCategory('numbers')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                    activeCategory === 'numbers'
+                      ? "bg-[#7c8d7c] text-white shadow-sm"
+                      : "bg-gray-50/50 dark:bg-zinc-900/40 text-[#7a7a6a] hover:text-[#2d2d28] dark:hover:text-white border border-gray-100 dark:border-zinc-800"
+                  }`}
+                >
+                  ASL Numbers
+                  <span className="text-[9px] opacity-70 font-mono">({categoryStats.numbers})</span>
+                </button>
+                <button
+                  onClick={() => setActiveCategory('greeting')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                    activeCategory === 'greeting'
+                      ? "bg-[#7c8d7c] text-white shadow-sm"
+                      : "bg-gray-50/50 dark:bg-zinc-900/40 text-[#7a7a6a] hover:text-[#2d2d28] dark:hover:text-white border border-gray-100 dark:border-zinc-800"
+                  }`}
+                >
+                  ASL Greetings
+                  <span className="text-[9px] opacity-70 font-mono">({categoryStats.greeting})</span>
+                </button>
+              </>
+            )}
+
             {categoryStats.custom > 0 && (
               <button
                 onClick={() => setActiveCategory('custom')}
@@ -1027,14 +1413,31 @@ export default function SignDictionary({ onSelectGesture, activeGesture, customG
               >
                 <div>
                   <div className="flex items-start justify-between gap-2 mb-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-2xl font-sans font-black tracking-tight text-[#2d2d28] dark:text-[#f4f4f5] group-hover:text-[#7c8d7c] dark:group-hover:text-[#a8baa8] transition-colors">
                         {gesture.char}
                       </span>
+                      
+                      {/* Sign Language Badge (ISL or ASL) */}
+                      <span className={`text-[9px] px-2 py-0.5 rounded-full font-mono font-bold uppercase tracking-wider border flex items-center gap-1 ${
+                        (gesture.signLanguage || 'ASL') === 'ISL'
+                          ? 'bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800'
+                          : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                      }`}>
+                        <span>{(gesture.signLanguage || 'ASL') === 'ISL' ? '🇮🇳 ISL' : '🇺🇸 ASL'}</span>
+                      </span>
+
+                      {/* Two handed badge */}
+                      {gesture.isTwoHanded && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full font-mono font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/50" title="Requires two hands">
+                          🙌 2-Handed
+                        </span>
+                      )}
+
                       <span className={`text-[9px] px-2 py-0.5 rounded-full font-mono font-bold uppercase tracking-wider border ${
-                        gesture.category === 'alphabet' 
+                        gesture.category === 'alphabet' || gesture.category === 'isl-alphabet'
                           ? 'bg-[#f0f2ee] dark:bg-[#222622] text-[#7c8d7c] dark:text-[#a8baa8] border-[#e0e4db] dark:border-emerald-900/30' 
-                          : gesture.category === 'greeting'
+                          : gesture.category === 'greeting' || gesture.category === 'isl-greeting'
                           ? 'bg-amber-50 dark:bg-[#28241d] text-amber-700 dark:text-amber-400 border-amber-100 dark:border-amber-900/30'
                           : gesture.category === 'custom' 
                           ? 'bg-purple-50 dark:bg-[#25202a] text-purple-700 dark:text-purple-400 border-purple-100 dark:border-purple-900/30'

@@ -1,9 +1,13 @@
+export type SignLanguageSystem = 'ASL' | 'ISL' | 'BSL' | string;
+
 export interface ASLGesture {
   id: string;
   char: string;
   videoUrl?: string;
   description: string;
-  category: 'alphabet' | 'greeting' | 'common' | 'custom' | string;
+  category: 'alphabet' | 'greeting' | 'common' | 'custom' | 'isl-alphabet' | 'isl-greeting' | 'isl-common' | 'isl-number' | string;
+  signLanguage?: SignLanguageSystem;
+  isTwoHanded?: boolean;
   visualTip: string;
   meaning?: string;
   synonyms?: string[];

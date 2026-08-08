@@ -26,6 +26,7 @@ app.add_middleware(
 class TranslateFrameRequest(BaseModel):
     image: str
     targetGesture: Optional[str] = None
+    signLanguage: Optional[str] = "ASL"
 
 class ImproveGrammarRequest(BaseModel):
     sentence: str
@@ -388,67 +389,87 @@ async def health_check():
         "mode": "Gemini Real-Time Stream" if has_api_key else "Interactive Simulation Stream"
     }
 
-def get_simulated_prediction(target_gesture: str) -> dict:
+def get_simulated_prediction(target_gesture: str, sign_language: str = "ASL") -> dict:
     """Fallback high-quality prediction simulator when Gemini API Key is not set up."""
-    alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    chosen_letter = target_gesture if target_gesture else random.choice(alphabet)
+    is_isl = sign_language == "ISL"
+    isl_samples = ["Namaste", "Dhanyawad", "Swagatam", "Kripya", "Madad", "Pani", "Khana", "Pyaar"]
+    asl_samples = ["A", "B", "C", "Hello", "Thank You", "Yes", "No", "Help"]
+    
+    if target_gesture:
+        chosen_letter = target_gesture
+    else:
+        chosen_letter = random.choice(isl_samples if is_isl else asl_samples)
     
     simulated_responses = {
+        "Namaste": {
+            "predictedChar": "Namaste",
+            "confidence": 96.8,
+            "explanation": "ISL Anjali Mudra posture recognized with both palms pressed flat together at chest height and head tilted in a respectful bow.",
+            "tips": ["Keep forearms horizontal and elbows relaxed.", "Press fingertips firmly together at upper chest level."],
+            "grammarMatches": ["Indian Sign Language Cultural Greeting", "Namaste / Pranam"]
+        },
+        "Dhanyawad": {
+            "predictedChar": "Dhanyawad",
+            "confidence": 93.5,
+            "explanation": "Flat open hand meeting forehead/chin and moving gracefully forward and down in Indian Sign Language thankfulness gesture.",
+            "tips": ["Start with fingertips near lower face or forehead.", "Extend arm forward with palm opening upward."],
+            "grammarMatches": ["ISL Expression of Gratitude", "Dhanyawad / Thank You"]
+        },
+        "Swagatam": {
+            "predictedChar": "Swagatam",
+            "confidence": 94.2,
+            "explanation": "Two open palms facing upward drawing smoothly inward toward the chest in an ISL welcoming gesture.",
+            "tips": ["Keep both palms facing upward at waist level.", "Draw both hands inward simultaneously."],
+            "grammarMatches": ["ISL Hospitality Formula", "Swagatam / Welcome"]
+        },
+        "Kripya": {
+            "predictedChar": "Kripya",
+            "confidence": 92.1,
+            "explanation": "Open flat palm rubbing over heart region in a gentle circular clockwise motion in Indian Sign Language.",
+            "tips": ["Keep palm flat against chest.", "Rub in small clockwise circles."],
+            "grammarMatches": ["ISL Request Modifier", "Kripya / Please"]
+        },
+        "Madad": {
+            "predictedChar": "Madad",
+            "confidence": 91.0,
+            "explanation": "Dominant fist resting flat on top of open non-dominant palm, lifting together in ISL assistance sign.",
+            "tips": ["Keep non-dominant palm flat as a platform.", "Lift both hands steadily upward."],
+            "grammarMatches": ["ISL Help / Assistance", "Madad / Support"]
+        },
+        "Pani": {
+            "predictedChar": "Pani",
+            "confidence": 95.0,
+            "explanation": "Extended index and middle finger tapping lower lip region in Indian Sign Language water gesture.",
+            "tips": ["Tap chin or lip twice lightly.", "Keep palm facing inward."],
+            "grammarMatches": ["ISL Common Noun", "Pani / Water"]
+        },
+        "Khana": {
+            "predictedChar": "Khana",
+            "confidence": 94.7,
+            "explanation": "Clustered fingertips brought to mouth twice in ISL eating/food gesture.",
+            "tips": ["Gather all 5 fingertips into a cluster mudra.", "Touch mouth gently twice."],
+            "grammarMatches": ["ISL Common Noun/Verb", "Khana / Food / Eat"]
+        },
+        "Pyaar": {
+            "predictedChar": "Pyaar",
+            "confidence": 95.2,
+            "explanation": "Both arms crossed over chest with wrists crossing heart area in Indian Sign Language love sign.",
+            "tips": ["Cross wrists tightly over heart.", "Press palms gently against chest."],
+            "grammarMatches": ["ISL Emotional Expression", "Pyaar / Love"]
+        },
         "A": {
             "predictedChar": "A",
             "confidence": 94.5,
             "explanation": "Strong fist gesture recognized over WebSocket. The thumb is resting comfortably flat along the vertical side of the index finger.",
             "tips": ["Keep your fingers tightly closed together.", "Avoid tucking your thumb underneath the fingers; push it outward as a support pillar."],
-            "grammarMatches": ["Symbol for Letter 'A'", "ASL Alphabet Entry #1"]
-        },
-        "B": {
-            "predictedChar": "B",
-            "confidence": 89.2,
-            "explanation": "Open flat hand layout oriented upwards received via WS stream, with fingers pressed together and index/thumb neatly tucked inside.",
-            "tips": ["Ensure all four main fingers are fully straightened vertically.", "Fold your thumb securely across your upper palm."],
-            "grammarMatches": ["Symbol for Letter 'B'", "Numerical gesture '4' variation"]
-        },
-        "C": {
-            "predictedChar": "C",
-            "confidence": 91.8,
-            "explanation": "A clean, semicircular skeletal shape formed by curved fingers and thumb, mimicking a cup structure. WS packet latency was 24ms.",
-            "tips": ["Keep your palm open to reveal the side curve.", "Ensure the spacing between the fingertips and thumb tip remains clearly aligned."],
-            "grammarMatches": ["Symbol for letter 'C'"]
+            "grammarMatches": ["Symbol for Letter 'A'", "Alphabet Entry #1"]
         },
         "Hello": {
             "predictedChar": "Hello",
             "confidence": 95.8,
-            "explanation": "Flat hand posture aligned vertically at forehead height, swept outwards in an elegant salute motion. High contrast fingers detected against the background.",
+            "explanation": "Flat hand posture aligned vertically at forehead height, swept outwards in an elegant salute motion.",
             "tips": ["Hold your hand flat and tilt your wrist outward.", "Make sure your thumb is tucked close to the side of your index finger."],
-            "grammarMatches": ["Greeting", "ASL Universal Hello"]
-        },
-        "Thank You": {
-            "predictedChar": "Thank You",
-            "confidence": 92.4,
-            "explanation": "Flat open palm meeting the lip region and moving gracefully downward and outward facing the reader.",
-            "tips": ["Ensure your hand starts close to your lips before moving outward.", "Keep your palm facing upward at the end of the sign."],
-            "grammarMatches": ["Greeting", "Politeness Formula 'Thank You'"]
-        },
-        "Yes": {
-            "predictedChar": "Yes",
-            "confidence": 94.1,
-            "explanation": "S-hand shape (closed fist) facing outward, rocking vertically forward and back in a rhythmic nodding pattern.",
-            "tips": ["Keep your fingers tightly closed into a fist mimicking a head shape.", "Tilt your wrist cleanly from top to bottom, not side to side."],
-            "grammarMatches": ["Agreement", "Affirmation 'Yes'"]
-        },
-        "No": {
-            "predictedChar": "No",
-            "confidence": 93.0,
-            "explanation": "Index and middle fingers extended together and rapidly striking the extended thumb pad below.",
-            "tips": ["Keep your ring and pinky fingers fully curled into your palm.", "Perform a crisp double-tap motion for maximum recognition accuracy."],
-            "grammarMatches": ["Negation", "Refusal 'No'"]
-        },
-        "Help": {
-            "predictedChar": "Help",
-            "confidence": 91.5,
-            "explanation": "Dominant hand closed in a thumbs-up shape resting squarely on top of the flat, open non-dominant hand, moving upward in a lifting motion.",
-            "tips": ["Ensure the non-dominant palm acts as a clear flat supporting platform.", "Extend your thumb pointing straight up in a clean thumbs-up posture."],
-            "grammarMatches": ["Request", "Assistance 'Help'", "SOS Emergency Sign"]
+            "grammarMatches": ["Greeting", "Universal Hello"]
         }
     }
     
@@ -458,9 +479,9 @@ def get_simulated_prediction(target_gesture: str) -> dict:
         payload = {
             "predictedChar": chosen_letter,
             "confidence": round(85.0 + random.random() * 12.0, 1),
-            "explanation": f"Detected a live WS stream gesture resembling '{chosen_letter}' under localized camera lighting.",
-            "tips": ["Keep your hand centered inside the green detection ring for ideal tracking.", "Minimize background clutter and maintain high contrast shadow lines."],
-            "grammarMatches": [f"Symbol for {chosen_letter}", "General gesture sequence"]
+            "explanation": f"Detected a live WS stream {'ISL' if is_isl else 'ASL'} gesture resembling '{chosen_letter}'.",
+            "tips": ["Keep your hand centered inside the green detection ring for ideal tracking.", "Minimize background clutter and maintain high contrast."],
+            "grammarMatches": [f"Symbol for {chosen_letter}", f"{'ISL' if is_isl else 'ASL'} gesture sequence"]
         }
         
     return payload

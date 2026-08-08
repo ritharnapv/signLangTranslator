@@ -522,6 +522,14 @@ export default function App() {
   const [trainedClientModel, setTrainedClientModel] = useState<tf.LayersModel | null>(null);
   const [trainedClasses, setTrainedClasses] = useState<string[]>([]);
   const [predictionSource, setPredictionSource] = useState<'simulated' | 'tensorflow' | 'heuristics' | 'heuristics-numbers'>('heuristics');
+  const [selectedSignLanguage, setSelectedSignLanguage] = useState<'ASL' | 'ISL'>(() => {
+    try {
+      const saved = localStorage.getItem('asl_sign_language_system');
+      return (saved === 'ISL' || saved === 'ASL') ? saved : 'ASL';
+    } catch {
+      return 'ASL';
+    }
+  });
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [cameraActive, setCameraActive] = useState<boolean>(false);
   const [selectedGesture, setSelectedGesture] = useState<ASLGesture>({
@@ -2778,7 +2786,8 @@ export default function App() {
         wsRef.current.send(JSON.stringify({
           type: "frame",
           image: imageToSend,
-          targetGesture: selectedGesture?.char || ""
+          targetGesture: selectedGesture?.char || "",
+          signLanguage: selectedSignLanguage || "ASL"
         }));
       };
 
@@ -2938,7 +2947,8 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           image: base64Image === "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/" ? getSandboxImagePlaceholder(selectedGesture.char) : base64Image,
-          targetGesture: selectedGesture.char
+          targetGesture: selectedGesture.char,
+          signLanguage: selectedSignLanguage || "ASL"
         })
       });
 
@@ -3325,6 +3335,40 @@ export default function App() {
 
         {/* Right Nav-bar: Language Switcher, Dark mode switcher, status indicators & Mobile Menu Burger Button */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          {/* Sign Language System Selector (ASL / ISL) */}
+          <div className="flex items-center bg-[#f0f2ee] dark:bg-[#202024] p-0.5 rounded-xl border border-[#d8dcd3] dark:border-[#333338] text-xs font-bold shadow-xs">
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedSignLanguage('ASL');
+                localStorage.setItem('asl_sign_language_system', 'ASL');
+              }}
+              className={`px-2.5 py-1 rounded-lg transition-colors ${
+                selectedSignLanguage === 'ASL'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-white'
+              }`}
+              title="American Sign Language Mode"
+            >
+              ASL 🇺🇸
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedSignLanguage('ISL');
+                localStorage.setItem('asl_sign_language_system', 'ISL');
+              }}
+              className={`px-2.5 py-1 rounded-lg transition-colors ${
+                selectedSignLanguage === 'ISL'
+                  ? 'bg-orange-600 text-white shadow-xs'
+                  : 'text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-white'
+              }`}
+              title="Indian Sign Language Mode"
+            >
+              ISL 🇮🇳
+            </button>
+          </div>
+
           {/* Prominent UI Language Selector */}
           <LanguageSelector variant="dropdown" />
           {/* PWA Install Button (Displays on any screen when ready) */}
@@ -5664,17 +5708,24 @@ export default function App() {
           />
         )}
 
-        {/* ASL Reference Tab view separately */}
+        {/* ASL & ISL Reference Tab view separately */}
         {activeTab === 'dictionary' && (
           <div className="space-y-6" id="dictionary-tab-view">
             <div className="bg-[#ffffff] dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-6 shadow-sm space-y-3" id="dictionary-intro-hero">
-              <h2 className="text-xl font-bold text-[#2d2d28] dark:text-[#f4f4f5]">American Sign Language Dictionary</h2>
+              <h2 className="text-xl font-bold text-[#2d2d28] dark:text-[#f4f4f5]">Sign Language Dictionary (ASL & ISL)</h2>
               <p className="text-xs text-[#5a5a4a] dark:text-[#cbd5e1] leading-relaxed max-w-3xl">
-                Explore correct posture, wrist rotational alignment, and knuckles placement for A-Z alphabetic letters and common entry-level greetings. Toggle active practicing on any of the cards to bind that gesture inside the camera translation scanner HUD preview.
+                Explore correct posture, wrist rotational alignment, and hand placements for American Sign Language (ASL) and Indian Sign Language (ISL). Switch between ASL and ISL categories or filter by gesture type.
               </p>
             </div>
             <SignDictionary 
               customGestures={customGestures}
+              activeSignLanguage={selectedSignLanguage}
+              onSignLanguageChange={(lang) => {
+                if (lang === 'ISL' || lang === 'ASL') {
+                  setSelectedSignLanguage(lang);
+                  localStorage.setItem('asl_sign_language_system', lang);
+                }
+              }}
               onSelectGesture={(gesture) => {
                 setSelectedGesture(gesture);
                 // Switch tab back to dashboard for action practice
@@ -5683,9 +5734,9 @@ export default function App() {
                 setLatestResult({
                   predictedChar: gesture.char,
                   confidence: 93.0 + Math.random() * 5.0,
-                  explanation: `Set target posture practice match to Letter '${gesture.char}'. ${gesture.description}`,
+                  explanation: `Set target posture practice match to '${gesture.char}'. ${gesture.description}`,
                   tips: [gesture.visualTip, "Hold your hand upright in parallel with your neck coordinate."],
-                  grammarMatches: [`Selected letter practicing: ${gesture.char}`]
+                  grammarMatches: [`Selected sign practicing: ${gesture.char}`]
                 });
               }} 
               activeGesture={selectedGesture}

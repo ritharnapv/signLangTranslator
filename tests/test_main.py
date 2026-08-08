@@ -24,3 +24,10 @@ def test_sign_dictionary_search():
     data = response.json()
     assert "results" in data
     assert isinstance(data["results"], list)
+
+def test_sign_dictionary_isl_filter():
+    response = client.get("/api/v1/dictionary?query=namaste&signLanguage=ISL")
+    assert response.status_code == 200
+    data = response.json()
+    assert "results" in data
+    assert isinstance(data["results"], list)

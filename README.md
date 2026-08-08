@@ -1,11 +1,11 @@
-# SignSense: AI-Powered American Sign Language (ASL) Translator & Practice Suite
+# SignSense: AI-Powered American (ASL) & Indian Sign Language (ISL) Translator & Practice Suite
 
 [![Production Release v1.0.0](https://img.shields.io/badge/Release-v1.0.0_Production-emerald.svg)](https://ai.studio/build)
 [![CI/CD Pipeline](https://img.shields.io/badge/CI%2FCD-GitHub_Actions_Passing-blue.svg)](.github/workflows/ci-cd.yml)
 [![Docker Ready](https://img.shields.io/badge/Docker-Frontend_%2B_Backend-cyan.svg)](docker-compose.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-Welcome to **SignSense v1.0.0**, a highly polished, production-ready, full-stack application for American Sign Language (ASL) tracking, translation, dataset management, and interactive learning. 
+Welcome to **SignSense v1.0.0**, a highly polished, production-ready, full-stack application for American Sign Language (ASL) and Indian Sign Language (ISL) tracking, translation, dataset management, and interactive learning. 
 
 This repository features a modern, ultra-responsive **React (Vite) + Tailwind CSS** frontend, a high-performance **Express.js REST API gateway** with robust offline support, and a dedicated **FastAPI Computer Vision and Neural Prediction Server** powered by **Google MediaPipe Hand Tracking** and **Google Gemini 1.5/3.5/Flash AI models**.
 
@@ -13,31 +13,41 @@ This repository features a modern, ultra-responsive **React (Vite) + Tailwind CS
 
 ## Table of Contents
 1. [Core Features Overview](#1-core-features-overview)
-2. [Full Code Review & System Architecture](#2-full-code-review--system-architecture)
-3. [Performance Audit & Optimizations](#3-performance-audit--optimizations)
-4. [Accessibility & Usability Enhancements](#4-accessibility--usability-enhancements)
-5. [Security Architecture & Audit](#5-security-architecture--audit)
-6. [User Guide & Operation Manual](#6-user-guide--operation-manual)
-7. [Installation & Local Setup Guide](#7-installation--local-setup-guide)
-8. [API & WebSocket Specification](#8-api--websocket-specification)
-9. [Production Deployment Guide](#9-production-deployment-guide)
-10. [Future Roadmap](#10-future-roadmap)
+2. [Indian Sign Language (ISL) & ASL Multi-Language Architecture](#2-indian-sign-language-isl--asl-multi-language-architecture)
+3. [Full Code Review & System Architecture](#3-full-code-review--system-architecture)
+4. [Performance Audit & Optimizations](#4-performance-audit--optimizations)
+5. [Accessibility & Usability Enhancements](#5-accessibility--usability-enhancements)
+6. [Security Architecture & Audit](#6-security-architecture--audit)
+7. [User Guide & Operation Manual](#7-user-guide--operation-manual)
+8. [Installation & Local Setup Guide](#8-installation--local-setup-guide)
+9. [API & WebSocket Specification](#9-api--websocket-specification)
+10. [Production Deployment Guide](#10-production-deployment-guide)
 
 ---
 
 ## 1. Core Features Overview
 
-SignSense is built to provide an immersive, barrier-free environment for both ASL learners and fluent speakers.
+SignSense is built to provide an immersive, barrier-free environment for both ASL/ISL learners and fluent speakers.
 
-*   **Real-Time Computer Vision:** Uses **MediaPipe Hands** to identify landmarks on your hands directly in-browser.
+*   **Multi-Language Sign System Support (ASL & ISL):** Instant toggle between American Sign Language (ASL) and Indian Sign Language (ISL) modes with dedicated gesture dictionaries, two-handed gesture support, labels, and meanings.
+*   **Real-Time Computer Vision:** Uses **MediaPipe Hands** to identify landmarks on single or double hands directly in-browser.
 *   **Dual Processing Pipelines:**
     *   **HTTP Frame Pull:** High-compatibility REST API endpoint (`/api/translate-frame`) for slower or restricted networks.
     *   **WebSocket Stream:** An ultra-low latency, full-duplex socket channel (`/ws`) for continuous, sub-50ms hand coordinate translation.
-*   **Smart Sentence Builder:** Dynamically gathers recognized gestures (letters, words, or full actions) and applies state-of-the-art **Gemini AI Grammar Correction** to instantly output elegant, natural-sounding English sentences.
+*   **Smart Sentence Builder:** Dynamically gathers recognized gestures (letters, words, or full actions) and applies state-of-the-art **Gemini AI Grammar Correction** to instantly output elegant, natural-sounding sentences.
 *   **Aesthetic AI Corrections Card:** Shows a side-by-side comparison of raw transcripts versus AI-suggested sentences, listing grammar fixes, structural improvements, and a description of preserved semantic context.
-*   **Multilingual Translation & TTS:** Reads corrected sentences aloud in beautiful, high-fidelity voices (Fenrir, Kore, Zephyr) and translates them into multiple target languages (Hindi, Kannada, Malayalam, etc.) instantly.
+*   **Multilingual Translation & TTS:** Reads corrected sentences aloud in beautiful, high-fidelity voices (Fenrir, Kore, Zephyr) and translates them into multiple target languages (Hindi, Kannada, Malayalam, English, etc.) instantly.
 *   **Durable Cloud Customization:** Fully integrates with **Firebase Cloud Firestore** to sync custom gestures, practice histories, and daily streaks securely across sessions.
-*   **Simulated Offline Fallbacks:** Designed with a robust "Graceful Degradation" engine. When Gemini API keys are not supplied, the app automatically activates high-quality rule-based local grammar correction and a dictionary translation system to keep the workspace 100% functional for local developers.
+*   **Simulated Offline Fallbacks:** Designed with a robust "Graceful Degradation" engine. When Gemini API keys are not supplied, the app automatically activates high-quality rule-based local grammar correction and an ASL/ISL dictionary translation system to keep the workspace 100% functional for local developers.
+
+---
+
+## 2. Indian Sign Language (ISL) & ASL Multi-Language Architecture
+
+SignSense v1.0.0 separates and categorizes sign systems to prevent ambiguity:
+*   **ISL Specific Gestures:** Includes traditional Indian Sign Language single and two-handed gestures such as Namaste (Greetings), Dhanyavaad (Thank You), Pyaar (Love), Bharat (India), Jal (Water), and Swagatam (Welcome).
+*   **ISL Labels & Grammatical Context:** Provides exact meanings, two-handed indicators, difficulty levels, and step-by-step postural instructions.
+*   **Language System Context in AI Pipeline:** Both REST (`/api/translate-frame`) and WebSocket payloads transmit the `signLanguage` field ('ASL' | 'ISL'), instructing the server and Gemini vision backend to apply the appropriate recognition pool.
 
 ---
 

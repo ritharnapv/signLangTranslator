@@ -298,7 +298,7 @@ app.post("/api/face-auth/login", async (req, res): Promise<any> => {
 
 // 2. Multimodal Camera Frame Sign Language Translation Endpoint
 // Helper function to process camera frames with either real Gemini Multimodal API or local simulation
-async function runPrediction(image: string, targetGesture?: string): Promise<any> {
+async function runPrediction(image: string, targetGesture?: string, signLanguage: string = "ASL"): Promise<any> {
   if (!image) {
     throw new Error("Missing frame capture data");
   }
@@ -316,85 +316,106 @@ async function runPrediction(image: string, targetGesture?: string): Promise<any
 
   if (!ai) {
     // Graceful local offline developer simulation if API Key is not set up
-    // Delivers realistic letter prediction from user choice or A-Z alphabet to make workspace functional
-    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    const sampleLetters = targetGesture ? [targetGesture] : ["H", "A", "Y", "L", "O", "W"];
-    const chosenLetter = sampleLetters[Math.floor(Math.random() * sampleLetters.length)];
+    const isISL = signLanguage === "ISL";
+    const islSamples = ["Namaste", "Dhanyawad", "Swagatam", "Kripya", "Madad", "Pani", "Khana", "Pyaar"];
+    const aslSamples = ["H", "A", "Y", "L", "O", "W", "Hello", "Thank You", "Yes", "No", "Help"];
+    
+    const samplePool = targetGesture 
+      ? [targetGesture] 
+      : (isISL ? islSamples : aslSamples);
+      
+    const chosenLetter = samplePool[Math.floor(Math.random() * samplePool.length)];
     
     const possibleEmotions = ["happy", "sad", "angry", "neutral"];
     const randomEmotion = possibleEmotions[Math.floor(Math.random() * possibleEmotions.length)];
 
     const simulatedResponses: Record<string, any> = {
+      "Namaste": {
+        predictedChar: "Namaste",
+        confidence: 96.8,
+        explanation: "ISL Anjali Mudra posture recognized with both palms pressed flat together at chest height and head tilted in a respectful bow.",
+        tips: ["Keep forearms horizontal and elbows relaxed.", "Press fingertips firmly together at upper chest level."],
+        grammarMatches: ["Indian Sign Language Cultural Greeting", "Namaste / Pranam"],
+        detectedEmotion: "happy"
+      },
+      "Dhanyawad": {
+        predictedChar: "Dhanyawad",
+        confidence: 93.5,
+        explanation: "Flat open hand meeting forehead/chin and moving gracefully forward and down in Indian Sign Language thankfulness gesture.",
+        tips: ["Start with fingertips near lower face or forehead.", "Extend arm forward with palm opening upward."],
+        grammarMatches: ["ISL Expression of Gratitude", "Dhanyawad / Thank You"],
+        detectedEmotion: "happy"
+      },
+      "Swagatam": {
+        predictedChar: "Swagatam",
+        confidence: 94.2,
+        explanation: "Two open palms facing upward drawing smoothly inward toward the chest in an ISL welcoming gesture.",
+        tips: ["Keep both palms facing upward at waist level.", "Draw both hands inward simultaneously."],
+        grammarMatches: ["ISL Hospitality Formula", "Swagatam / Welcome"],
+        detectedEmotion: "happy"
+      },
+      "Kripya": {
+        predictedChar: "Kripya",
+        confidence: 92.1,
+        explanation: "Open flat palm rubbing over heart region in a gentle circular clockwise motion in Indian Sign Language.",
+        tips: ["Keep palm flat against chest.", "Rub in small clockwise circles."],
+        grammarMatches: ["ISL Request Modifier", "Kripya / Please"],
+        detectedEmotion: "happy"
+      },
+      "Madad": {
+        predictedChar: "Madad",
+        confidence: 91.0,
+        explanation: "Dominant fist resting flat on top of open non-dominant palm, lifting together in ISL assistance sign.",
+        tips: ["Keep non-dominant palm flat as a platform.", "Lift both hands steadily upward."],
+        grammarMatches: ["ISL Help / Assistance", "Madad / Support"],
+        detectedEmotion: "neutral"
+      },
+      "Pani": {
+        predictedChar: "Pani",
+        confidence: 95.0,
+        explanation: "Extended index and middle finger tapping lower lip region in Indian Sign Language water gesture.",
+        tips: ["Tap chin or lip twice lightly.", "Keep palm facing inward."],
+        grammarMatches: ["ISL Common Noun", "Pani / Water"],
+        detectedEmotion: "neutral"
+      },
+      "Khana": {
+        predictedChar: "Khana",
+        confidence: 94.7,
+        explanation: "Clustered fingertips brought to mouth twice in ISL eating/food gesture.",
+        tips: ["Gather all 5 fingertips into a cluster mudra.", "Touch mouth gently twice."],
+        grammarMatches: ["ISL Common Noun/Verb", "Khana / Food / Eat"],
+        detectedEmotion: "happy"
+      },
+      "Pyaar": {
+        predictedChar: "Pyaar",
+        confidence: 95.2,
+        explanation: "Both arms crossed over chest with wrists crossing heart area in Indian Sign Language love sign.",
+        tips: ["Cross wrists tightly over heart.", "Press palms gently against chest."],
+        grammarMatches: ["ISL Emotional Expression", "Pyaar / Love"],
+        detectedEmotion: "happy"
+      },
       "A": {
         predictedChar: "A",
         confidence: 94.5,
         explanation: "Strong fist gesture recognized with the thumb resting comfortably flat along the vertical side of the index finger.",
         tips: ["Keep your fingers tightly closed together.", "Avoid tucking your thumb underneath the fingers; push it outward as a support pillar."],
-        grammarMatches: ["Symbol for Letter 'A'", "ASL Alphabet Entry #1"],
+        grammarMatches: ["Symbol for Letter 'A'", "Alphabet Entry #1"],
         detectedEmotion: "neutral"
-      },
-      "B": {
-        predictedChar: "B",
-        confidence: 89.2,
-        explanation: "Open flat hand layout oriented upwards, with fingers pressed together and index/thumb neatly tucked inside the front.",
-        tips: ["Ensure all four main fingers are fully straightened vertically.", "Fold your thumb securely across your upper palm."],
-        grammarMatches: ["Symbol for Letter 'B'", "Numerical gesture '4' variation"],
-        detectedEmotion: "neutral"
-      },
-      "C": {
-        predictedChar: "C",
-        confidence: 91.8,
-        explanation: "A clean, semicircular skeletal shape formed by curved fingers and thumb, mimicking a cup structure.",
-        tips: ["Keep your palm open to reveal the side curve.", "Ensure the spacing between the fingertips and thumb tip remains clearly aligned."],
-        grammarMatches: ["Symbol for letter 'C'"],
-        detectedEmotion: "happy"
       },
       "Hello": {
         predictedChar: "Hello",
         confidence: 95.8,
-        explanation: "Flat hand posture aligned vertically at forehead height, swept outwards in an elegant salute motion. High contrast fingers detected against the background.",
+        explanation: "Flat hand posture aligned vertically at forehead height, swept outwards in an elegant salute motion.",
         tips: ["Hold your hand flat and tilt your wrist outward.", "Make sure your thumb is tucked close to the side of your index finger."],
-        grammarMatches: ["Greeting", "ASL Universal Hello"],
+        grammarMatches: ["Greeting", "Universal Hello"],
         detectedEmotion: "happy"
-      },
-      "Thank You": {
-        predictedChar: "Thank You",
-        confidence: 92.4,
-        explanation: "Flat open palm meeting the lip region and moving gracefully downward and outward facing the reader.",
-        tips: ["Ensure your hand starts close to your lips before moving outward.", "Keep your palm facing upward at the end of the sign."],
-        grammarMatches: ["Greeting", "Politeness Formula 'Thank You'"],
-        detectedEmotion: "happy"
-      },
-      "Yes": {
-        predictedChar: "Yes",
-        confidence: 94.1,
-        explanation: "S-hand shape (closed fist) facing outward, rocking vertically forward and back in a rhythmic nodding pattern.",
-        tips: ["Keep your fingers tightly closed into a fist mimicking a head shape.", "Tilt your wrist cleanly from top to bottom, not side to side."],
-        grammarMatches: ["Agreement", "Affirmation 'Yes'"],
-        detectedEmotion: "happy"
-      },
-      "No": {
-        predictedChar: "No",
-        confidence: 93.0,
-        explanation: "Index and middle fingers extended together and rapidly striking the extended thumb pad below.",
-        tips: ["Keep your ring and pinky fingers fully curled into your palm.", "Perform a crisp double-tap motion for maximum recognition accuracy."],
-        grammarMatches: ["Negation", "Refusal 'No'"],
-        detectedEmotion: "angry"
-      },
-      "Help": {
-        predictedChar: "Help",
-        confidence: 91.5,
-        explanation: "Dominant hand closed in a thumbs-up shape resting squarely on top of the flat, open non-dominant hand, moving upward in a lifting motion.",
-        tips: ["Ensure the non-dominant palm acts as a clear flat supporting platform.", "Extend your thumb pointing straight up in a clean thumbs-up posture."],
-        grammarMatches: ["Request", "Assistance 'Help'", "SOS Emergency Sign"],
-        detectedEmotion: "sad"
       },
       "DEFAULT": {
         predictedChar: chosenLetter,
-        confidence: 85.0 + Math.random() * 12.0,
-        explanation: `We've detected a distinctive gesture resembling '${chosenLetter}' under localized camera lighting. The joints are angled well with clear outline distinction.`,
-        tips: ["Keep your hand centered inside the green detection ring for ideal tracking.", "Minimize background clutter and maintain high contrast shadow lines."],
-        grammarMatches: [`Symbol for ${chosenLetter}`, "General gesture sequence"],
+        confidence: 86.0 + Math.random() * 11.0,
+        explanation: `We've detected a distinctive ${isISL ? "Indian Sign Language (ISL)" : "Sign Language"} gesture resembling '${chosenLetter}' under localized camera lighting.`,
+        tips: ["Keep your hand centered inside the green detection ring for ideal tracking.", "Maintain high contrast against the background."],
+        grammarMatches: [`Symbol for ${chosenLetter}`, `${isISL ? "ISL" : "ASL"} Gesture Sequence`],
         detectedEmotion: randomEmotion
       }
     };
@@ -403,15 +424,17 @@ async function runPrediction(image: string, targetGesture?: string): Promise<any
     
     return {
       ...payload,
+      signLanguageSystem: isISL ? "ISL" : "ASL",
       simulated: true,
-      message: "Secrets not configured in Settings. Using Interactive Developer Sandbox recognition."
+      message: `Secrets not configured in Settings. Using Interactive Developer Sandbox ${isISL ? "Indian Sign Language (ISL)" : "ASL"} recognition.`
     };
   }
 
   // Call actual Gemini 3.5 Multimodal model
+  const isISL = signLanguage === "ISL";
   const promptText = targetGesture
-    ? `You are a certified sign language interpreter. The user is practicing the ASL symbol for "${targetGesture}". Analyze their camera snapshot. Check if they did it correctly, output their prediction, confidence (0-100), detailed feedback explanation, constructive correction tips, and also identify if their face is visible and what facial emotion they are displaying: happy, sad, angry, or neutral (default to neutral if not clear).`
-    : "You are a professional sign language interpreter. Analyze this camera frame image and translate the hand gesture to its corresponding ASL alphabet letter or common sign (like Hello, Please, Thank You, Love). Also analyze the face in the image to detect the user's facial emotion: happy, sad, angry, or neutral (default to neutral if not clear or not visible). Return prediction, confidence, explanation, physical correctness tips, and detected facial emotion.";
+    ? `You are a certified ${isISL ? "Indian Sign Language (ISL)" : "ASL"} sign language interpreter. The user is practicing the ${isISL ? "Indian Sign Language (ISL)" : "ASL"} symbol for "${targetGesture}". Analyze their camera snapshot. Check if they did it correctly, output their prediction, confidence (0-100), detailed feedback explanation, constructive correction tips, and identify their facial emotion: happy, sad, angry, or neutral.`
+    : `You are a professional ${isISL ? "Indian Sign Language (ISL)" : "ASL"} interpreter. Analyze this camera frame image and translate the hand gesture to its corresponding ${isISL ? "Indian Sign Language (ISL) gesture (such as Namaste, Dhanyawad, Swagatam, Kripya, Madad, Pani, Khana, Pyaar, or ISL alphabet)" : "ASL alphabet letter or common sign (like Hello, Please, Thank You, Love)"}. Also analyze the face to detect facial emotion: happy, sad, angry, or neutral. Return prediction, confidence, explanation, tips, and detected facial emotion.`;
 
   const imagePart = {
     inlineData: {
@@ -430,14 +453,14 @@ async function runPrediction(image: string, targetGesture?: string): Promise<any
     config: {
       temperature: 0.1,
       maxOutputTokens: 250,
-      systemInstruction: "You are a professional sign language feedback and facial sentiment AI. Analyze the uploaded image containing a sign language hand shape and face expression, output the correct letter/word, a numeric confidence score, a visual outline description, a list of 2 or 3 corrective hand-placement improvement tips, and the detected facial emotion ('happy', 'sad', 'angry', 'neutral'). You must return EXACTLY valid JSON matching the schema.",
+      systemInstruction: `You are a professional ${isISL ? "Indian Sign Language (ISL)" : "American Sign Language (ASL)"} feedback and facial sentiment AI. Analyze the uploaded image containing a sign language hand shape and face expression, output the correct letter/word, a numeric confidence score, a visual outline description, a list of 2 or 3 corrective hand-placement improvement tips, and the detected facial emotion ('happy', 'sad', 'angry', 'neutral'). You must return EXACTLY valid JSON matching the schema.`,
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
         properties: {
           predictedChar: {
             type: Type.STRING,
-            description: "The primary ASL alphabet letter (A-Z) or greeting word predicted from the hand shape."
+            description: `The primary ${isISL ? "ISL" : "ASL"} sign or word predicted from the hand shape.`
           },
           confidence: {
             type: Type.NUMBER,
@@ -450,12 +473,12 @@ async function runPrediction(image: string, targetGesture?: string): Promise<any
           tips: {
             type: Type.ARRAY,
             items: { type: Type.STRING },
-            description: "2 or 3 operational tips on physical adjustments the user can make to execute a cleaner, more readable sign (e.g., 'Fully extend index finger', 'Separate your thumb')."
+            description: "2 or 3 operational tips on physical adjustments the user can make."
           },
           grammarMatches: {
             type: Type.ARRAY,
             items: { type: Type.STRING },
-            description: "Contextual info or words containing this letter."
+            description: "Contextual info or words containing this sign."
           },
           detectedEmotion: {
             type: Type.STRING,
@@ -470,6 +493,7 @@ async function runPrediction(image: string, targetGesture?: string): Promise<any
   const resultText = response.text || "";
   return {
     ...JSON.parse(resultText.trim()),
+    signLanguageSystem: isISL ? "ISL" : "ASL",
     simulated: false
   };
 }
@@ -477,8 +501,8 @@ async function runPrediction(image: string, targetGesture?: string): Promise<any
 // 2. Multimodal Camera Frame Sign Language Translation Endpoint
 app.post("/api/translate-frame", async (req, res): Promise<any> => {
   try {
-    const { image, targetGesture } = req.body;
-    const result = await runPrediction(image, targetGesture);
+    const { image, targetGesture, signLanguage } = req.body;
+    const result = await runPrediction(image, targetGesture, signLanguage || "ASL");
     res.json(result);
   } catch (error: any) {
     console.error("Frame recognition error:", error);

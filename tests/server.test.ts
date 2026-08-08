@@ -16,15 +16,17 @@ test('REST API User Data Validation', () => {
   assert.strictEqual(mockUser.preferences.themeMode, 'dark');
 });
 
-test('Gesture Translation Request Payload Format', () => {
+test('Gesture Translation Request Payload Format with ISL', () => {
   const gestureRequest = {
     image: 'data:image/jpeg;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
-    targetGesture: 'A',
-    targetLanguage: 'English'
+    targetGesture: 'Namaste',
+    signLanguage: 'ISL',
+    targetLanguage: 'Hindi'
   };
   assert.ok(gestureRequest.image.startsWith('data:image/'));
-  assert.strictEqual(gestureRequest.targetGesture, 'A');
-  assert.strictEqual(gestureRequest.targetLanguage, 'English');
+  assert.strictEqual(gestureRequest.targetGesture, 'Namaste');
+  assert.strictEqual(gestureRequest.signLanguage, 'ISL');
+  assert.strictEqual(gestureRequest.targetLanguage, 'Hindi');
 });
 
 test('Dataset Upload Statistics Calculation', () => {
