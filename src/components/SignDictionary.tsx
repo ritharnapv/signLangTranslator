@@ -1002,6 +1002,7 @@ export default function SignDictionary({
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [activeSignLanguageSystem, setActiveSignLanguageSystem] = useState<string>(activeSignLanguage || 'ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedAlphabet, setSelectedAlphabet] = useState<string>('ALL');
   const [selectedDifficulty, setSelectedDifficulty] = useState<'all' | 'easy' | 'medium' | 'hard'>('all');
   const [animateSkeleton, setAnimateSkeleton] = useState(true);
   const [showJointLabels, setShowJointLabels] = useState(false);
@@ -1124,6 +1125,11 @@ export default function SignDictionary({
         selectedDifficulty === 'all' || 
         gesture.difficulty === selectedDifficulty;
 
+      // Alphabet filter
+      const matchesAlphabet = 
+        selectedAlphabet === 'ALL' || 
+        gesture.char.toUpperCase().startsWith(selectedAlphabet);
+
       // Search query filter (matches character name, description, synonyms, or steps)
       const matchesSearch = 
         searchQuery.trim() === '' ||
@@ -1132,9 +1138,9 @@ export default function SignDictionary({
         (gesture.meaning && gesture.meaning.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (gesture.synonyms && gesture.synonyms.some(s => s.toLowerCase().includes(searchQuery.toLowerCase())));
 
-      return matchesLanguage && matchesCategory && matchesDifficulty && matchesSearch;
+      return matchesLanguage && matchesCategory && matchesDifficulty && matchesSearch && matchesAlphabet;
     });
-  }, [allGestures, activeSignLanguageSystem, activeCategory, selectedDifficulty, searchQuery, bookmarkedIds]);
+  }, [allGestures, activeSignLanguageSystem, activeCategory, selectedDifficulty, searchQuery, selectedAlphabet, bookmarkedIds]);
 
   // Get procedural joints for inspected gesture
   const handLandmarks = useMemo(() => {
@@ -1360,6 +1366,54 @@ export default function SignDictionary({
               Favorites
               <span className="text-[9px] opacity-70 font-mono">({categoryStats.bookmarked})</span>
             </button>
+          </div>
+
+          {/* Alphabetical A-Z Jump Filter Bar */}
+          <div className="pt-2 border-t border-[#ecece0] dark:border-[#2d2d32] space-y-1.5" id="alphabetical-filter-bar">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
+                <span>🔤</span> Alphabet Index (A-Z)
+              </span>
+              {selectedAlphabet !== 'ALL' && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedAlphabet('ALL')}
+                  className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
+                >
+                  Reset Alphabet
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-zinc-800">
+              <button
+                type="button"
+                onClick={() => setSelectedAlphabet('ALL')}
+                className={`px-2 py-1 text-[10px] font-mono font-bold rounded-lg transition cursor-pointer shrink-0 ${
+                  selectedAlphabet === 'ALL'
+                    ? 'bg-[#7c8d7c] text-white shadow-xs'
+                    : 'bg-gray-100 dark:bg-zinc-800/60 text-gray-600 dark:text-zinc-400 hover:bg-gray-200 dark:hover:bg-zinc-700'
+                }`}
+              >
+                ALL
+              </button>
+              {'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(letter => {
+                const isSelected = selectedAlphabet === letter;
+                return (
+                  <button
+                    key={letter}
+                    type="button"
+                    onClick={() => setSelectedAlphabet(letter)}
+                    className={`w-6 h-6 text-[10px] font-mono font-bold rounded-md transition flex items-center justify-center shrink-0 cursor-pointer ${
+                      isSelected
+                        ? 'bg-emerald-600 dark:bg-emerald-500 text-white shadow-xs ring-1 ring-emerald-400'
+                        : 'bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 text-stone-600 dark:text-stone-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
+                    }`}
+                  >
+                    {letter}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Advanced Sliders / Difficulty sub-filters */}
