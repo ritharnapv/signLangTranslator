@@ -103,3 +103,39 @@ export interface PredictionFeedback {
   landmarksSnapshot?: Array<{ x: number; y: number; z: number }>;
 }
 
+export interface DailyPracticeSign {
+  id: string;
+  char: string;
+  description: string;
+  category: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  visualTip: string;
+  steps: string[];
+  status: 'pending' | 'completed' | 'mastered';
+  accuracy?: number;
+  attempts?: number;
+  feedback?: string;
+  completedAt?: string;
+}
+
+export interface DailyPracticeStats {
+  date: string; // YYYY-MM-DD
+  completedCount: number;
+  totalSigns: number;
+  dailyScore: number; // Avg accuracy %
+  xpEarned: number;
+  isDailyGoalMet: boolean;
+  signs: DailyPracticeSign[];
+}
+
+export interface UserStreakInfo {
+  currentStreak: number;
+  longestStreak: number;
+  lastPracticedDate: string | null;
+  totalPracticedDays: number;
+  totalXp: number;
+  streakFreezeCount: number;
+  level: number;
+  history: Record<string, { completedCount: number; dailyScore: number; xpEarned: number }>; // YYYY-MM-DD -> stats
+}
+

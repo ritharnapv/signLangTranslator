@@ -28,9 +28,12 @@ import {
   Lightbulb,
   ThumbsUp,
   TrendingUp,
-  Compass
+  Compass,
+  Zap
 } from 'lucide-react';
 import { ASLGesture, SessionHistoryItem } from '../types';
+import DailyPracticeSystem from './DailyPracticeSystem';
+
 
 // Connection lines for the hand skeleton
 const SKELETON_CONNECTIONS = [
@@ -430,7 +433,7 @@ export default function GestureLearning({
   customGestures = []
 }: GestureLearningProps) {
   // Navigation & filtering states
-  const [activeTab, setActiveTab] = useState<'modules' | 'arena' | 'quiz'>('modules');
+  const [activeTab, setActiveTab] = useState<'daily' | 'modules' | 'arena' | 'quiz'>('daily');
   const [selectedModule, setSelectedModule] = useState<'all' | 'alphabet' | 'greetings' | 'common' | 'custom'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDifficulty, setSelectedDifficulty] = useState<'all' | 'easy' | 'medium' | 'hard'>('all');
@@ -894,9 +897,26 @@ export default function GestureLearning({
         </div>
       </div>
 
-      {/* TAB SELECTOR FOR LEARNING vs QUIZ */}
+      {/* TAB SELECTOR FOR DAILY PRACTICE vs MODULES vs QUIZ */}
       {activeTab !== 'arena' && (
-        <div className="flex border-b border-[#ecece0] dark:border-[#2d2d32] pb-px">
+        <div className="flex border-b border-[#ecece0] dark:border-[#2d2d32] pb-px overflow-x-auto scrollbar-none">
+          <button
+            onClick={() => {
+              setActiveTab('daily');
+              if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+              }
+              setIsSpeaking(false);
+            }}
+            className={`pb-3 text-xs font-bold tracking-wider uppercase border-b-2 px-4 transition-all flex items-center gap-2 cursor-pointer shrink-0 ${
+              activeTab === 'daily'
+                ? 'border-amber-500 text-amber-700 dark:text-amber-400 font-extrabold'
+                : 'border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-zinc-300'
+            }`}
+          >
+            <Flame className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />
+            Daily Practice Hub
+          </button>
           <button
             onClick={() => {
               setActiveTab('modules');
@@ -905,7 +925,7 @@ export default function GestureLearning({
               }
               setIsSpeaking(false);
             }}
-            className={`pb-3 text-xs font-bold tracking-wider uppercase border-b-2 px-4 transition-all flex items-center gap-2 cursor-pointer ${
+            className={`pb-3 text-xs font-bold tracking-wider uppercase border-b-2 px-4 ml-2 transition-all flex items-center gap-2 cursor-pointer shrink-0 ${
               activeTab === 'modules'
                 ? 'border-[#7c8d7c] text-[#7c8d7c] dark:text-[#a8baa8]'
                 : 'border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-zinc-300'
@@ -923,7 +943,7 @@ export default function GestureLearning({
               }
               setIsSpeaking(false);
             }}
-            className={`pb-3 text-xs font-bold tracking-wider uppercase border-b-2 px-4 ml-2 transition-all flex items-center gap-2 cursor-pointer ${
+            className={`pb-3 text-xs font-bold tracking-wider uppercase border-b-2 px-4 ml-2 transition-all flex items-center gap-2 cursor-pointer shrink-0 ${
               activeTab === 'quiz'
                 ? 'border-[#7c8d7c] text-[#7c8d7c] dark:text-[#a8baa8]'
                 : 'border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-zinc-300'
@@ -935,8 +955,26 @@ export default function GestureLearning({
         </div>
       )}
 
-      {/* 2. CHOOSE CORRESPONDING VIEW LAYOUT (MODULES INDEX OR PRACTICE ARENA) */}
+      {/* 2. CHOOSE CORRESPONDING VIEW LAYOUT (DAILY PRACTICE, MODULES INDEX OR PRACTICE ARENA) */}
       <AnimatePresence mode="wait">
+        
+        {activeTab === 'daily' && (
+          <motion.div
+            key="daily-view"
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.2 }}
+          >
+            <DailyPracticeSystem
+              customGestures={customGestures}
+              cameraActive={cameraActive}
+              onToggleCamera={onToggleCamera}
+              videoRef={videoRef}
+              landmarkCanvasRef={landmarkCanvasRef}
+            />
+          </motion.div>
+        )}
         
         {activeTab === 'modules' && (
           <motion.div

@@ -28,6 +28,7 @@ export interface TranslationDictionary {
   tagline: string;
   liveTranslator: string;
   interactiveLearning: string;
+  dailyPractice: string;
   aslDictionary: string;
   roadmap: string;
   gestureCollector: string;
@@ -85,6 +86,7 @@ export const TRANSLATIONS: Record<UILanguage, TranslationDictionary> = {
     tagline: 'Real-time ASL Sign Language Translation & AI Workspace',
     liveTranslator: 'Live Translator',
     interactiveLearning: 'Interactive Learning',
+    dailyPractice: 'Daily Practice',
     aslDictionary: 'ASL Dictionary',
     roadmap: 'Learning Roadmap',
     gestureCollector: 'Data Collector',
@@ -140,6 +142,7 @@ export const TRANSLATIONS: Record<UILanguage, TranslationDictionary> = {
     tagline: 'रियल-टाइम एएसएल सांकेतिक भाषा अनुवाद और एआई कार्यक्षेत्र',
     liveTranslator: 'लाइव अनुवादक',
     interactiveLearning: 'इंटरएक्टिव लर्निंग',
+    dailyPractice: 'दैनिक अभ्यास',
     aslDictionary: 'एएसएल शब्दकोश',
     roadmap: 'लर्निंग रोडमैप',
     gestureCollector: 'डेटा संग्राहक',
@@ -195,6 +198,7 @@ export const TRANSLATIONS: Record<UILanguage, TranslationDictionary> = {
     tagline: 'ನೈಜ-ಸಮಯದ ಎಎಸ್‌ಎಲ್ ಚಿಹ್ನೆ ಭಾಷೆ ಅನುವಾದ ಮತ್ತು ಎಐ ಕಾರ್ಯಕ್ಷೇತ್ರ',
     liveTranslator: 'ಲೈವ್ ಅನುವಾದಕ',
     interactiveLearning: 'ಇಂಟರ್ಯಾಕ್ಟಿವ್ ಕಲಿಕೆ',
+    dailyPractice: 'ದೈನಂದಿನ ಅಭ್ಯಾಸ',
     aslDictionary: 'ಎಎಸ್‌ಎಲ್ ನಿಘಂಟು',
     roadmap: 'ಕಲಿಕೆಯ ಮಾರ್ಗಸೂಚಿ',
     gestureCollector: 'ಡೇಟಾ ಸಂಗ್ರಾಹಕ',
@@ -250,6 +254,7 @@ export const TRANSLATIONS: Record<UILanguage, TranslationDictionary> = {
     tagline: 'തത്സമയ എഎസ്എൽ ആംഗ്യഭാഷാ പരിഭാഷയും എഐ വർക്ക്സ്പേസും',
     liveTranslator: 'ലൈവ് പരിഭാഷകൻ',
     interactiveLearning: 'ഇന്ററാക്ടീവ് പഠനം',
+    dailyPractice: 'ദിനചര്യ പരിശീലനം',
     aslDictionary: 'എഎസ്എൽ നിഘണ്ടു',
     roadmap: 'പഠന റോഡ്മാപ്പ്',
     gestureCollector: 'ഡാറ്റ ശേഖരണം',
@@ -305,6 +310,7 @@ export const TRANSLATIONS: Record<UILanguage, TranslationDictionary> = {
     tagline: 'நேரலை ASL சைகை மொழிபெயர்ப்பு மற்றும் AI பணிப்பகுதி',
     liveTranslator: 'நேரலை மொழிபெயர்ப்பாளர்',
     interactiveLearning: 'ஊடாடும் கற்றல்',
+    dailyPractice: 'தினசரி பயிற்சி',
     aslDictionary: 'ASL அகராதி',
     roadmap: 'கற்றல் பாதை',
     gestureCollector: 'தரவு சேகரிப்பான்',

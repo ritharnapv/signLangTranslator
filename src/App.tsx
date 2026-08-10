@@ -3186,6 +3186,17 @@ export default function App() {
           </button>
           <button
             onClick={() => { setActiveTab('learning'); setMobileMenuOpen(false); }}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all flex items-center gap-1.5 ${
+              activeTab === 'learning'
+                ? "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white shadow-sm"
+                : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
+            }`}
+          >
+            <Flame className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />
+            <span>{t('dailyPractice')}</span>
+          </button>
+          <button
+            onClick={() => { setActiveTab('learning'); setMobileMenuOpen(false); }}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
               activeTab === 'learning'
                 ? "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white shadow-sm"
