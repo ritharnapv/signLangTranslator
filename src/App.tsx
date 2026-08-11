@@ -18,6 +18,7 @@ import GestureReplaySystem from './components/GestureReplaySystem';
 import PredictionCorrectionModal from './components/PredictionCorrectionModal';
 import PredictionFeedbackManager from './components/PredictionFeedbackManager';
 import RestApiDocs from './components/RestApiDocs';
+import VideoTranslation from './components/VideoTranslation';
 import { ensureBaselineModelCached } from './lib/offlineModelCache';
 import { getOfflineSyncQueue, syncOfflineDataToCloud } from './lib/offlineSync';
 import { getLocalAutoBackupSettings, createCloudBackupSnapshot } from './lib/cloudAutoBackup';
@@ -3155,6 +3156,17 @@ export default function App() {
             {t('liveTranslator')}
           </button>
           <button
+            onClick={() => { setActiveTab('video_translator'); setMobileMenuOpen(false); }}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all flex items-center gap-1.5 ${
+              activeTab === 'video_translator'
+                ? "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white shadow-sm"
+                : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
+            }`}
+          >
+            <Film className="w-3.5 h-3.5 text-emerald-500" />
+            <span>{t('videoTranslator')}</span>
+          </button>
+          <button
             onClick={() => { setActiveTab('conversation'); setMobileMenuOpen(false); }}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
               activeTab === 'conversation'
@@ -5704,6 +5716,16 @@ export default function App() {
             </div>
 
           </div>
+        )}
+
+        {/* Video Translation Tab View */}
+        {activeTab === 'video_translator' && (
+          <VideoTranslation
+            customGestures={customGestures}
+            onLogTranslation={(inputText, translatedText, targetLang) => {
+              logTranslationEvent(inputText, translatedText, targetLang);
+            }}
+          />
         )}
 
         {/* Practice Arena & Interactive Learning Tab view */}
