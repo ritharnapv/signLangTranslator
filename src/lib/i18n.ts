@@ -28,6 +28,7 @@ export interface TranslationDictionary {
   tagline: string;
   liveTranslator: string;
   videoTranslator: string;
+  liveMeeting: string;
   interactiveLearning: string;
   dailyPractice: string;
   aslDictionary: string;
@@ -87,6 +88,7 @@ export const TRANSLATIONS: Record<UILanguage, TranslationDictionary> = {
     tagline: 'Real-time ASL Sign Language Translation & AI Workspace',
     liveTranslator: 'Live Translator',
     videoTranslator: 'Video Translator',
+    liveMeeting: 'Live Meeting Subtitles',
     interactiveLearning: 'Interactive Learning',
     dailyPractice: 'Daily Practice',
     aslDictionary: 'ASL Dictionary',
@@ -144,6 +146,7 @@ export const TRANSLATIONS: Record<UILanguage, TranslationDictionary> = {
     tagline: 'रियल-टाइम एएसएल सांकेतिक भाषा अनुवाद और एआई कार्यक्षेत्र',
     liveTranslator: 'लाइव अनुवादक',
     videoTranslator: 'वीडियो अनुवादक',
+    liveMeeting: 'लाइव मीटिंग सबटाइटल',
     interactiveLearning: 'इंटरएक्टिव लर्निंग',
     dailyPractice: 'दैनिक अभ्यास',
     aslDictionary: 'एएसएल शब्दकोश',
@@ -201,6 +204,7 @@ export const TRANSLATIONS: Record<UILanguage, TranslationDictionary> = {
     tagline: 'ನೈಜ-ಸಮಯದ ಎಎಸ್‌ಎಲ್ ಚಿಹ್ನೆ ಭಾಷೆ ಅನುವಾದ ಮತ್ತು ಎಐ ಕಾರ್ಯಕ್ಷೇತ್ರ',
     liveTranslator: 'ಲೈವ್ ಅನುವಾದಕ',
     videoTranslator: 'ವೀಡಿಯೊ ಅನುವಾದಕ',
+    liveMeeting: 'ಲೈವ್ ಮೀಟಿಂಗ್ ಉಪಶೀರ್ಷಿಕೆಗಳು',
     interactiveLearning: 'ಇಂಟರ್ಯಾಕ್ಟಿವ್ ಕಲಿಕೆ',
     dailyPractice: 'ದೈನಂದಿನ ಅಭ್ಯಾಸ',
     aslDictionary: 'ಎಎಸ್‌ಎಲ್ ನಿಘಂಟು',
@@ -258,6 +262,7 @@ export const TRANSLATIONS: Record<UILanguage, TranslationDictionary> = {
     tagline: 'തത്സമയ എഎസ്എൽ ആംഗ്യഭാഷാ പരിഭാഷയും എഐ വർക്ക്സ്പേസും',
     liveTranslator: 'ലൈവ് പരിഭാഷകൻ',
     videoTranslator: 'വീഡിയോ പരിഭാഷകൻ',
+    liveMeeting: 'ലൈവ് മീറ്റിംഗ് സബ്‌ടൈറ്റിലുകൾ',
     interactiveLearning: 'ഇന്ററാക്ടീവ് പഠനം',
     dailyPractice: 'ദിനചര്യ പരിശീലനം',
     aslDictionary: 'എഎസ്എൽ നിഘണ്ടു',
@@ -315,6 +320,7 @@ export const TRANSLATIONS: Record<UILanguage, TranslationDictionary> = {
     tagline: 'நேரலை ASL சைகை மொழிபெயர்ப்பு மற்றும் AI பணிப்பகுதி',
     liveTranslator: 'நேரலை மொழிபெயர்ப்பாளர்',
     videoTranslator: 'வீடியோ மொழிபெயர்ப்பாளர்',
+    liveMeeting: 'நேரலை கூட்ட துணைத்தலைப்புகள்',
     interactiveLearning: 'ஊடாடும் கற்றல்',
     dailyPractice: 'தினசரி பயிற்சி',
     aslDictionary: 'ASL அகராதி',
