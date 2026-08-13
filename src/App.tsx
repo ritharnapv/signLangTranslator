@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ASLGesture, TranslationResult, SessionHistoryItem, CollectedSample, TranslationLogItem } from './types';
+import { ASLGesture, TranslationResult, SessionHistoryItem, CollectedSample, TranslationLogItem, SavedPersonalModel } from './types';
 import { motion } from 'motion/react';
 import TimelineRoadmap from './components/TimelineRoadmap';
 import SignDictionary from './components/SignDictionary';
@@ -524,6 +524,40 @@ export default function App() {
   const [trainedClientModel, setTrainedClientModel] = useState<tf.LayersModel | null>(null);
   const [trainedClasses, setTrainedClasses] = useState<string[]>([]);
   const [predictionSource, setPredictionSource] = useState<'simulated' | 'tensorflow' | 'heuristics' | 'heuristics-numbers'>('heuristics');
+
+  // Auto-restore active personal model from IndexedDB on startup
+  useEffect(() => {
+    const restoreActivePersonalModel = async () => {
+      try {
+        const activeId = localStorage.getItem('asl_active_model_id');
+        const savedModelsStr = localStorage.getItem('asl_saved_personal_models');
+        
+        let storageKey = 'asl_trained_mlp_model';
+        let classes = ['A', 'B', 'C', 'HELLO', 'LOVE', 'YES', 'NO', 'HELP', 'THANK YOU', 'PLEASE'];
+
+        if (savedModelsStr && activeId) {
+          const savedModels: SavedPersonalModel[] = JSON.parse(savedModelsStr);
+          const activeItem = savedModels.find(m => m.id === activeId || m.isActive);
+          if (activeItem) {
+            storageKey = activeItem.storageKey;
+            classes = activeItem.classes;
+          }
+        }
+
+        const key = storageKey.startsWith('indexeddb://') ? storageKey : `indexeddb://${storageKey}`;
+        const loadedModel = await tf.loadLayersModel(key);
+        
+        setTrainedClientModel(loadedModel);
+        setTrainedClasses(classes);
+        setPredictionSource('tensorflow');
+        console.log(`Auto-restored active personal gesture model (${key}) into live translator.`);
+      } catch (err) {
+        console.log("No custom personal gesture model restored from IndexedDB on startup.");
+      }
+    };
+
+    restoreActivePersonalModel();
+  }, []);
   const [selectedSignLanguage, setSelectedSignLanguage] = useState<'ASL' | 'ISL'>(() => {
     try {
       const saved = localStorage.getItem('asl_sign_language_system');
@@ -6363,10 +6397,21 @@ export default function App() {
         {activeTab === 'trainer' && (
           <ModelTrainer 
             collectedSamples={collectedSamples}
-            onRegisterTrainedModel={(model, classes) => {
+            customGestures={customGestures}
+            currentUser={currentUser}
+            onRegisterTrainedModel={(model, classes, modelId) => {
               setTrainedClientModel(model);
               setTrainedClasses(classes);
               setPredictionSource('tensorflow');
+              if (modelId) {
+                localStorage.setItem('asl_active_model_id', modelId);
+              }
+            }}
+            onAddCustomGesture={(newG) => {
+              setCustomGestures(prev => [newG, ...prev]);
+            }}
+            onAddCollectedSample={(sample) => {
+              setCollectedSamples(prev => [sample, ...prev]);
             }}
           />
         )}

@@ -139,3 +139,25 @@ export interface UserStreakInfo {
   history: Record<string, { completedCount: number; dailyScore: number; xpEarned: number }>; // YYYY-MM-DD -> stats
 }
 
+export interface SavedPersonalModel {
+  id: string;
+  name: string;
+  description: string;
+  createdAt: string;
+  updatedAt?: string;
+  epochs: number;
+  accuracy: number;
+  loss: number;
+  valAccuracy?: number;
+  valLoss?: number;
+  sampleCount: number;
+  classes: string[];
+  architecture: string;
+  storageKey: string;
+  isActive: boolean;
+  tags?: string[];
+  authorUid?: string;
+  authorEmail?: string;
+}
+
+
