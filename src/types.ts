@@ -3,17 +3,25 @@ export type SignLanguageSystem = 'ASL' | 'ISL' | 'BSL' | string;
 export interface ASLGesture {
   id: string;
   char: string;
+  hindiChar?: string;
+  englishTitle?: string;
   videoUrl?: string;
+  imageUrl?: string;
   description: string;
-  category: 'alphabet' | 'greeting' | 'common' | 'custom' | 'isl-alphabet' | 'isl-greeting' | 'isl-common' | 'isl-number' | string;
+  category: 'alphabet' | 'greeting' | 'common' | 'custom' | 'isl-alphabet' | 'isl-greeting' | 'isl-common' | 'isl-number' | 'isl-daily-phrase' | 'isl-family' | 'isl-food' | 'isl-emotion' | 'isl-health-emergency' | 'isl-time' | 'isl-culture-places' | string;
   signLanguage?: SignLanguageSystem;
   isTwoHanded?: boolean;
   visualTip: string;
   meaning?: string;
+  culturalContext?: string;
+  facialExpression?: string;
+  movementType?: string;
+  movementDescription?: string;
   synonyms?: string[];
   difficulty?: 'easy' | 'medium' | 'hard';
   steps?: string[];
   grammaticalRole?: string;
+  tags?: string[];
 }
 
 export interface TranslationResult {
