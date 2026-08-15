@@ -1,6 +1,6 @@
 {
   "name": "Sign Language Translator",
-  "description": "Real-time sign language translation for live video meetings with webcam subtitles, personalized gesture model training, and a complete Indian Sign Language (ISL) & ASL dictionary with interactive video demonstrations, categories, meanings, and search.",
+  "description": "Real-time sign language translation for live video meetings with webcam subtitles, personalized gesture model training, complete Indian Sign Language (ISL) dictionary with HD videos, and an interactive Learning Dashboard with daily structured lessons, progress analytics, custom practice goals, and completion badges.",
   "requestFramePermissions": ["camera"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

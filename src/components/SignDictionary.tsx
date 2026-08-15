@@ -26,7 +26,8 @@ import {
   Hand,
   Globe,
   Compass,
-  X
+  X,
+  Trophy
 } from 'lucide-react';
 import { COMPLETE_ISL_DICTIONARY, ISL_CATEGORIES, ISLSignItem } from '../data/islDictionaryData';
 import ISLVideoDemonstrator from './ISLVideoDemonstrator';
@@ -258,6 +259,7 @@ interface SignDictionaryProps {
   customGestures?: ASLGesture[];
   activeSignLanguage?: string;
   onSignLanguageChange?: (lang: string) => void;
+  onNavigateToLearningDashboard?: () => void;
 }
 
 export default function SignDictionary({ 
@@ -265,7 +267,8 @@ export default function SignDictionary({
   activeGesture, 
   customGestures = [],
   activeSignLanguage = 'ISL',
-  onSignLanguageChange
+  onSignLanguageChange,
+  onNavigateToLearningDashboard
 }: SignDictionaryProps) {
   // Primary state variables
   const [activeSignLanguageSystem, setActiveSignLanguageSystem] = useState<string>(activeSignLanguage || 'ISL');
@@ -533,6 +536,17 @@ export default function SignDictionary({
               <GraduationCap className="w-4 h-4" />
               <span>Flashcards & Quiz</span>
             </button>
+
+            {/* Learning Dashboard Link */}
+            {onNavigateToLearningDashboard && (
+              <button
+                onClick={onNavigateToLearningDashboard}
+                className="flex items-center gap-2 px-4 py-2.5 bg-orange-600/90 hover:bg-orange-500 border border-orange-400/40 text-white text-xs font-bold rounded-2xl shadow-md transition-all cursor-pointer transform active:scale-95"
+              >
+                <Trophy className="w-4 h-4 text-amber-300" />
+                <span>Learning Dashboard</span>
+              </button>
+            )}
 
             {/* Language System Switcher */}
             <div className="flex items-center bg-black/60 p-1 rounded-2xl border border-emerald-700/50">

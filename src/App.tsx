@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import TimelineRoadmap from './components/TimelineRoadmap';
 import SignDictionary from './components/SignDictionary';
 import GestureLearning from './components/GestureLearning';
+import LearningDashboard from './components/LearningDashboard';
 import DatasetManagement from './components/DatasetManagement';
 import ModelTrainer from './components/ModelTrainer';
 import UserAuth from './components/UserAuth';
@@ -88,7 +89,9 @@ import {
   Zap,
   ShieldCheck,
   Tag,
-  Film
+  Film,
+  Trophy,
+  Target
 } from 'lucide-react';
 
 // Production environment configuration helpers
@@ -288,7 +291,7 @@ export default function App() {
     handleUpdateThemeSettings({ themeMode: nextMode });
   };
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'learning' | 'dictionary' | 'roadmap' | 'collector' | 'datasets' | 'labeler' | 'replay' | 'corrections' | 'trainer' | 'files' | 'profile' | 'analytics' | 'conversation' | 'offline' | 'admin' | 'api-docs'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'learning_dashboard' | 'learning' | 'dictionary' | 'roadmap' | 'collector' | 'datasets' | 'labeler' | 'replay' | 'corrections' | 'trainer' | 'files' | 'profile' | 'analytics' | 'conversation' | 'offline' | 'admin' | 'api-docs'>('dashboard');
 
   // Prediction Correction Modal State
   const [isCorrectionModalOpen, setIsCorrectionModalOpen] = useState<boolean>(false);
@@ -3243,6 +3246,18 @@ export default function App() {
             {t('aslDictionary')}
           </button>
           <button
+            onClick={() => { setActiveTab('learning_dashboard'); setMobileMenuOpen(false); }}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all flex items-center gap-1.5 ${
+              activeTab === 'learning_dashboard'
+                ? "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white shadow-sm ring-1 ring-[#7c8d7c]"
+                : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
+            }`}
+            id="tab-learning-dashboard-btn"
+          >
+            <Trophy className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />
+            <span>{t('learningDashboard')}</span>
+          </button>
+          <button
             onClick={() => { setActiveTab('learning'); setMobileMenuOpen(false); }}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all flex items-center gap-1.5 ${
               activeTab === 'learning'
@@ -3250,18 +3265,8 @@ export default function App() {
                 : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
             }`}
           >
-            <Flame className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />
+            <Flame className="w-3.5 h-3.5 text-orange-500" />
             <span>{t('dailyPractice')}</span>
-          </button>
-          <button
-            onClick={() => { setActiveTab('learning'); setMobileMenuOpen(false); }}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
-              activeTab === 'learning'
-                ? "bg-[#7c8d7c] dark:bg-[#4a5c4e] text-white shadow-sm"
-                : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
-            }`}
-          >
-            {t('interactiveLearning')}
           </button>
           <button
             onClick={() => { setActiveTab('roadmap'); setMobileMenuOpen(false); }}
@@ -3628,6 +3633,7 @@ export default function App() {
           <div className="grid grid-cols-2 gap-2">
             {[
               { id: 'dashboard', label: t('liveTranslator'), icon: Camera },
+              { id: 'learning_dashboard', label: t('learningDashboard'), icon: Trophy },
               { id: 'conversation', label: t('continuousConversation'), icon: MessageSquare },
               { id: 'analytics', label: t('analytics'), icon: Activity },
               { id: 'dictionary', label: t('aslDictionary'), icon: BookOpen },
@@ -5791,6 +5797,16 @@ export default function App() {
           />
         )}
 
+        {/* Learning Dashboard: Daily Lessons, Progress, Goals, Badges */}
+        {activeTab === 'learning_dashboard' && (
+          <LearningDashboard
+            onNavigateToDictionary={() => setActiveTab('dictionary')}
+            onNavigateToCamera={() => setActiveTab('learning')}
+            cameraActive={cameraActive}
+            onToggleCamera={toggleCamera}
+          />
+        )}
+
         {/* Practice Arena & Interactive Learning Tab view */}
         {activeTab === 'learning' && (
           <GestureLearning
@@ -5822,6 +5838,7 @@ export default function App() {
                   localStorage.setItem('asl_sign_language_system', lang);
                 }
               }}
+              onNavigateToLearningDashboard={() => setActiveTab('learning_dashboard')}
               onSelectGesture={(gesture) => {
                 setSelectedGesture(gesture);
                 // Switch tab back to dashboard for action practice

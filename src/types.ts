@@ -168,4 +168,108 @@ export interface SavedPersonalModel {
   authorEmail?: string;
 }
 
+export interface LessonSignDetail {
+  id: string;
+  char: string;
+  hindiChar?: string;
+  englishTitle: string;
+  meaning: string;
+  visualTip: string;
+  description: string;
+  steps: string[];
+  isTwoHanded?: boolean;
+  culturalNote?: string;
+  difficulty?: 'easy' | 'medium' | 'hard';
+}
+
+export interface LessonQuizQuestion {
+  id: string;
+  question: string;
+  options: string[];
+  correctIndex: number;
+  explanation: string;
+  signChar?: string;
+}
+
+export interface LearningLesson {
+  id: string;
+  trackId: string;
+  dayNumber: number;
+  title: string;
+  subtitle: string;
+  description: string;
+  durationMin: number;
+  xpReward: number;
+  difficulty: 'beginner' | 'intermediate' | 'advanced';
+  signLanguage: 'ISL' | 'ASL' | 'BOTH';
+  signs: LessonSignDetail[];
+  quizQuestions: LessonQuizQuestion[];
+  culturalFact?: string;
+  completed: boolean;
+  score?: number;
+  stars?: number; // 1 to 3
+  completedAt?: string;
+  unlocked?: boolean;
+}
+
+export interface LearningTrack {
+  id: string;
+  title: string;
+  description: string;
+  level: 'Beginner' | 'Intermediate' | 'Advanced';
+  icon: string;
+  signLanguage: 'ISL' | 'ASL' | 'BOTH';
+  color: string;
+  totalLessons: number;
+  completedLessons: number;
+}
+
+export interface PracticeGoal {
+  id: string;
+  title: string;
+  description: string;
+  type: 'daily_signs' | 'daily_time' | 'daily_accuracy' | 'weekly_lessons' | 'weekly_xp' | 'streak_target';
+  targetValue: number;
+  currentValue: number;
+  unit: string;
+  period: 'daily' | 'weekly';
+  isCompleted: boolean;
+  xpReward: number;
+  iconName: string;
+}
+
+export interface CompletionBadge {
+  id: string;
+  title: string;
+  description: string;
+  category: 'streak' | 'mastery' | 'accuracy' | 'curriculum' | 'speed' | 'culture';
+  icon: string;
+  tier: 'bronze' | 'silver' | 'gold' | 'diamond';
+  requirement: string;
+  currentProgress: number;
+  maxProgress: number;
+  unlocked: boolean;
+  unlockedAt?: string;
+  xpValue: number;
+  flavorText?: string;
+}
+
+export interface LearningDashboardStats {
+  totalXp: number;
+  level: number;
+  levelTitle: string;
+  nextLevelXp: number;
+  currentLevelXpProgress: number;
+  currentStreak: number;
+  bestStreak: number;
+  totalPracticedDays: number;
+  signsMasteredCount: number;
+  totalLessonsCompleted: number;
+  overallAccuracy: number;
+  practiceMinutesThisWeek: number;
+  streakFreezeAvailable: number;
+  lastPracticedDate: string | null;
+}
+
+
 
