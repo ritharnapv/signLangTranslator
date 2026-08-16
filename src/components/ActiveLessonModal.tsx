@@ -33,6 +33,7 @@ interface ActiveLessonModalProps {
   onCompleteLesson: (lessonId: string, score: number, stars: number, xpEarned: number) => void;
   cameraActive?: boolean;
   onToggleCamera?: () => void;
+  onLaunchEvaluator?: (signName: string, lang?: 'ASL' | 'ISL') => void;
 }
 
 export default function ActiveLessonModal({
@@ -41,7 +42,8 @@ export default function ActiveLessonModal({
   onClose,
   onCompleteLesson,
   cameraActive = false,
-  onToggleCamera
+  onToggleCamera,
+  onLaunchEvaluator
 }: ActiveLessonModalProps) {
   // Modal Stages: 'intro' -> 'study' -> 'practice' -> 'quiz' -> 'summary'
   const [stage, setStage] = useState<'study' | 'quiz' | 'summary'>('study');
@@ -287,10 +289,20 @@ export default function ActiveLessonModal({
 
                 {/* Practice Check with Camera or Verification */}
                 <div className="w-full space-y-2">
+                  {onLaunchEvaluator && (
+                    <button
+                      onClick={() => onLaunchEvaluator(currentSign.char, lesson.signLanguage === 'ASL' ? 'ASL' : 'ISL')}
+                      className="w-full py-2.5 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-98 text-white rounded-xl text-xs font-black transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
+                      <span>Deep Biometric Evaluation (AI Coach)</span>
+                    </button>
+                  )}
+
                   <button
                     onClick={handleVerifyPosture}
                     disabled={isSimulatingCheck}
-                    className="w-full py-2.5 px-4 bg-orange-600 hover:bg-orange-700 active:scale-98 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    className="w-full py-2 px-4 bg-orange-600 hover:bg-orange-700 active:scale-98 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                   >
                     <Camera className="w-4 h-4" />
                     <span>{isSimulatingCheck ? 'Evaluating Posture...' : 'Verify My Posture'}</span>

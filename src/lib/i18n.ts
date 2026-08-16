@@ -81,6 +81,8 @@ export interface TranslationDictionary {
   developerMode: string;
   activeModel: string;
   customNeuralNet: string;
+  signEvaluator: string;
+  evaluateGesture: string;
 }
 
 export const TRANSLATIONS: Record<UILanguage, TranslationDictionary> = {
@@ -93,6 +95,8 @@ export const TRANSLATIONS: Record<UILanguage, TranslationDictionary> = {
     interactiveLearning: 'Interactive Learning',
     dailyPractice: 'Daily Practice',
     learningDashboard: 'Learning Dashboard',
+    signEvaluator: 'Sign Evaluator',
+    evaluateGesture: 'Evaluate Gesture',
     aslDictionary: 'ASL Dictionary',
     roadmap: 'Learning Roadmap',
     gestureCollector: 'Data Collector',
@@ -152,6 +156,8 @@ export const TRANSLATIONS: Record<UILanguage, TranslationDictionary> = {
     interactiveLearning: 'इंटरएक्टिव लर्निंग',
     dailyPractice: 'दैनिक अभ्यास',
     learningDashboard: 'लर्निंग डैशबोर्ड',
+    signEvaluator: 'साइन मूल्यांकनकर्ता',
+    evaluateGesture: 'इशारा मूल्यांकन',
     aslDictionary: 'एएसएल शब्दकोश',
     roadmap: 'लर्निंग रोडमैप',
     gestureCollector: 'डेटा संग्राहक',
@@ -211,6 +217,8 @@ export const TRANSLATIONS: Record<UILanguage, TranslationDictionary> = {
     interactiveLearning: 'ಇಂಟರ್ಯಾಕ್ಟಿವ್ ಕಲಿಕೆ',
     dailyPractice: 'ದೈನಂದಿನ ಅಭ್ಯಾಸ',
     learningDashboard: 'ಕಲಿಕೆ ಡ್ಯಾಶ್‌ಬೋರ್ಡ್',
+    signEvaluator: 'ಸಂಜ್ಞೆ ಮೌಲ್ಯಮಾಪಕ',
+    evaluateGesture: 'ಸಂಜ್ಞೆ ಮೌಲ್ಯಮಾಪನ',
     aslDictionary: 'ಎಎಸ್‌ಎಲ್ ನಿಘಂಟು',
     roadmap: 'ಕಲಿಕೆಯ ಮಾರ್ಗಸೂಚಿ',
     gestureCollector: 'ಡೇಟಾ ಸಂಗ್ರಾಹಕ',
@@ -270,6 +278,8 @@ export const TRANSLATIONS: Record<UILanguage, TranslationDictionary> = {
     interactiveLearning: 'ഇന്ററാക്ടീവ് പഠനം',
     dailyPractice: 'ദിനചര്യ പരിശീലനം',
     learningDashboard: 'പഠന ഡാഷ്‌ബോർഡ്',
+    signEvaluator: 'സൈൻ ഇവാലുവേറ്റർ',
+    evaluateGesture: 'ആംഗ്യം വിലയിരുത്തുക',
     aslDictionary: 'എഎസ്എൽ നിഘണ്ടു',
     roadmap: 'പഠന റോഡ്മാപ്പ്',
     gestureCollector: 'ഡാറ്റ ശേഖരണം',
@@ -329,6 +339,8 @@ export const TRANSLATIONS: Record<UILanguage, TranslationDictionary> = {
     interactiveLearning: 'ஊடாடும் கற்றல்',
     dailyPractice: 'தினசரி பயிற்சி',
     learningDashboard: 'கற்றல் டாஷ்போர்டு',
+    signEvaluator: 'சைகை மதிப்பீட்டாளர்',
+    evaluateGesture: 'சைகையை மதிப்பிடு',
     aslDictionary: 'ASL அகராதி',
     roadmap: 'கற்றல் பாதை',
     gestureCollector: 'தரவு சேகரிப்பான்',

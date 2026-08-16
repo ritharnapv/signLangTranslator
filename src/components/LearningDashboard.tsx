@@ -55,13 +55,15 @@ interface LearningDashboardProps {
   onNavigateToCamera?: () => void;
   cameraActive?: boolean;
   onToggleCamera?: () => void;
+  onOpenEvaluator?: (signName: string, lang?: 'ASL' | 'ISL') => void;
 }
 
 export default function LearningDashboard({
   onNavigateToDictionary,
   onNavigateToCamera,
   cameraActive = false,
-  onToggleCamera
+  onToggleCamera,
+  onOpenEvaluator
 }: LearningDashboardProps) {
   // Navigation & Sub-views: 'all' | 'lessons' | 'progress' | 'goals' | 'badges'
   const [activeSection, setActiveSection] = useState<'overview' | 'lessons' | 'progress' | 'goals' | 'badges'>('overview');
@@ -1053,6 +1055,12 @@ export default function LearningDashboard({
           onCompleteLesson={handleCompleteLesson}
           cameraActive={cameraActive}
           onToggleCamera={onToggleCamera}
+          onLaunchEvaluator={(signName, lang) => {
+            setIsLessonModalOpen(false);
+            if (onOpenEvaluator) {
+              onOpenEvaluator(signName, lang);
+            }
+          }}
         />
       )}
 

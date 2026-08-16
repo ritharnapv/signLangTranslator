@@ -271,5 +271,65 @@ export interface LearningDashboardStats {
   lastPracticedDate: string | null;
 }
 
+export interface SignMistake {
+  id: string;
+  finger: 'Thumb' | 'Index' | 'Middle' | 'Ring' | 'Pinky' | 'Wrist' | 'Palm' | 'Both Hands';
+  jointIndices: number[];
+  severity: 'critical' | 'moderate' | 'minor';
+  title: string;
+  description: string;
+  expectedState: string;
+  observedState: string;
+  correctionAction: string;
+  correctionDirection?: 'up' | 'down' | 'left' | 'right' | 'inward' | 'outward' | 'curve' | 'straighten';
+}
+
+export interface JointStatus {
+  jointIndex: number;
+  name: string;
+  status: 'correct' | 'warning' | 'error';
+  errorDistance: number;
+  expectedPos?: { x: number; y: number; z?: number };
+  actualPos?: { x: number; y: number; z?: number };
+  feedback?: string;
+}
+
+export interface SignEvaluationResult {
+  id: string;
+  timestamp: string;
+  targetSign: string;
+  detectedSign: string;
+  signLanguage: 'ASL' | 'ISL' | string;
+  overallScore: number; // 0 - 100
+  grade: 'Mastered' | 'Excellent' | 'Good' | 'Needs Practice' | 'Incorrect';
+  isCorrect: boolean;
+  subScores: {
+    fingerExtension: number; // 0 - 100
+    thumbOpposition: number; // 0 - 100
+    palmOrientation: number; // 0 - 100
+    jointCurvature: number;  // 0 - 100
+    abductionSpread: number; // 0 - 100
+  };
+  mistakes: SignMistake[];
+  jointStatuses: JointStatus[];
+  suggestions: string[];
+  correctiveChecklist: Array<{
+    id: string;
+    label: string;
+    completed: boolean;
+    tip: string;
+    arrowGuide?: { fromJoint: number; toJoint: number; direction: string };
+  }>;
+  referenceLandmarks?: Array<{ x: number; y: number; z?: number }>;
+  userLandmarks?: Array<{ x: number; y: number; z?: number }>;
+  explanation: string;
+  aiVisionFeedback?: {
+    explanation: string;
+    lightingQuality: 'good' | 'fair' | 'poor';
+    handVisibility: 'clear' | 'partially_occluded' | 'out_of_frame';
+  };
+}
+
+
 
 

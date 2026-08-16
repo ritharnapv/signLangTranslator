@@ -21,6 +21,7 @@ import PredictionFeedbackManager from './components/PredictionFeedbackManager';
 import RestApiDocs from './components/RestApiDocs';
 import VideoTranslation from './components/VideoTranslation';
 import LiveMeetingTranslator from './components/LiveMeetingTranslator';
+import SignEvaluatorView from './components/SignEvaluatorView';
 import { ensureBaselineModelCached } from './lib/offlineModelCache';
 import { getOfflineSyncQueue, syncOfflineDataToCloud } from './lib/offlineSync';
 import { getLocalAutoBackupSettings, createCloudBackupSnapshot } from './lib/cloudAutoBackup';
@@ -291,7 +292,8 @@ export default function App() {
     handleUpdateThemeSettings({ themeMode: nextMode });
   };
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'learning_dashboard' | 'learning' | 'dictionary' | 'roadmap' | 'collector' | 'datasets' | 'labeler' | 'replay' | 'corrections' | 'trainer' | 'files' | 'profile' | 'analytics' | 'conversation' | 'offline' | 'admin' | 'api-docs'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'learning_dashboard' | 'learning' | 'dictionary' | 'evaluator' | 'roadmap' | 'collector' | 'datasets' | 'labeler' | 'replay' | 'corrections' | 'trainer' | 'files' | 'profile' | 'analytics' | 'conversation' | 'offline' | 'admin' | 'api-docs' | 'video_translator' | 'live_meeting'>('dashboard');
+  const [evaluatorInitialSign, setEvaluatorInitialSign] = useState<string>('A');
 
   // Prediction Correction Modal State
   const [isCorrectionModalOpen, setIsCorrectionModalOpen] = useState<boolean>(false);
@@ -3258,6 +3260,18 @@ export default function App() {
             <span>{t('learningDashboard')}</span>
           </button>
           <button
+            onClick={() => { setActiveTab('evaluator'); setMobileMenuOpen(false); }}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold tracking-wide transition-all flex items-center gap-1.5 ${
+              activeTab === 'evaluator'
+                ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-sm ring-1 ring-emerald-400"
+                : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
+            }`}
+            id="tab-evaluator-btn"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400 animate-pulse" />
+            <span>AI Coach (Evaluator)</span>
+          </button>
+          <button
             onClick={() => { setActiveTab('learning'); setMobileMenuOpen(false); }}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all flex items-center gap-1.5 ${
               activeTab === 'learning'
@@ -3634,6 +3648,7 @@ export default function App() {
             {[
               { id: 'dashboard', label: t('liveTranslator'), icon: Camera },
               { id: 'learning_dashboard', label: t('learningDashboard'), icon: Trophy },
+              { id: 'evaluator', label: 'AI Coach Evaluator', icon: Target },
               { id: 'conversation', label: t('continuousConversation'), icon: MessageSquare },
               { id: 'analytics', label: t('analytics'), icon: Activity },
               { id: 'dictionary', label: t('aslDictionary'), icon: BookOpen },
@@ -5804,6 +5819,24 @@ export default function App() {
             onNavigateToCamera={() => setActiveTab('learning')}
             cameraActive={cameraActive}
             onToggleCamera={toggleCamera}
+            onOpenEvaluator={(signName, lang) => {
+              setEvaluatorInitialSign(signName);
+              if (lang) setSelectedSignLanguage(lang);
+              setActiveTab('evaluator');
+            }}
+          />
+        )}
+
+        {/* Sign Evaluator & Biometric Gesture Accuracy AI Coach */}
+        {activeTab === 'evaluator' && (
+          <SignEvaluatorView
+            initialSign={evaluatorInitialSign}
+            signLanguage={selectedSignLanguage}
+            availableSigns={customGestures}
+            onNavigateToDashboard={() => setActiveTab('learning_dashboard')}
+            onCompletePractice={(score, signName) => {
+              addLearningPracticeLog(signName, score, score >= 85 ? 'happy' : 'neutral');
+            }}
           />
         )}
 
@@ -5839,6 +5872,11 @@ export default function App() {
                 }
               }}
               onNavigateToLearningDashboard={() => setActiveTab('learning_dashboard')}
+              onOpenEvaluator={(signName, lang) => {
+                setEvaluatorInitialSign(signName);
+                if (lang) setSelectedSignLanguage(lang);
+                setActiveTab('evaluator');
+              }}
               onSelectGesture={(gesture) => {
                 setSelectedGesture(gesture);
                 // Switch tab back to dashboard for action practice

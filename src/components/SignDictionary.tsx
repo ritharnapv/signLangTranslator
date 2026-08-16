@@ -260,6 +260,7 @@ interface SignDictionaryProps {
   activeSignLanguage?: string;
   onSignLanguageChange?: (lang: string) => void;
   onNavigateToLearningDashboard?: () => void;
+  onOpenEvaluator?: (signName: string, lang?: 'ASL' | 'ISL') => void;
 }
 
 export default function SignDictionary({ 
@@ -268,7 +269,8 @@ export default function SignDictionary({
   customGestures = [],
   activeSignLanguage = 'ISL',
   onSignLanguageChange,
-  onNavigateToLearningDashboard
+  onNavigateToLearningDashboard,
+  onOpenEvaluator
 }: SignDictionaryProps) {
   // Primary state variables
   const [activeSignLanguageSystem, setActiveSignLanguageSystem] = useState<string>(activeSignLanguage || 'ISL');
@@ -945,18 +947,29 @@ export default function SignDictionary({
                 </div>
               )}
 
-              {/* Lock into Practice Camera HUD */}
-              <div className="pt-2">
+              {/* Lock into Practice Camera HUD & AI Evaluator */}
+              <div className="pt-2 space-y-2">
+                {onOpenEvaluator && (
+                  <button
+                    onClick={() => onOpenEvaluator(inspectedGesture.char, (inspectedGesture.signLanguage as any) || (activeSignLanguageSystem as any) || 'ASL')}
+                    className="w-full flex items-center justify-center gap-2 px-5 py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-black rounded-2xl shadow-lg transition-transform active:scale-95 cursor-pointer"
+                  >
+                    <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
+                    <span>Evaluate Sign Accuracy (AI Coach)</span>
+                    <ChevronRight className="w-4 h-4 ml-auto" />
+                  </button>
+                )}
+
                 <button
                   onClick={() => onSelectGesture(inspectedGesture)}
-                  className="w-full flex items-center justify-center gap-2 px-5 py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black rounded-2xl shadow-lg transition-transform active:scale-95 cursor-pointer"
+                  className="w-full flex items-center justify-center gap-2 px-5 py-3 bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-200 text-xs font-bold rounded-2xl border border-neutral-200 dark:border-neutral-700 transition-all cursor-pointer"
                 >
-                  <Flame className="w-4 h-4 fill-white" />
-                  Practice Sign in Live Camera HUD
+                  <Flame className="w-4 h-4 text-emerald-600" />
+                  <span>Practice in Live HUD Camera</span>
                   <ChevronRight className="w-4 h-4 ml-auto" />
                 </button>
-                <p className="text-[10px] text-neutral-400 text-center mt-1.5">
-                  Directs to the live webcam practice scanner to verify your physical posture and joint calibration.
+                <p className="text-[10px] text-neutral-400 text-center mt-1">
+                  Evaluate compares your posture against reference skeletons with scoring, joint error highlights, and coaching tips.
                 </p>
               </div>
 
