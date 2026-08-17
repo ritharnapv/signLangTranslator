@@ -22,6 +22,7 @@ import RestApiDocs from './components/RestApiDocs';
 import VideoTranslation from './components/VideoTranslation';
 import LiveMeetingTranslator from './components/LiveMeetingTranslator';
 import SignEvaluatorView from './components/SignEvaluatorView';
+import MultiplayerPracticeView from './components/MultiplayerPracticeView';
 import { ensureBaselineModelCached } from './lib/offlineModelCache';
 import { getOfflineSyncQueue, syncOfflineDataToCloud } from './lib/offlineSync';
 import { getLocalAutoBackupSettings, createCloudBackupSnapshot } from './lib/cloudAutoBackup';
@@ -92,7 +93,9 @@ import {
   Tag,
   Film,
   Trophy,
-  Target
+  Target,
+  Swords,
+  Users
 } from 'lucide-react';
 
 // Production environment configuration helpers
@@ -292,7 +295,7 @@ export default function App() {
     handleUpdateThemeSettings({ themeMode: nextMode });
   };
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'learning_dashboard' | 'learning' | 'dictionary' | 'evaluator' | 'roadmap' | 'collector' | 'datasets' | 'labeler' | 'replay' | 'corrections' | 'trainer' | 'files' | 'profile' | 'analytics' | 'conversation' | 'offline' | 'admin' | 'api-docs' | 'video_translator' | 'live_meeting'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'learning_dashboard' | 'learning' | 'dictionary' | 'evaluator' | 'multiplayer' | 'roadmap' | 'collector' | 'datasets' | 'labeler' | 'replay' | 'corrections' | 'trainer' | 'files' | 'profile' | 'analytics' | 'conversation' | 'offline' | 'admin' | 'api-docs' | 'video_translator' | 'live_meeting'>('dashboard');
   const [evaluatorInitialSign, setEvaluatorInitialSign] = useState<string>('A');
 
   // Prediction Correction Modal State
@@ -3272,6 +3275,18 @@ export default function App() {
             <span>AI Coach (Evaluator)</span>
           </button>
           <button
+            onClick={() => { setActiveTab('multiplayer'); setMobileMenuOpen(false); }}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold tracking-wide transition-all flex items-center gap-1.5 ${
+              activeTab === 'multiplayer'
+                ? "bg-gradient-to-r from-orange-600 via-amber-600 to-yellow-600 text-white shadow-sm ring-1 ring-orange-400"
+                : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
+            }`}
+            id="tab-multiplayer-btn"
+          >
+            <Swords className="w-3.5 h-3.5 text-orange-500 animate-bounce" />
+            <span>Multiplayer Arena</span>
+          </button>
+          <button
             onClick={() => { setActiveTab('learning'); setMobileMenuOpen(false); }}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all flex items-center gap-1.5 ${
               activeTab === 'learning'
@@ -3649,6 +3664,7 @@ export default function App() {
               { id: 'dashboard', label: t('liveTranslator'), icon: Camera },
               { id: 'learning_dashboard', label: t('learningDashboard'), icon: Trophy },
               { id: 'evaluator', label: 'AI Coach Evaluator', icon: Target },
+              { id: 'multiplayer', label: t('multiplayerPractice'), icon: Swords },
               { id: 'conversation', label: t('continuousConversation'), icon: MessageSquare },
               { id: 'analytics', label: t('analytics'), icon: Activity },
               { id: 'dictionary', label: t('aslDictionary'), icon: BookOpen },
@@ -5824,6 +5840,7 @@ export default function App() {
               if (lang) setSelectedSignLanguage(lang);
               setActiveTab('evaluator');
             }}
+            onNavigateToMultiplayer={() => setActiveTab('multiplayer')}
           />
         )}
 
@@ -5836,6 +5853,22 @@ export default function App() {
             onNavigateToDashboard={() => setActiveTab('learning_dashboard')}
             onCompletePractice={(score, signName) => {
               addLearningPracticeLog(signName, score, score >= 85 ? 'happy' : 'neutral');
+            }}
+          />
+        )}
+
+        {/* Multiplayer Practice Arena: Dual Webcams, Live Landmark Comparison, Real-time Scoreboard & Challenges */}
+        {activeTab === 'multiplayer' && (
+          <MultiplayerPracticeView
+            signLanguage={selectedSignLanguage}
+            customGestures={customGestures}
+            onNavigateToDashboard={() => setActiveTab('learning_dashboard')}
+            onLogMultiplayerMatch={(summary) => {
+              addLearningPracticeLog(
+                `Multiplayer (${summary.gameMode}) - vs ${summary.winner}`,
+                summary.accuracy,
+                summary.accuracy >= 85 ? 'happy' : 'neutral'
+              );
             }}
           />
         )}

@@ -31,7 +31,9 @@ import {
   Activity,
   Smile,
   Compass,
-  ArrowUpRight
+  ArrowUpRight,
+  Swords,
+  Users
 } from 'lucide-react';
 import { 
   LearningLesson, 
@@ -56,6 +58,7 @@ interface LearningDashboardProps {
   cameraActive?: boolean;
   onToggleCamera?: () => void;
   onOpenEvaluator?: (signName: string, lang?: 'ASL' | 'ISL') => void;
+  onNavigateToMultiplayer?: () => void;
 }
 
 export default function LearningDashboard({
@@ -63,7 +66,8 @@ export default function LearningDashboard({
   onNavigateToCamera,
   cameraActive = false,
   onToggleCamera,
-  onOpenEvaluator
+  onOpenEvaluator,
+  onNavigateToMultiplayer
 }: LearningDashboardProps) {
   // Navigation & Sub-views: 'all' | 'lessons' | 'progress' | 'goals' | 'badges'
   const [activeSection, setActiveSection] = useState<'overview' | 'lessons' | 'progress' | 'goals' | 'badges'>('overview');
@@ -468,6 +472,32 @@ export default function LearningDashboard({
           ))}
         </div>
       </div>
+
+      {/* Multiplayer Arena Challenge Callout Banner */}
+      {activeSection === 'overview' && onNavigateToMultiplayer && (
+        <div className="bg-gradient-to-r from-violet-600 via-indigo-600 to-purple-700 text-white rounded-3xl p-6 shadow-md relative overflow-hidden flex flex-col sm:flex-row sm:items-center justify-between gap-5">
+          <div className="space-y-1.5 z-10">
+            <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-lg bg-white/20 backdrop-blur-md text-[10px] font-mono font-bold uppercase tracking-wider">
+              <Swords className="w-3.5 h-3.5 text-amber-300" />
+              <span>Multiplayer Practice & Challenge Arena</span>
+            </div>
+            <h3 className="text-lg sm:text-xl font-black">
+              Dual Webcam Sign Battles & Live Comparison
+            </h3>
+            <p className="text-xs text-white/80 max-w-xl font-sans leading-relaxed">
+              Challenge friends with dual camera feeds or play against adaptive AI bots. Real-time joint accuracy evaluation, live speed scoreboard, and competitive challenge modes.
+            </p>
+          </div>
+          <button
+            onClick={onNavigateToMultiplayer}
+            type="button"
+            className="px-5 py-3 rounded-2xl bg-white text-violet-800 font-extrabold text-xs uppercase tracking-wider hover:bg-violet-50 transition-all shadow-md flex items-center justify-center gap-2 shrink-0 cursor-pointer self-start sm:self-auto"
+          >
+            <Swords className="w-4 h-4 text-violet-700" />
+            <span>Enter Multiplayer Arena</span>
+          </button>
+        </div>
+      )}
 
       {/* ============================================================ */}
       {/* 1. DAILY LESSONS MODULE */}

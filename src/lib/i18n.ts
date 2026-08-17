@@ -83,6 +83,8 @@ export interface TranslationDictionary {
   customNeuralNet: string;
   signEvaluator: string;
   evaluateGesture: string;
+  multiplayerPractice: string;
+  multiplayerChallenge: string;
 }
 
 export const TRANSLATIONS: Record<UILanguage, TranslationDictionary> = {
@@ -97,6 +99,8 @@ export const TRANSLATIONS: Record<UILanguage, TranslationDictionary> = {
     learningDashboard: 'Learning Dashboard',
     signEvaluator: 'Sign Evaluator',
     evaluateGesture: 'Evaluate Gesture',
+    multiplayerPractice: 'Multiplayer Practice',
+    multiplayerChallenge: 'Challenge Arena',
     aslDictionary: 'ASL Dictionary',
     roadmap: 'Learning Roadmap',
     gestureCollector: 'Data Collector',
@@ -158,6 +162,8 @@ export const TRANSLATIONS: Record<UILanguage, TranslationDictionary> = {
     learningDashboard: 'लर्निंग डैशबोर्ड',
     signEvaluator: 'साइन मूल्यांकनकर्ता',
     evaluateGesture: 'इशारा मूल्यांकन',
+    multiplayerPractice: 'मल्टीप्लेयर अभ्यास',
+    multiplayerChallenge: 'चुनौती अखाड़ा',
     aslDictionary: 'एएसएल शब्दकोश',
     roadmap: 'लर्निंग रोडमैप',
     gestureCollector: 'डेटा संग्राहक',
@@ -219,6 +225,8 @@ export const TRANSLATIONS: Record<UILanguage, TranslationDictionary> = {
     learningDashboard: 'ಕಲಿಕೆ ಡ್ಯಾಶ್‌ಬೋರ್ಡ್',
     signEvaluator: 'ಸಂಜ್ಞೆ ಮೌಲ್ಯಮಾಪಕ',
     evaluateGesture: 'ಸಂಜ್ಞೆ ಮೌಲ್ಯಮಾಪನ',
+    multiplayerPractice: 'ಮಲ್ಟಿಪ್ಲೇಯರ್ ಅಭ್ಯಾಸ',
+    multiplayerChallenge: 'ಸ್ಪರ್ಧಾ ಅಖಾಡ',
     aslDictionary: 'ಎಎಸ್‌ಎಲ್ ನಿಘಂಟು',
     roadmap: 'ಕಲಿಕೆಯ ಮಾರ್ಗಸೂಚಿ',
     gestureCollector: 'ಡೇಟಾ ಸಂಗ್ರಾಹಕ',
@@ -280,6 +288,8 @@ export const TRANSLATIONS: Record<UILanguage, TranslationDictionary> = {
     learningDashboard: 'പഠന ഡാഷ്‌ബോർഡ്',
     signEvaluator: 'സൈൻ ഇവാലുവേറ്റർ',
     evaluateGesture: 'ആംഗ്യം വിലയിരുത്തുക',
+    multiplayerPractice: 'മൾട്ടിപ്ലെയർ പരിശീലനം',
+    multiplayerChallenge: 'ചലഞ്ച് അരീന',
     aslDictionary: 'എഎസ്എൽ നിഘണ്ടു',
     roadmap: 'പഠന റോഡ്മാപ്പ്',
     gestureCollector: 'ഡാറ്റ ശേഖരണം',
@@ -341,6 +351,8 @@ export const TRANSLATIONS: Record<UILanguage, TranslationDictionary> = {
     learningDashboard: 'கற்றல் டாஷ்போர்டு',
     signEvaluator: 'சைகை மதிப்பீட்டாளர்',
     evaluateGesture: 'சைகையை மதிப்பிடு',
+    multiplayerPractice: 'மல்டிபிளேயர் பயிற்சி',
+    multiplayerChallenge: 'போட்டி அரங்கம்',
     aslDictionary: 'ASL அகராதி',
     roadmap: 'கற்றல் பாதை',
     gestureCollector: 'தரவு சேகரிப்பான்',

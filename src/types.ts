@@ -330,6 +330,66 @@ export interface SignEvaluationResult {
   };
 }
 
+export interface MultiplayerPlayer {
+  id: string;
+  name: string;
+  avatar: string;
+  isAi?: boolean;
+  aiDifficulty?: 'novice' | 'intermediate' | 'expert';
+  cameraActive: boolean;
+  currentScore: number;
+  roundWins: number;
+  currentAccuracy: number;
+  currentSignAttempt: string;
+  streak: number;
+  bestReactionMs: number;
+  isReady: boolean;
+  landmarks?: Array<{ x: number; y: number; z?: number }>;
+  mistakes?: SignMistake[];
+}
 
+export type MultiplayerGameMode = 'speed_duel' | 'precision_clash' | 'sign_gauntlet' | 'mimic_battle' | 'sudden_death';
+export type MultiplayerDifficulty = 'novice' | 'intermediate' | 'expert';
 
+export interface MultiplayerRoundResult {
+  roundNumber: number;
+  targetSign: string;
+  winnerId: string | 'tie';
+  p1Accuracy: number;
+  p1TimeMs: number;
+  p2Accuracy: number;
+  p2TimeMs: number;
+  explanation: string;
+}
 
+export interface MultiplayerMatchState {
+  matchId: string;
+  roomCode: string;
+  gameMode: MultiplayerGameMode;
+  difficulty: MultiplayerDifficulty;
+  signLanguage: 'ASL' | 'ISL';
+  totalRounds: number;
+  currentRoundIndex: number;
+  roundTimeLimitSec: number;
+  roundTimeRemainingSec: number;
+  status: 'lobby' | 'countdown' | 'in_progress' | 'round_recap' | 'match_summary';
+  targetSigns: string[];
+  currentPromptSign: string;
+  p1: MultiplayerPlayer;
+  p2: MultiplayerPlayer;
+  roundHistory: MultiplayerRoundResult[];
+}
+
+export interface MultiplayerLeaderboardEntry {
+  rank: number;
+  playerName: string;
+  avatar: string;
+  eloRating: number;
+  tier: 'Grandmaster' | 'Diamond' | 'Platinum' | 'Gold' | 'Silver';
+  wins: number;
+  losses: number;
+  winRate: number;
+  avgAccuracy: number;
+  highestStreak: number;
+  isUser?: boolean;
+}

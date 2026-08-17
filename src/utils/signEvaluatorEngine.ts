@@ -969,3 +969,48 @@ export function evaluateUserSignPerformance(
     }
   };
 }
+
+/**
+ * Generate synthetic landmark jitter/displacement from reference landmarks based on accuracy ratio
+ */
+export function generateSyntheticLandmarks(
+  referenceLandmarks: Array<{ x: number; y: number; z?: number }>,
+  errorRate: number = 0.15
+): Array<{ x: number; y: number; z: number }> {
+  return referenceLandmarks.map((pt, idx) => {
+    // Wrist (0) and knuckle bases (5, 9, 13, 17) remain relatively anchored
+    const isAnchor = idx === 0 || idx === 5 || idx === 9 || idx === 13 || idx === 17;
+    const jitterFactor = isAnchor ? 0.3 : 1.0;
+    const offsetMagnitude = errorRate * 24 * jitterFactor;
+
+    const noiseX = (Math.sin(idx * 4.7 + Date.now() * 0.003) * 0.7 + (Math.random() - 0.5) * 0.3) * offsetMagnitude;
+    const noiseY = (Math.cos(idx * 3.2 + Date.now() * 0.002) * 0.7 + (Math.random() - 0.5) * 0.3) * offsetMagnitude;
+
+    return {
+      x: Math.round(pt.x + noiseX),
+      y: Math.round(pt.y + noiseY),
+      z: (pt.z || 0) + (Math.random() - 0.5) * 0.05 * errorRate
+    };
+  });
+}
+
+/**
+ * Alias wrapper to evaluate user hand landmarks against target sign name
+ */
+export function evaluateUserHandLandmarks(
+  userLandmarks: Array<{ x: number; y: number; z?: number }> | null,
+  targetSignName: string,
+  signLanguage: string = 'ASL'
+): SignEvaluationResult {
+  return evaluateUserSignPerformance(targetSignName, userLandmarks, signLanguage);
+}
+
+// Blueprint categorization helpers
+export const ASL_BLUEPRINTS = Object.values(REFERENCE_SIGN_BLUEPRINTS).filter(
+  (b) => b.signLanguage === 'ASL'
+);
+
+export const ISL_BLUEPRINTS = Object.values(REFERENCE_SIGN_BLUEPRINTS).filter(
+  (b) => b.signLanguage === 'ISL'
+);
+
