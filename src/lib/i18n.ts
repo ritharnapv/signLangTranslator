@@ -85,6 +85,11 @@ export interface TranslationDictionary {
   evaluateGesture: string;
   multiplayerPractice: string;
   multiplayerChallenge: string;
+  gestureSearch: string;
+  searchByWord: string;
+  searchByCategory: string;
+  searchByImage: string;
+  fastFiltering: string;
 }
 
 export const TRANSLATIONS: Record<UILanguage, TranslationDictionary> = {
@@ -149,7 +154,12 @@ export const TRANSLATIONS: Record<UILanguage, TranslationDictionary> = {
     close: 'Close',
     developerMode: 'Dev Mode',
     activeModel: 'Active AI Model',
-    customNeuralNet: 'Custom Neural Net'
+    customNeuralNet: 'Custom Neural Net',
+    gestureSearch: 'Gesture Search',
+    searchByWord: 'Search by Word',
+    searchByCategory: 'Search by Category',
+    searchByImage: 'Search by Image',
+    fastFiltering: 'Fast Filtering'
   },
   hi: {
     appTitle: 'साइन एआई प्रो',
@@ -212,7 +222,12 @@ export const TRANSLATIONS: Record<UILanguage, TranslationDictionary> = {
     close: 'बंद करें',
     developerMode: 'डेवलपर मोड',
     activeModel: 'सक्रिय एआई मॉडल',
-    customNeuralNet: 'कस्टम न्यूरल नेटवर्क'
+    customNeuralNet: 'कस्टम न्यूरल नेटवर्क',
+    gestureSearch: 'जेस्चर खोज',
+    searchByWord: 'शब्द द्वारा खोजें',
+    searchByCategory: 'श्रेणी द्वारा खोजें',
+    searchByImage: 'छवि द्वारा खोजें',
+    fastFiltering: 'तीव्र फ़िल्टरिंग'
   },
   kn: {
     appTitle: 'ಸೈನ್ ಎಐ ಪ್ರೊ',
@@ -275,7 +290,12 @@ export const TRANSLATIONS: Record<UILanguage, TranslationDictionary> = {
     close: 'ಮುಚ್ಚಿ',
     developerMode: 'ಡೆವಲಪರ್ ಮೋಡ್',
     activeModel: 'ಸಕ್ರಿಯ ಎಐ ಮಾದರಿ',
-    customNeuralNet: 'ಕಸ್ಟಮ್ ನ್ಯೂರಲ್ ನೆಟ್‌ವರ್ಕ್'
+    customNeuralNet: 'ಕಸ್ಟಮ್ ನ್ಯೂರಲ್ ನೆಟ್‌ವರ್ಕ್',
+    gestureSearch: 'ಸನ್ನೆ ಹುಡುಕಾಟ',
+    searchByWord: 'ಪದದಿಂದ ಹುಡುಕಿ',
+    searchByCategory: 'ವರ್ಗದಿಂದ ಹುಡುಕಿ',
+    searchByImage: 'ಚಿತ್ರದಿಂದ ಹುಡುಕಿ',
+    fastFiltering: 'ವೇಗದ ಫಿಲ್ಟರ್'
   },
   ml: {
     appTitle: 'സൈൻ എഐ പ്രോ',
@@ -338,7 +358,12 @@ export const TRANSLATIONS: Record<UILanguage, TranslationDictionary> = {
     close: 'അടയ്ക്കുക',
     developerMode: 'ഡെവലപ്പർ മോഡ്',
     activeModel: 'സജീവ എഐ മോഡൽ',
-    customNeuralNet: 'കസ്റ്റം ന്യൂറൽ നെറ്റ്'
+    customNeuralNet: 'കസ്റ്റം ന്യൂറൽ നെറ്റ്',
+    gestureSearch: 'ആംഗ്യ തിരയൽ',
+    searchByWord: 'വാക്കിലൂടെ തിരയുക',
+    searchByCategory: 'വിഭാഗം അനുസരിച്ച് തിരയുക',
+    searchByImage: 'ചിത്രത്തിലൂടെ തിരയുക',
+    fastFiltering: 'വേഗതയേറിയ ഫിൽട്ടറിംഗ്'
   },
   ta: {
     appTitle: 'சைன் AI புரோ',
@@ -401,7 +426,12 @@ export const TRANSLATIONS: Record<UILanguage, TranslationDictionary> = {
     close: 'மூடு',
     developerMode: 'தேவல்பர் பயன்முறை',
     activeModel: 'செயலில் உள்ள AI மாதிரி',
-    customNeuralNet: 'தனிப்பயன் நியூரல் நெட்'
+    customNeuralNet: 'தனிப்பயன் நியூரல் நெட்',
+    gestureSearch: 'சைகை தேடல்',
+    searchByWord: 'வார்த்தை மூலம் தேடு',
+    searchByCategory: 'வகை வாரியாக தேடு',
+    searchByImage: 'படம் மூலம் தேடு',
+    fastFiltering: 'விரைவான வடிகட்டுதல்'
   }
 };
 

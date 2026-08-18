@@ -23,6 +23,7 @@ import VideoTranslation from './components/VideoTranslation';
 import LiveMeetingTranslator from './components/LiveMeetingTranslator';
 import SignEvaluatorView from './components/SignEvaluatorView';
 import MultiplayerPracticeView from './components/MultiplayerPracticeView';
+import GestureSearch from './components/GestureSearch';
 import { ensureBaselineModelCached } from './lib/offlineModelCache';
 import { getOfflineSyncQueue, syncOfflineDataToCloud } from './lib/offlineSync';
 import { getLocalAutoBackupSettings, createCloudBackupSnapshot } from './lib/cloudAutoBackup';
@@ -95,7 +96,8 @@ import {
   Trophy,
   Target,
   Swords,
-  Users
+  Users,
+  Search
 } from 'lucide-react';
 
 // Production environment configuration helpers
@@ -295,8 +297,9 @@ export default function App() {
     handleUpdateThemeSettings({ themeMode: nextMode });
   };
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'learning_dashboard' | 'learning' | 'dictionary' | 'evaluator' | 'multiplayer' | 'roadmap' | 'collector' | 'datasets' | 'labeler' | 'replay' | 'corrections' | 'trainer' | 'files' | 'profile' | 'analytics' | 'conversation' | 'offline' | 'admin' | 'api-docs' | 'video_translator' | 'live_meeting'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'learning_dashboard' | 'learning' | 'dictionary' | 'gesture_search' | 'evaluator' | 'multiplayer' | 'roadmap' | 'collector' | 'datasets' | 'labeler' | 'replay' | 'corrections' | 'trainer' | 'files' | 'profile' | 'analytics' | 'conversation' | 'offline' | 'admin' | 'api-docs' | 'video_translator' | 'live_meeting'>('dashboard');
   const [evaluatorInitialSign, setEvaluatorInitialSign] = useState<string>('A');
+  const [gestureSearchInitialQuery, setGestureSearchInitialQuery] = useState<string>('');
 
   // Prediction Correction Modal State
   const [isCorrectionModalOpen, setIsCorrectionModalOpen] = useState<boolean>(false);
@@ -3251,6 +3254,18 @@ export default function App() {
             {t('aslDictionary')}
           </button>
           <button
+            onClick={() => { setActiveTab('gesture_search'); setMobileMenuOpen(false); }}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold tracking-wide transition-all flex items-center gap-1.5 ${
+              activeTab === 'gesture_search'
+                ? "bg-indigo-600 dark:bg-indigo-700 text-white shadow-sm ring-1 ring-indigo-400"
+                : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
+            }`}
+            id="tab-gesture-search-btn"
+          >
+            <Search className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-300" />
+            <span>{t('gestureSearch')}</span>
+          </button>
+          <button
             onClick={() => { setActiveTab('learning_dashboard'); setMobileMenuOpen(false); }}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all flex items-center gap-1.5 ${
               activeTab === 'learning_dashboard'
@@ -3662,6 +3677,7 @@ export default function App() {
           <div className="grid grid-cols-2 gap-2">
             {[
               { id: 'dashboard', label: t('liveTranslator'), icon: Camera },
+              { id: 'gesture_search', label: t('gestureSearch'), icon: Search },
               { id: 'learning_dashboard', label: t('learningDashboard'), icon: Trophy },
               { id: 'evaluator', label: 'AI Coach Evaluator', icon: Target },
               { id: 'multiplayer', label: t('multiplayerPractice'), icon: Swords },
@@ -5905,6 +5921,7 @@ export default function App() {
                 }
               }}
               onNavigateToLearningDashboard={() => setActiveTab('learning_dashboard')}
+              onNavigateToGestureSearch={() => setActiveTab('gesture_search')}
               onOpenEvaluator={(signName, lang) => {
                 setEvaluatorInitialSign(signName);
                 if (lang) setSelectedSignLanguage(lang);
@@ -5924,6 +5941,30 @@ export default function App() {
                 });
               }} 
               activeGesture={selectedGesture}
+            />
+          </div>
+        )}
+
+        {/* Gesture Search (Word, Category, Image & Camera Match, Fast Real-time Filtering) */}
+        {activeTab === 'gesture_search' && (
+          <div className="space-y-6" id="gesture-search-tab-view">
+            <GestureSearch
+              initialQuery={gestureSearchInitialQuery}
+              onSelectSignForDictionary={(signName, lang) => {
+                if (lang === 'ISL' || lang === 'ASL') {
+                  setSelectedSignLanguage(lang);
+                }
+                const foundCustom = customGestures.find(g => g.char.toUpperCase() === signName.toUpperCase());
+                if (foundCustom) {
+                  setSelectedGesture(foundCustom);
+                }
+                setActiveTab('dictionary');
+              }}
+              onOpenEvaluator={(signName, lang) => {
+                setEvaluatorInitialSign(signName);
+                if (lang) setSelectedSignLanguage(lang);
+                setActiveTab('evaluator');
+              }}
             />
           </div>
         )}

@@ -393,3 +393,35 @@ export interface MultiplayerLeaderboardEntry {
   highestStreak: number;
   isUser?: boolean;
 }
+
+// Gesture Search & Reverse Image Recognition Types
+export interface GestureSearchFilters {
+  query: string;
+  selectedCategories: string[];
+  signLanguage: 'ALL' | 'ASL' | 'ISL';
+  difficulty: 'all' | 'easy' | 'medium' | 'hard';
+  handedness: 'all' | 'one_handed' | 'two_handed';
+  movementType: 'all' | 'static' | 'dynamic';
+  sortBy: 'relevance' | 'alphabetical_asc' | 'alphabetical_desc' | 'difficulty_asc' | 'difficulty_desc' | 'popular';
+}
+
+export interface ImageSearchMatch {
+  char: string;
+  englishTitle: string;
+  signLanguage: 'ASL' | 'ISL' | string;
+  category: string;
+  confidence: number;
+  matchReason: string;
+  fingerBreakdown?: string;
+  handShapeMatch?: string;
+  visualTip?: string;
+}
+
+export interface ImageSearchResultData {
+  detectedHandPose: string;
+  isTwoHanded?: boolean;
+  anatomicalSummary: string;
+  matches: ImageSearchMatch[];
+  suggestions: string[];
+}
+

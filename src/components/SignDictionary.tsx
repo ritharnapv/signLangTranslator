@@ -260,6 +260,7 @@ interface SignDictionaryProps {
   activeSignLanguage?: string;
   onSignLanguageChange?: (lang: string) => void;
   onNavigateToLearningDashboard?: () => void;
+  onNavigateToGestureSearch?: () => void;
   onOpenEvaluator?: (signName: string, lang?: 'ASL' | 'ISL') => void;
 }
 
@@ -270,6 +271,7 @@ export default function SignDictionary({
   activeSignLanguage = 'ISL',
   onSignLanguageChange,
   onNavigateToLearningDashboard,
+  onNavigateToGestureSearch,
   onOpenEvaluator
 }: SignDictionaryProps) {
   // Primary state variables
@@ -521,6 +523,17 @@ export default function SignDictionary({
 
           {/* Quick Action Tools */}
           <div className="flex flex-wrap items-center gap-3">
+            {/* Open Gesture Search */}
+            {onNavigateToGestureSearch && (
+              <button
+                onClick={onNavigateToGestureSearch}
+                className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600/90 hover:bg-indigo-500 border border-indigo-400/40 text-white text-xs font-bold rounded-2xl shadow-md transition-all cursor-pointer transform active:scale-95"
+              >
+                <Search className="w-4 h-4 text-indigo-200" />
+                <span>Gesture Search (Image/Word)</span>
+              </button>
+            )}
+
             {/* Open Alphabet Chart Modal */}
             <button
               onClick={() => setShowAlphabetModal(true)}
