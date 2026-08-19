@@ -59,6 +59,7 @@ interface LearningDashboardProps {
   onToggleCamera?: () => void;
   onOpenEvaluator?: (signName: string, lang?: 'ASL' | 'ISL') => void;
   onNavigateToMultiplayer?: () => void;
+  onNavigateToRecommendations?: () => void;
 }
 
 export default function LearningDashboard({
@@ -67,7 +68,8 @@ export default function LearningDashboard({
   cameraActive = false,
   onToggleCamera,
   onOpenEvaluator,
-  onNavigateToMultiplayer
+  onNavigateToMultiplayer,
+  onNavigateToRecommendations
 }: LearningDashboardProps) {
   // Navigation & Sub-views: 'all' | 'lessons' | 'progress' | 'goals' | 'badges'
   const [activeSection, setActiveSection] = useState<'overview' | 'lessons' | 'progress' | 'goals' | 'badges'>('overview');
@@ -495,6 +497,32 @@ export default function LearningDashboard({
           >
             <Swords className="w-4 h-4 text-violet-700" />
             <span>Enter Multiplayer Arena</span>
+          </button>
+        </div>
+      )}
+
+      {/* AI Smart Practice Recommendations Callout Banner */}
+      {activeSection === 'overview' && onNavigateToRecommendations && (
+        <div className="bg-gradient-to-r from-indigo-900 via-slate-900 to-violet-950 text-white rounded-3xl p-6 shadow-md relative overflow-hidden flex flex-col sm:flex-row sm:items-center justify-between gap-5 border border-indigo-500/30">
+          <div className="space-y-1.5 z-10">
+            <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-lg bg-indigo-500/20 border border-indigo-400/30 text-[10px] font-mono font-bold uppercase tracking-wider text-indigo-300">
+              <Sparkles className="w-3.5 h-3.5 text-indigo-300" />
+              <span>AI Weakness Analysis & Spaced Repetition</span>
+            </div>
+            <h3 className="text-lg sm:text-xl font-black">
+              Smart Practice Recommendations
+            </h3>
+            <p className="text-xs text-indigo-200/80 max-w-xl font-sans leading-relaxed">
+              Personalized practice playlists generated from your learning history, detected joint mistakes, and spaced memory retention curves.
+            </p>
+          </div>
+          <button
+            onClick={onNavigateToRecommendations}
+            type="button"
+            className="px-5 py-3 rounded-2xl bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-400 hover:to-violet-500 text-white font-extrabold text-xs uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-2 shrink-0 cursor-pointer self-start sm:self-auto"
+          >
+            <Sparkles className="w-4 h-4 text-white" />
+            <span>Open Practice Recommendations</span>
           </button>
         </div>
       )}

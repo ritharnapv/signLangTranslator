@@ -24,6 +24,7 @@ import LiveMeetingTranslator from './components/LiveMeetingTranslator';
 import SignEvaluatorView from './components/SignEvaluatorView';
 import MultiplayerPracticeView from './components/MultiplayerPracticeView';
 import GestureSearch from './components/GestureSearch';
+import PracticeRecommendations from './components/PracticeRecommendations';
 import { ensureBaselineModelCached } from './lib/offlineModelCache';
 import { getOfflineSyncQueue, syncOfflineDataToCloud } from './lib/offlineSync';
 import { getLocalAutoBackupSettings, createCloudBackupSnapshot } from './lib/cloudAutoBackup';
@@ -297,7 +298,7 @@ export default function App() {
     handleUpdateThemeSettings({ themeMode: nextMode });
   };
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'learning_dashboard' | 'learning' | 'dictionary' | 'gesture_search' | 'evaluator' | 'multiplayer' | 'roadmap' | 'collector' | 'datasets' | 'labeler' | 'replay' | 'corrections' | 'trainer' | 'files' | 'profile' | 'analytics' | 'conversation' | 'offline' | 'admin' | 'api-docs' | 'video_translator' | 'live_meeting'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'learning_dashboard' | 'practice_recommendations' | 'learning' | 'dictionary' | 'gesture_search' | 'evaluator' | 'multiplayer' | 'roadmap' | 'collector' | 'datasets' | 'labeler' | 'replay' | 'corrections' | 'trainer' | 'files' | 'profile' | 'analytics' | 'conversation' | 'offline' | 'admin' | 'api-docs' | 'video_translator' | 'live_meeting'>('dashboard');
   const [evaluatorInitialSign, setEvaluatorInitialSign] = useState<string>('A');
   const [gestureSearchInitialQuery, setGestureSearchInitialQuery] = useState<string>('');
 
@@ -3278,6 +3279,18 @@ export default function App() {
             <span>{t('learningDashboard')}</span>
           </button>
           <button
+            onClick={() => { setActiveTab('practice_recommendations'); setMobileMenuOpen(false); }}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold tracking-wide transition-all flex items-center gap-1.5 ${
+              activeTab === 'practice_recommendations'
+                ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-sm ring-1 ring-indigo-400"
+                : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
+            }`}
+            id="tab-practice-recommendations-btn"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
+            <span>Smart Recommendations</span>
+          </button>
+          <button
             onClick={() => { setActiveTab('evaluator'); setMobileMenuOpen(false); }}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-bold tracking-wide transition-all flex items-center gap-1.5 ${
               activeTab === 'evaluator'
@@ -3679,6 +3692,7 @@ export default function App() {
               { id: 'dashboard', label: t('liveTranslator'), icon: Camera },
               { id: 'gesture_search', label: t('gestureSearch'), icon: Search },
               { id: 'learning_dashboard', label: t('learningDashboard'), icon: Trophy },
+              { id: 'practice_recommendations', label: 'Smart Recommendations', icon: Sparkles },
               { id: 'evaluator', label: 'AI Coach Evaluator', icon: Target },
               { id: 'multiplayer', label: t('multiplayerPractice'), icon: Swords },
               { id: 'conversation', label: t('continuousConversation'), icon: MessageSquare },
@@ -5857,6 +5871,26 @@ export default function App() {
               setActiveTab('evaluator');
             }}
             onNavigateToMultiplayer={() => setActiveTab('multiplayer')}
+            onNavigateToRecommendations={() => setActiveTab('practice_recommendations')}
+          />
+        )}
+
+        {/* AI Practice Recommendations & Weakness Analyzer */}
+        {activeTab === 'practice_recommendations' && (
+          <PracticeRecommendations
+            onOpenEvaluator={(signChar, lang) => {
+              setEvaluatorInitialSign(signChar);
+              if (lang) setSelectedSignLanguage(lang);
+              setActiveTab('evaluator');
+            }}
+            onOpenDictionary={(signChar, lang) => {
+              if (lang) setSelectedSignLanguage(lang);
+              const found = customGestures.find(g => g.char.toUpperCase() === signChar.toUpperCase());
+              if (found) setSelectedGesture(found);
+              setActiveTab('dictionary');
+            }}
+            onNavigateToDashboard={() => setActiveTab('learning_dashboard')}
+            onOpenDailyPractice={() => setActiveTab('learning')}
           />
         )}
 
@@ -5867,6 +5901,7 @@ export default function App() {
             signLanguage={selectedSignLanguage}
             availableSigns={customGestures}
             onNavigateToDashboard={() => setActiveTab('learning_dashboard')}
+            onNavigateToRecommendations={() => setActiveTab('practice_recommendations')}
             onCompletePractice={(score, signName) => {
               addLearningPracticeLog(signName, score, score >= 85 ? 'happy' : 'neutral');
             }}
@@ -5950,6 +5985,7 @@ export default function App() {
           <div className="space-y-6" id="gesture-search-tab-view">
             <GestureSearch
               initialQuery={gestureSearchInitialQuery}
+              onNavigateToRecommendations={() => setActiveTab('practice_recommendations')}
               onSelectSignForDictionary={(signName, lang) => {
                 if (lang === 'ISL' || lang === 'ASL') {
                   setSelectedSignLanguage(lang);

@@ -35,6 +35,7 @@ import {
   SKELETON_CONNECTIONS,
   LANDMARK_INDICES
 } from '../utils/signEvaluatorEngine';
+import { recordLearningHistoryEntry } from '../utils/practiceRecommender';
 
 interface SignEvaluatorViewProps {
   initialSign?: string;
@@ -42,6 +43,7 @@ interface SignEvaluatorViewProps {
   onCompletePractice?: (score: number, signName: string) => void;
   availableSigns?: ASLGesture[];
   onNavigateToDashboard?: () => void;
+  onNavigateToRecommendations?: () => void;
 }
 
 export const SignEvaluatorView: React.FC<SignEvaluatorViewProps> = ({
@@ -49,7 +51,8 @@ export const SignEvaluatorView: React.FC<SignEvaluatorViewProps> = ({
   signLanguage = 'ASL',
   onCompletePractice,
   availableSigns = [],
-  onNavigateToDashboard
+  onNavigateToDashboard,
+  onNavigateToRecommendations
 }) => {
   const [selectedSign, setSelectedSign] = useState<string>(initialSign);
   const [currentSignLanguage, setCurrentSignLanguage] = useState<'ASL' | 'ISL'>(signLanguage);
@@ -222,6 +225,21 @@ export const SignEvaluatorView: React.FC<SignEvaluatorViewProps> = ({
               correctiveChecklist: apiResult.correctiveChecklist || localResult.correctiveChecklist
             };
             setEvaluationResult(mergedResult);
+
+            // Record into learning history & weakness analytics
+            recordLearningHistoryEntry({
+              timestamp: new Date().toISOString(),
+              signChar: selectedSign,
+              englishTitle: blueprint.name || `Sign ${selectedSign}`,
+              signLanguage: currentSignLanguage,
+              source: 'evaluator',
+              score: mergedResult.overallScore,
+              accuracyGrade: mergedResult.grade,
+              durationSeconds: 12,
+              mistakesRecorded: mergedResult.mistakes.map(m => `${m.title}: ${m.description}`),
+              subScores: mergedResult.subScores
+            });
+
             if (onCompletePractice && mergedResult.overallScore >= 75) {
               onCompletePractice(mergedResult.overallScore, selectedSign);
             }
@@ -236,6 +254,21 @@ export const SignEvaluatorView: React.FC<SignEvaluatorViewProps> = ({
       // 2. Local Fallback Geometric Evaluator
       const localResult = evaluateUserSignPerformance(selectedSign, null, currentSignLanguage);
       setEvaluationResult(localResult);
+
+      // Record into learning history & weakness analytics
+      recordLearningHistoryEntry({
+        timestamp: new Date().toISOString(),
+        signChar: selectedSign,
+        englishTitle: blueprint.name || `Sign ${selectedSign}`,
+        signLanguage: currentSignLanguage,
+        source: 'evaluator',
+        score: localResult.overallScore,
+        accuracyGrade: localResult.grade,
+        durationSeconds: 10,
+        mistakesRecorded: localResult.mistakes.map(m => `${m.title}: ${m.description}`),
+        subScores: localResult.subScores
+      });
+
       if (onCompletePractice && localResult.overallScore >= 75) {
         onCompletePractice(localResult.overallScore, selectedSign);
       }
@@ -824,6 +857,22 @@ export const SignEvaluatorView: React.FC<SignEvaluatorViewProps> = ({
                         </div>
                       );
                     })}
+                  </div>
+                )}
+
+                {/* Practice Recommendations Quick Link */}
+                {onNavigateToRecommendations && (
+                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                    <span className="text-xs text-slate-500 dark:text-slate-400">
+                      Want an adaptive workout targeting this and other weak signs?
+                    </span>
+                    <button
+                      onClick={onNavigateToRecommendations}
+                      className="px-3.5 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 border border-indigo-200 dark:border-indigo-800/40 text-indigo-700 dark:text-indigo-300 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Smart Practice Recommendations</span>
+                    </button>
                   </div>
                 )}
               </div>

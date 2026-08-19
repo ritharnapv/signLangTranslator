@@ -40,6 +40,7 @@ interface GestureSearchProps {
   customGestures?: ASLGesture[];
   onOpenEvaluator?: (signName: string, lang?: 'ASL' | 'ISL') => void;
   onSelectSignForDictionary?: (signName: string, lang?: 'ASL' | 'ISL') => void;
+  onNavigateToRecommendations?: () => void;
   initialQuery?: string;
   initialCategory?: string;
 }
@@ -48,6 +49,7 @@ export default function GestureSearch({
   customGestures = [],
   onOpenEvaluator,
   onSelectSignForDictionary,
+  onNavigateToRecommendations,
   initialQuery = '',
   initialCategory = 'all'
 }: GestureSearchProps) {
@@ -241,7 +243,18 @@ export default function GestureSearch({
             </div>
 
             {/* Quick Stats / Action */}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {onNavigateToRecommendations && (
+                <button
+                  onClick={onNavigateToRecommendations}
+                  className="px-3.5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold shadow-md backdrop-blur-md flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 border border-white/20"
+                  id="open-recommendations-from-search-btn"
+                  title="View AI recommended signs to practice based on your history"
+                >
+                  <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
+                  <span>Recommended for You</span>
+                </button>
+              )}
               <button
                 onClick={() => setIsImageSearchModalOpen(true)}
                 className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-950/50 flex items-center gap-2 transition-all hover:scale-105 active:scale-95 border border-indigo-400/40"

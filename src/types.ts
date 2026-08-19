@@ -425,3 +425,108 @@ export interface ImageSearchResultData {
   suggestions: string[];
 }
 
+// Practice Recommendations & Weak Gesture Analysis Types
+export type MasteryTier = 'mastered' | 'proficient' | 'developing' | 'critical_weakness' | 'untested';
+export type RecommendationUrgency = 'high' | 'medium' | 'low';
+export type RecommendationReasonType = 'weak_accuracy' | 'frequent_mistake' | 'spaced_repetition_due' | 'confusion_pair' | 'curriculum_frontier' | 'multiplayer_loss';
+
+export interface AnatomicalWeaknessPoint {
+  fingerOrJoint: string;
+  issueDescription: string;
+  frequency: number; // percentage of attempts
+  correctiveTip: string;
+}
+
+export interface WeakGestureAnalysis {
+  signChar: string;
+  englishTitle?: string;
+  hindiChar?: string;
+  signLanguage: 'ASL' | 'ISL' | string;
+  category: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  isTwoHanded?: boolean;
+  masteryTier: MasteryTier;
+  averageAccuracy: number; // 0 - 100
+  recentAccuracy: number;  // last 3 attempts avg
+  totalAttempts: number;
+  lastPracticedAt: string | null;
+  daysSinceLastPractice: number;
+  retentionScore: number; // 0 - 100 based on forgetting curve
+  weaknessScore: number;  // 0 - 100 (higher = needs more practice)
+  consecutiveFailures: number;
+  topMistakes: AnatomicalWeaknessPoint[];
+  confusionPartners?: string[]; // e.g. ['M', 'N'] or ['A', 'S']
+  historicalScores: Array<{ timestamp: string; score: number; source: string }>;
+  trend: 'improving' | 'declining' | 'stagnant' | 'new';
+}
+
+export interface PracticeRecommendation {
+  id: string;
+  signChar: string;
+  englishTitle?: string;
+  hindiChar?: string;
+  signLanguage: 'ASL' | 'ISL' | string;
+  category: string;
+  urgency: RecommendationUrgency;
+  reasonType: RecommendationReasonType;
+  headline: string;
+  detailedReason: string;
+  coachingTip: string;
+  expectedImprovement: string;
+  estimatedMinutes: number;
+  xpBonus: number;
+  weaknessScore: number;
+  targetAccuracy: number;
+  currentAccuracy: number;
+  anatomicalFocus: string[];
+  sampleSteps: string[];
+  visualTip: string;
+}
+
+export interface PersonalizedPracticePlan {
+  id: string;
+  title: string;
+  description: string;
+  estimatedMinutes: number;
+  focusArea: string;
+  totalXpReward: number;
+  targetSigns: PracticeRecommendation[];
+  level: 'Beginner' | 'Intermediate' | 'Advanced';
+  tag: string;
+  isCompleted?: boolean;
+}
+
+export interface LearningHistoryEntry {
+  id: string;
+  timestamp: string;
+  signChar: string;
+  englishTitle?: string;
+  signLanguage: 'ASL' | 'ISL' | string;
+  source: 'evaluator' | 'daily_practice' | 'curriculum_quiz' | 'multiplayer' | 'live_translator';
+  score: number; // 0 - 100
+  accuracyGrade?: 'Mastered' | 'Excellent' | 'Good' | 'Needs Practice' | 'Incorrect';
+  durationSeconds?: number;
+  mistakesRecorded?: string[];
+  subScores?: {
+    fingerExtension?: number;
+    thumbOpposition?: number;
+    palmOrientation?: number;
+    jointCurvature?: number;
+    abductionSpread?: number;
+  };
+  notes?: string;
+}
+
+export interface UserLearningProfileSummary {
+  totalPracticedSigns: number;
+  masteredCount: number;
+  proficientCount: number;
+  developingCount: number;
+  criticalWeaknessCount: number;
+  overallHealthScore: number; // 0 - 100
+  topAnatomicalWeakness: string;
+  retentionDueCount: number;
+  longestMasteryStreak: number;
+  remediatedCount: number; // Weaknesses turned into mastered
+}
+
