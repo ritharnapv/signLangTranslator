@@ -11,6 +11,7 @@ import * as tf from '@tensorflow/tfjs';
 import { collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { CollectedSample, PredictionFeedback, SavedPersonalModel, ASLGesture } from '../types';
+import { triggerModelUpdateNotification } from '../utils/notificationEngine';
 
 interface DatasetItem {
   id: string;
@@ -733,6 +734,17 @@ export default function ModelTrainer({
         if (onRegisterTrainedModel) {
           onRegisterTrainedModel(model, sortedLabels);
         }
+
+        // Trigger Notification Engine alert & toast
+        triggerModelUpdateNotification({
+          modelName: newVersionRecord.versionName,
+          modelVersion: `v${versionNumber}`,
+          accuracy: Number((finalAccuracy * 100).toFixed(1)),
+          epochs: epochs,
+          sampleCount: activeDatasetSamples.length,
+          isCustom: true,
+          description: `Custom model trained on ${activeDatasetSamples.length} samples with ${(finalAccuracy * 100).toFixed(1)}% accuracy. Active across live translation feeds.`
+        });
 
         setSuccessMsg(`Model ${newVersionRecord.versionName} trained to completion! Integrated ${userFeedbackList.length} user corrections. Accuracy gain: ${accuracyGain >= 0 ? '+' : ''}${(accuracyGain * 100).toFixed(1)}%. Saved checkpoint to local storage!`);
       }

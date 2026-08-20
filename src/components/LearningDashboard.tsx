@@ -48,6 +48,7 @@ import {
   INITIAL_PRACTICE_GOALS, 
   ALL_COMPLETION_BADGES 
 } from '../data/learningCurriculumData';
+import { triggerAchievementNotification, triggerStreakAlert } from '../utils/notificationEngine';
 import ActiveLessonModal from './ActiveLessonModal';
 import { auth, db } from '../firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
@@ -254,15 +255,41 @@ export default function LearningDashboard({
     // Update badges
     const updatedBadges = badges.map(b => {
       if (b.id === 'badge_first_steps' && !b.unlocked) {
+        triggerAchievementNotification({
+          id: b.id,
+          title: b.title,
+          description: b.description,
+          tier: b.tier,
+          xpEarned: b.xpValue
+        });
         return { ...b, unlocked: true, currentProgress: 1, unlockedAt: new Date().toISOString() };
       }
       if (b.id === 'badge_vocabulary_50') {
         const nextProg = Math.min(stats.signsMasteredCount + 4, 50);
-        return { ...b, currentProgress: nextProg, unlocked: nextProg >= 50 };
+        const wasUnlocked = b.unlocked;
+        const nowUnlocked = nextProg >= 50;
+        if (!wasUnlocked && nowUnlocked) {
+          triggerAchievementNotification({
+            id: b.id,
+            title: b.title,
+            description: b.description,
+            tier: b.tier,
+            xpEarned: b.xpValue
+          });
+        }
+        return { ...b, currentProgress: nextProg, unlocked: nowUnlocked };
       }
       return b;
     });
     setBadges(updatedBadges);
+
+    // Trigger lesson completion celebration
+    triggerAchievementNotification({
+      title: `Lesson Mastered: ${score}% Score!`,
+      description: `Completed micro-lesson with ${stars} stars and earned +${xpEarned} XP.`,
+      tier: stars === 3 ? 'gold' : 'silver',
+      xpEarned: xpEarned
+    });
 
     persistState(updatedLessons, updatedGoals, updatedBadges, updatedStats);
   };

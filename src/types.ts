@@ -530,3 +530,49 @@ export interface UserLearningProfileSummary {
   remediatedCount: number; // Weaknesses turned into mastered
 }
 
+export type NotificationType = 'practice_reminder' | 'achievement' | 'model_update' | 'system' | 'streak_alert';
+export type NotificationPriority = 'low' | 'normal' | 'high' | 'urgent';
+
+export interface AppNotification {
+  id: string;
+  title: string;
+  message: string;
+  type: NotificationType;
+  priority: NotificationPriority;
+  timestamp: string; // ISO string
+  read: boolean;
+  actionTab?: 'dashboard' | 'learning_dashboard' | 'practice_recommendations' | 'evaluator' | 'multiplayer' | 'learning' | 'dictionary' | 'gesture_search' | 'trainer' | 'datasets' | 'offline' | 'profile';
+  actionLabel?: string;
+  actionPayload?: {
+    signChar?: string;
+    signLanguage?: 'ASL' | 'ISL' | string;
+    badgeId?: string;
+    badgeTitle?: string;
+    badgeTier?: 'bronze' | 'silver' | 'gold' | 'diamond';
+    modelId?: string;
+    modelName?: string;
+    modelVersion?: string;
+    modelAccuracy?: number;
+    streakDays?: number;
+    xpEarned?: number;
+    url?: string;
+  };
+  iconType?: 'bell' | 'sparkles' | 'trophy' | 'cpu' | 'flame' | 'target' | 'clock' | 'zap';
+  sentToBrowser?: boolean;
+}
+
+export interface NotificationPreferences {
+  browserNotificationsEnabled: boolean;
+  practiceRemindersEnabled: boolean;
+  practiceReminderTime: string; // e.g. "18:00"
+  practiceReminderDays: number[]; // [0,1,2,3,4,5,6] (0=Sun, 6=Sat)
+  practiceIntervalHours: number; // e.g. 24
+  achievementAlertsEnabled: boolean;
+  modelUpdatesEnabled: boolean;
+  streakProtectionAlerts: boolean;
+  soundEnabled: boolean;
+  quietHoursEnabled: boolean;
+  quietHoursStart: string; // e.g. "22:00"
+  quietHoursEnd: string;   // e.g. "08:00"
+}
+

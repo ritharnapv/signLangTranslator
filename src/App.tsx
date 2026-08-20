@@ -25,6 +25,9 @@ import SignEvaluatorView from './components/SignEvaluatorView';
 import MultiplayerPracticeView from './components/MultiplayerPracticeView';
 import GestureSearch from './components/GestureSearch';
 import PracticeRecommendations from './components/PracticeRecommendations';
+import NotificationToastBanner from './components/NotificationToastBanner';
+import NotificationCenterModal from './components/NotificationCenterModal';
+import { getUnreadNotificationCount, checkAndTriggerAutomatedPracticeReminder } from './utils/notificationEngine';
 import { ensureBaselineModelCached } from './lib/offlineModelCache';
 import { getOfflineSyncQueue, syncOfflineDataToCloud } from './lib/offlineSync';
 import { getLocalAutoBackupSettings, createCloudBackupSnapshot } from './lib/cloudAutoBackup';
@@ -98,7 +101,8 @@ import {
   Target,
   Swords,
   Users,
-  Search
+  Search,
+  Bell
 } from 'lucide-react';
 
 // Production environment configuration helpers
@@ -204,7 +208,39 @@ export default function App() {
 
   const [themeCustomizerOpen, setThemeCustomizerOpen] = useState<boolean>(false);
   const [keyboardShortcutsOpen, setKeyboardShortcutsOpen] = useState<boolean>(false);
+  const [notificationCenterOpen, setNotificationCenterOpen] = useState<boolean>(false);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState<number>(() => getUnreadNotificationCount());
   const [srAnnouncement, setSrAnnouncement] = useState<string>('');
+
+  // Notifications sync & tab navigation event listener
+  useEffect(() => {
+    const updateUnread = () => {
+      setUnreadNotificationsCount(getUnreadNotificationCount());
+    };
+    
+    window.addEventListener('sign_ai_notifications_updated' as any, updateUnread);
+    
+    const handleNavigateEvent = (e: CustomEvent<{ tab: string; payload?: any }>) => {
+      if (e.detail?.tab) {
+        setActiveTab(e.detail.tab as any);
+      }
+    };
+    window.addEventListener('sign_ai_navigate_tab' as any, handleNavigateEvent);
+
+    // Initial check for automated practice reminders
+    checkAndTriggerAutomatedPracticeReminder();
+
+    // Check periodically for daily reminders (every 2 minutes)
+    const reminderInterval = setInterval(() => {
+      checkAndTriggerAutomatedPracticeReminder();
+    }, 120000);
+
+    return () => {
+      window.removeEventListener('sign_ai_notifications_updated' as any, updateUnread);
+      window.removeEventListener('sign_ai_navigate_tab' as any, handleNavigateEvent);
+      clearInterval(reminderInterval);
+    };
+  }, []);
 
   // Screen Reader live announcement helper
   const announceToSR = (message: string) => {
@@ -1001,6 +1037,10 @@ export default function App() {
           setKeyboardShortcutsOpen(false);
           announceToSR("Keyboard shortcuts guide closed");
         }
+        if (notificationCenterOpen) {
+          setNotificationCenterOpen(false);
+          announceToSR("Notification center closed");
+        }
         return;
       }
 
@@ -1047,6 +1087,13 @@ export default function App() {
             announceToSR(next ? "Theme customizer opened" : "Theme customizer closed");
             return next;
           });
+        } else if (key === 'n') {
+          e.preventDefault();
+          setNotificationCenterOpen(prev => {
+            const next = !prev;
+            announceToSR(next ? "Notification center opened" : "Notification center closed");
+            return next;
+          });
         } else if (key === 'c') {
           e.preventDefault();
           setCameraActive(prev => {
@@ -1084,7 +1131,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [themeSettings, darkMode, themeCustomizerOpen, keyboardShortcutsOpen, cameraActive, formedSentence, translatedText]);
+  }, [themeSettings, darkMode, themeCustomizerOpen, keyboardShortcutsOpen, notificationCenterOpen, cameraActive, formedSentence, translatedText]);
 
   const handleLocalSpeak = (textToSpeak: string, languageOverride?: string) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
@@ -3590,6 +3637,23 @@ export default function App() {
           >
             <Palette className="w-5 h-5 text-[var(--color-primary)]" />
             <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-[#1a1a1d]" />
+          </button>
+
+          {/* Notification Center Bell Button */}
+          <button
+            onClick={() => setNotificationCenterOpen(true)}
+            className="w-10 h-10 rounded-xl bg-[#f0f2ee] dark:bg-[#1f1f22] border border-[#e0e4db] dark:border-[#2d2d32] flex items-center justify-center text-[#7c8d7c] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-[#ffffff] hover:scale-105 active:scale-95 transition-all shadow-sm cursor-pointer relative focus-visible:ring-2 focus-visible:ring-emerald-500"
+            title="Notifications & Practice Reminders (Alt + N)"
+            aria-label="Open Notifications Center and Preferences"
+            id="header-notification-bell-btn"
+            style={{ minHeight: '40px', minWidth: '40px' }}
+          >
+            <Bell className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+            {unreadNotificationsCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center ring-2 ring-white dark:ring-[#1a1a1d] shadow-sm animate-pulse">
+                {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
+              </span>
+            )}
           </button>
 
           {/* Quick Light/Dark Toggle Button */}
@@ -7006,6 +7070,23 @@ export default function App() {
       <KeyboardShortcutsModal
         isOpen={keyboardShortcutsOpen}
         onClose={() => setKeyboardShortcutsOpen(false)}
+      />
+
+      {/* Notification Center Modal */}
+      <NotificationCenterModal
+        isOpen={notificationCenterOpen}
+        onClose={() => setNotificationCenterOpen(false)}
+        onNavigateTab={(tab) => {
+          setActiveTab(tab as any);
+        }}
+      />
+
+      {/* Toast Notification Alert Banner */}
+      <NotificationToastBanner
+        onNavigateTab={(tab) => {
+          setActiveTab(tab as any);
+        }}
+        onOpenNotificationCenter={() => setNotificationCenterOpen(true)}
       />
 
       {/* Ground-Truth Prediction Correction Modal */}

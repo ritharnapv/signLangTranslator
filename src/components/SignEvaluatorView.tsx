@@ -36,6 +36,7 @@ import {
   LANDMARK_INDICES
 } from '../utils/signEvaluatorEngine';
 import { recordLearningHistoryEntry } from '../utils/practiceRecommender';
+import { triggerAchievementNotification } from '../utils/notificationEngine';
 
 interface SignEvaluatorViewProps {
   initialSign?: string;
@@ -243,6 +244,15 @@ export const SignEvaluatorView: React.FC<SignEvaluatorViewProps> = ({
             if (onCompletePractice && mergedResult.overallScore >= 75) {
               onCompletePractice(mergedResult.overallScore, selectedSign);
             }
+
+            if (mergedResult.overallScore >= 90) {
+              triggerAchievementNotification({
+                title: `Sign Mastery: ${selectedSign}`,
+                description: `Achieved ${mergedResult.overallScore}% score with flawless anatomical landmark alignment`,
+                tier: mergedResult.overallScore >= 98 ? 'diamond' : 'gold',
+                xpEarned: mergedResult.overallScore >= 98 ? 100 : 50
+              });
+            }
             setIsEvaluating(false);
             return;
           }
@@ -268,6 +278,15 @@ export const SignEvaluatorView: React.FC<SignEvaluatorViewProps> = ({
         mistakesRecorded: localResult.mistakes.map(m => `${m.title}: ${m.description}`),
         subScores: localResult.subScores
       });
+
+      if (localResult.overallScore >= 90) {
+        triggerAchievementNotification({
+          title: `Sign Mastery: ${selectedSign}`,
+          description: `Achieved ${localResult.overallScore}% score with flawless anatomical landmark alignment`,
+          tier: localResult.overallScore >= 98 ? 'diamond' : 'gold',
+          xpEarned: localResult.overallScore >= 98 ? 100 : 50
+        });
+      }
 
       if (onCompletePractice && localResult.overallScore >= 75) {
         onCompletePractice(localResult.overallScore, selectedSign);
