@@ -49,6 +49,7 @@ import {
   ALL_COMPLETION_BADGES 
 } from '../data/learningCurriculumData';
 import { triggerAchievementNotification, triggerStreakAlert } from '../utils/notificationEngine';
+import { recordTelemetryXp } from '../utils/leaderboardEngine';
 import ActiveLessonModal from './ActiveLessonModal';
 import { auth, db } from '../firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
@@ -61,6 +62,7 @@ interface LearningDashboardProps {
   onOpenEvaluator?: (signName: string, lang?: 'ASL' | 'ISL') => void;
   onNavigateToMultiplayer?: () => void;
   onNavigateToRecommendations?: () => void;
+  onNavigateToLeaderboard?: () => void;
 }
 
 export default function LearningDashboard({
@@ -70,7 +72,8 @@ export default function LearningDashboard({
   onToggleCamera,
   onOpenEvaluator,
   onNavigateToMultiplayer,
-  onNavigateToRecommendations
+  onNavigateToRecommendations,
+  onNavigateToLeaderboard
 }: LearningDashboardProps) {
   // Navigation & Sub-views: 'all' | 'lessons' | 'progress' | 'goals' | 'badges'
   const [activeSection, setActiveSection] = useState<'overview' | 'lessons' | 'progress' | 'goals' | 'badges'>('overview');
@@ -290,6 +293,9 @@ export default function LearningDashboard({
       tier: stars === 3 ? 'gold' : 'silver',
       xpEarned: xpEarned
     });
+
+    // Record telemetry in daily/weekly Leaderboard Engine
+    recordTelemetryXp(xpEarned, 4);
 
     persistState(updatedLessons, updatedGoals, updatedBadges, updatedStats);
   };
@@ -1038,10 +1044,21 @@ export default function LearningDashboard({
         <section className="space-y-6" id="completion-badges-module">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="space-y-1">
-              <h2 className="text-xl font-bold text-[#2d2d28] dark:text-white flex items-center gap-2">
-                <Trophy className="w-5 h-5 text-amber-500 fill-amber-400" />
-                <span>Completion Badges & Milestones</span>
-              </h2>
+              <div className="flex items-center gap-3">
+                <h2 className="text-xl font-bold text-[#2d2d28] dark:text-white flex items-center gap-2">
+                  <Trophy className="w-5 h-5 text-amber-500 fill-amber-400" />
+                  <span>Completion Badges & Milestones</span>
+                </h2>
+                {onNavigateToLeaderboard && (
+                  <button
+                    onClick={onNavigateToLeaderboard}
+                    className="px-3 py-1 text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white rounded-xl flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
+                  >
+                    <span>Leaderboard & Leagues</span>
+                    <ArrowUpRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
               <p className="text-xs text-stone-500 dark:text-stone-400">
                 Unlock prestigious recognition tokens for speed, precision, cultural knowledge, and continuous streaks.
               </p>

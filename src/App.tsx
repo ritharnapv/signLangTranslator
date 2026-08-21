@@ -22,6 +22,8 @@ import RestApiDocs from './components/RestApiDocs';
 import VideoTranslation from './components/VideoTranslation';
 import LiveMeetingTranslator from './components/LiveMeetingTranslator';
 import SignEvaluatorView from './components/SignEvaluatorView';
+import LeaderboardView from './components/LeaderboardView';
+import { recordTelemetryXp } from './utils/leaderboardEngine';
 import MultiplayerPracticeView from './components/MultiplayerPracticeView';
 import GestureSearch from './components/GestureSearch';
 import PracticeRecommendations from './components/PracticeRecommendations';
@@ -334,7 +336,7 @@ export default function App() {
     handleUpdateThemeSettings({ themeMode: nextMode });
   };
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'learning_dashboard' | 'practice_recommendations' | 'learning' | 'dictionary' | 'gesture_search' | 'evaluator' | 'multiplayer' | 'roadmap' | 'collector' | 'datasets' | 'labeler' | 'replay' | 'corrections' | 'trainer' | 'files' | 'profile' | 'analytics' | 'conversation' | 'offline' | 'admin' | 'api-docs' | 'video_translator' | 'live_meeting'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'learning_dashboard' | 'leaderboard' | 'practice_recommendations' | 'learning' | 'dictionary' | 'gesture_search' | 'evaluator' | 'multiplayer' | 'roadmap' | 'collector' | 'datasets' | 'labeler' | 'replay' | 'corrections' | 'trainer' | 'files' | 'profile' | 'analytics' | 'conversation' | 'offline' | 'admin' | 'api-docs' | 'video_translator' | 'live_meeting'>('dashboard');
   const [evaluatorInitialSign, setEvaluatorInitialSign] = useState<string>('A');
   const [gestureSearchInitialQuery, setGestureSearchInitialQuery] = useState<string>('');
 
@@ -3148,6 +3150,10 @@ export default function App() {
   };
 
   const addLearningPracticeLog = (predictedChar: string, confidence: number, emotion?: string) => {
+    // Record XP and practice counts to Leaderboard telemetry engine
+    const xpEarned = Math.max(10, Math.round(confidence * 0.5));
+    recordTelemetryXp(xpEarned, 1);
+
     setSessions(prev => {
       const isWord = ["Hello", "Thank You", "Yes", "No", "Help", "Love", "Please", "Sorry", "HI", "SOS"].includes(predictedChar);
       const label = isWord ? 'Sign' : 'Letter';
@@ -3324,6 +3330,18 @@ export default function App() {
           >
             <Trophy className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />
             <span>{t('learningDashboard')}</span>
+          </button>
+          <button
+            onClick={() => { setActiveTab('leaderboard'); setMobileMenuOpen(false); }}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold tracking-wide transition-all flex items-center gap-1.5 ${
+              activeTab === 'leaderboard'
+                ? "bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 text-white shadow-sm ring-1 ring-amber-400"
+                : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
+            }`}
+            id="tab-leaderboard-btn"
+          >
+            <Trophy className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+            <span>Leaderboard</span>
           </button>
           <button
             onClick={() => { setActiveTab('practice_recommendations'); setMobileMenuOpen(false); }}
@@ -3756,6 +3774,7 @@ export default function App() {
               { id: 'dashboard', label: t('liveTranslator'), icon: Camera },
               { id: 'gesture_search', label: t('gestureSearch'), icon: Search },
               { id: 'learning_dashboard', label: t('learningDashboard'), icon: Trophy },
+              { id: 'leaderboard', label: 'Leaderboard & Leagues', icon: Trophy },
               { id: 'practice_recommendations', label: 'Smart Recommendations', icon: Sparkles },
               { id: 'evaluator', label: 'AI Coach Evaluator', icon: Target },
               { id: 'multiplayer', label: t('multiplayerPractice'), icon: Swords },
@@ -5936,6 +5955,13 @@ export default function App() {
             }}
             onNavigateToMultiplayer={() => setActiveTab('multiplayer')}
             onNavigateToRecommendations={() => setActiveTab('practice_recommendations')}
+          />
+        )}
+
+        {/* Global Leaderboard & Achievement Leagues */}
+        {activeTab === 'leaderboard' && (
+          <LeaderboardView
+            onNavigateTab={(tabName) => setActiveTab(tabName as any)}
           />
         )}
 

@@ -55,6 +55,12 @@ export const SHORTCUTS_LIST: ShortcutItem[] = [
     icon: <Sparkles className="w-4 h-4 text-purple-500" />
   },
   {
+    keyCombo: ['Alt', 'N'],
+    description: 'Open Notifications & Practice Reminders center',
+    category: 'Accessibility',
+    icon: <Sparkles className="w-4 h-4 text-amber-500" />
+  },
+  {
     keyCombo: ['Alt', 'K'],
     description: 'Open / Close this Keyboard Shortcuts guide',
     category: 'Accessibility',
@@ -100,22 +106,22 @@ export const SHORTCUTS_LIST: ShortcutItem[] = [
   },
   {
     keyCombo: ['Alt', '4'],
-    description: 'Switch to Continuous Conversation tab',
+    description: 'Switch to Global Leaderboard & Leagues tab',
     category: 'Tab Navigation'
   },
   {
     keyCombo: ['Alt', '5'],
-    description: 'Switch to Dataset Collector tab',
+    description: 'Switch to Continuous Conversation tab',
     category: 'Tab Navigation'
   },
   {
     keyCombo: ['Alt', '6'],
-    description: 'Switch to Model Trainer tab',
+    description: 'Switch to Dataset Collector tab',
     category: 'Tab Navigation'
   },
   {
     keyCombo: ['Alt', '7'],
-    description: 'Switch to Analytics Dashboard tab',
+    description: 'Switch to Model Trainer tab',
     category: 'Tab Navigation'
   },
   {

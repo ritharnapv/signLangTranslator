@@ -541,7 +541,7 @@ export interface AppNotification {
   priority: NotificationPriority;
   timestamp: string; // ISO string
   read: boolean;
-  actionTab?: 'dashboard' | 'learning_dashboard' | 'practice_recommendations' | 'evaluator' | 'multiplayer' | 'learning' | 'dictionary' | 'gesture_search' | 'trainer' | 'datasets' | 'offline' | 'profile';
+  actionTab?: 'dashboard' | 'leaderboard' | 'learning_dashboard' | 'practice_recommendations' | 'evaluator' | 'multiplayer' | 'learning' | 'dictionary' | 'gesture_search' | 'trainer' | 'datasets' | 'offline' | 'profile';
   actionLabel?: string;
   actionPayload?: {
     signChar?: string;
@@ -574,5 +574,60 @@ export interface NotificationPreferences {
   quietHoursEnabled: boolean;
   quietHoursStart: string; // e.g. "22:00"
   quietHoursEnd: string;   // e.g. "08:00"
+}
+
+export type LeaderboardTimeframe = 'daily' | 'weekly' | 'all_time';
+export type LeagueTier = 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond' | 'master';
+
+export interface LeaderboardUser {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl?: string;
+  initials: string;
+  avatarColor: string;
+  countryCode: string;
+  countryFlag: string;
+  signLanguage: 'ASL' | 'ISL' | 'BOTH';
+  league: LeagueTier;
+  level: number;
+  levelTitle: string;
+  streak: number;
+  dailyScore: number;
+  weeklyScore: number;
+  allTimeScore: number;
+  dailySignsCount: number;
+  weeklySignsCount: number;
+  overallAccuracy: number; // 0 - 100
+  rankDaily?: number;
+  rankWeekly?: number;
+  rankAllTime?: number;
+  dailyTrend: 'up' | 'down' | 'same';
+  trendDelta: number;
+  unlockedBadges: CompletionBadge[];
+  featuredBadge?: CompletionBadge;
+  isCurrentUser?: boolean;
+  bio?: string;
+  lastActive: string;
+  multiplayerWins?: number;
+}
+
+export interface LeagueDefinition {
+  id: LeagueTier;
+  title: string;
+  icon: string;
+  color: string;
+  bgGradient: string;
+  minXp: number;
+  rewards: string;
+  description: string;
+  badgeBorder: string;
+}
+
+export interface LeaderboardFilterOptions {
+  timeframe: LeaderboardTimeframe;
+  signLanguage: 'ALL' | 'ASL' | 'ISL';
+  league: 'ALL' | LeagueTier;
+  searchQuery: string;
 }
 
