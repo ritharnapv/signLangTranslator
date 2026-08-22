@@ -23,6 +23,7 @@ import VideoTranslation from './components/VideoTranslation';
 import LiveMeetingTranslator from './components/LiveMeetingTranslator';
 import SignEvaluatorView from './components/SignEvaluatorView';
 import LeaderboardView from './components/LeaderboardView';
+import CertificateView from './components/CertificateView';
 import { recordTelemetryXp } from './utils/leaderboardEngine';
 import MultiplayerPracticeView from './components/MultiplayerPracticeView';
 import GestureSearch from './components/GestureSearch';
@@ -68,6 +69,7 @@ import {
   Flame,
   CheckCircle2,
   Trash2,
+  Award,
   BookOpen,
   Database,
   Download,
@@ -336,7 +338,7 @@ export default function App() {
     handleUpdateThemeSettings({ themeMode: nextMode });
   };
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'learning_dashboard' | 'leaderboard' | 'practice_recommendations' | 'learning' | 'dictionary' | 'gesture_search' | 'evaluator' | 'multiplayer' | 'roadmap' | 'collector' | 'datasets' | 'labeler' | 'replay' | 'corrections' | 'trainer' | 'files' | 'profile' | 'analytics' | 'conversation' | 'offline' | 'admin' | 'api-docs' | 'video_translator' | 'live_meeting'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'learning_dashboard' | 'leaderboard' | 'certificates' | 'practice_recommendations' | 'learning' | 'dictionary' | 'gesture_search' | 'evaluator' | 'multiplayer' | 'roadmap' | 'collector' | 'datasets' | 'labeler' | 'replay' | 'corrections' | 'trainer' | 'files' | 'profile' | 'analytics' | 'conversation' | 'offline' | 'admin' | 'api-docs' | 'video_translator' | 'live_meeting'>('dashboard');
   const [evaluatorInitialSign, setEvaluatorInitialSign] = useState<string>('A');
   const [gestureSearchInitialQuery, setGestureSearchInitialQuery] = useState<string>('');
 
@@ -3344,6 +3346,18 @@ export default function App() {
             <span>Leaderboard</span>
           </button>
           <button
+            onClick={() => { setActiveTab('certificates'); setMobileMenuOpen(false); }}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold tracking-wide transition-all flex items-center gap-1.5 ${
+              activeTab === 'certificates'
+                ? "bg-gradient-to-r from-amber-700 via-yellow-600 to-amber-800 text-white shadow-sm ring-1 ring-amber-300"
+                : "text-[#5a6b5a] dark:text-[#a1a1aa] hover:text-[#2d2d28] dark:hover:text-white"
+            }`}
+            id="tab-certificates-btn"
+          >
+            <Award className="w-3.5 h-3.5 text-amber-300" />
+            <span>Certificates</span>
+          </button>
+          <button
             onClick={() => { setActiveTab('practice_recommendations'); setMobileMenuOpen(false); }}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-bold tracking-wide transition-all flex items-center gap-1.5 ${
               activeTab === 'practice_recommendations'
@@ -3775,6 +3789,7 @@ export default function App() {
               { id: 'gesture_search', label: t('gestureSearch'), icon: Search },
               { id: 'learning_dashboard', label: t('learningDashboard'), icon: Trophy },
               { id: 'leaderboard', label: 'Leaderboard & Leagues', icon: Trophy },
+              { id: 'certificates', label: 'Certificates & QR', icon: Award },
               { id: 'practice_recommendations', label: 'Smart Recommendations', icon: Sparkles },
               { id: 'evaluator', label: 'AI Coach Evaluator', icon: Target },
               { id: 'multiplayer', label: t('multiplayerPractice'), icon: Swords },
@@ -5955,12 +5970,20 @@ export default function App() {
             }}
             onNavigateToMultiplayer={() => setActiveTab('multiplayer')}
             onNavigateToRecommendations={() => setActiveTab('practice_recommendations')}
+            onNavigateToCertificates={() => setActiveTab('certificates')}
           />
         )}
 
         {/* Global Leaderboard & Achievement Leagues */}
         {activeTab === 'leaderboard' && (
           <LeaderboardView
+            onNavigateTab={(tabName) => setActiveTab(tabName as any)}
+          />
+        )}
+
+        {/* Practice Completion Certificates & Cryptographic QR Verification */}
+        {activeTab === 'certificates' && (
+          <CertificateView
             onNavigateTab={(tabName) => setActiveTab(tabName as any)}
           />
         )}
@@ -5992,6 +6015,7 @@ export default function App() {
             availableSigns={customGestures}
             onNavigateToDashboard={() => setActiveTab('learning_dashboard')}
             onNavigateToRecommendations={() => setActiveTab('practice_recommendations')}
+            onNavigateToCertificates={() => setActiveTab('certificates')}
             onCompletePractice={(score, signName) => {
               addLearningPracticeLog(signName, score, score >= 85 ? 'happy' : 'neutral');
             }}

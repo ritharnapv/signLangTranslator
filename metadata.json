@@ -1,6 +1,6 @@
 {
   "name": "Sign Language Translator",
-  "description": "Real-time sign language translation for live video meetings with webcam subtitles, personalized gesture model training, complete ASL & ISL dictionary with HD videos, an AI Sign Evaluator with personalized practice recommendations and weak gesture biomechanical analysis, competitive Multiplayer Practice Arena, Global Leaderboards with daily/weekly leagues, achievement badges, customizable practice reminders & notifications, an advanced Gesture Search engine supporting keyword lookup, category browsing, visual image-based reverse sign search, and fast filtering, alongside an interactive Learning Dashboard.",
+  "description": "Real-time sign language translation for live video meetings with webcam subtitles, personalized gesture model training, complete ASL & ISL dictionary with HD videos, an AI Sign Evaluator with personalized practice recommendations and weak gesture biomechanical analysis, practice completion certificates with vector PDF download and cryptographic QR verification, competitive Multiplayer Practice Arena, Global Leaderboards with daily/weekly leagues, achievement badges, customizable practice reminders & notifications, an advanced Gesture Search engine, and an interactive Learning Dashboard.",
   "requestFramePermissions": ["camera"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

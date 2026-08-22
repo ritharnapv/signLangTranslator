@@ -45,6 +45,7 @@ interface SignEvaluatorViewProps {
   availableSigns?: ASLGesture[];
   onNavigateToDashboard?: () => void;
   onNavigateToRecommendations?: () => void;
+  onNavigateToCertificates?: () => void;
 }
 
 export const SignEvaluatorView: React.FC<SignEvaluatorViewProps> = ({
@@ -53,7 +54,8 @@ export const SignEvaluatorView: React.FC<SignEvaluatorViewProps> = ({
   onCompletePractice,
   availableSigns = [],
   onNavigateToDashboard,
-  onNavigateToRecommendations
+  onNavigateToRecommendations,
+  onNavigateToCertificates
 }) => {
   const [selectedSign, setSelectedSign] = useState<string>(initialSign);
   const [currentSignLanguage, setCurrentSignLanguage] = useState<'ASL' | 'ISL'>(signLanguage);
@@ -879,21 +881,33 @@ export const SignEvaluatorView: React.FC<SignEvaluatorViewProps> = ({
                   </div>
                 )}
 
-                {/* Practice Recommendations Quick Link */}
-                {onNavigateToRecommendations && (
-                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                    <span className="text-xs text-slate-500 dark:text-slate-400">
-                      Want an adaptive workout targeting this and other weak signs?
-                    </span>
-                    <button
-                      onClick={onNavigateToRecommendations}
-                      className="px-3.5 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 border border-indigo-200 dark:border-indigo-800/40 text-indigo-700 dark:text-indigo-300 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      <span>Smart Practice Recommendations</span>
-                    </button>
+                {/* Practice Recommendations & Certificate Quick Links */}
+                <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    High accuracy achieved? Claim official accreditation.
+                  </span>
+                  <div className="flex items-center gap-2">
+                    {onNavigateToRecommendations && (
+                      <button
+                        onClick={onNavigateToRecommendations}
+                        className="px-3.5 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 border border-indigo-200 dark:border-indigo-800/40 text-indigo-700 dark:text-indigo-300 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Smart Recommendations</span>
+                      </button>
+                    )}
+                    {onNavigateToCertificates && (
+                      <button
+                        onClick={onNavigateToCertificates}
+                        className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                        id="btn-evaluator-claim-cert"
+                      >
+                        <Award className="w-3.5 h-3.5" />
+                        <span>Claim Evaluator Certificate</span>
+                      </button>
+                    )}
                   </div>
-                )}
+                </div>
               </div>
             </>
           )}

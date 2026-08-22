@@ -13,6 +13,7 @@ import {
   LayoutGrid, 
   Check, 
   Sparkles,
+  Award,
   HelpCircle
 } from 'lucide-react';
 
@@ -128,6 +129,12 @@ export const SHORTCUTS_LIST: ShortcutItem[] = [
     keyCombo: ['Alt', '8'],
     description: 'Switch to User Profile & Preferences tab',
     category: 'Tab Navigation'
+  },
+  {
+    keyCombo: ['Alt', '9'],
+    description: 'Switch to Certificates & QR Verification tab',
+    category: 'Tab Navigation',
+    icon: <Award className="w-4 h-4 text-amber-500" />
   }
 ];
 

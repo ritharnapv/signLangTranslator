@@ -631,3 +631,76 @@ export interface LeaderboardFilterOptions {
   searchQuery: string;
 }
 
+export type CertificateTheme = 'gold' | 'emerald' | 'sapphire' | 'cyber';
+export type CertificateHonors = 'Honors with Distinction' | 'Excellence in Signing' | 'Verified Certified Signer' | 'Mastery Level';
+export type CertificateType = 'track_completion' | 'practice_milestone' | 'evaluator_mastery' | 'fluency_diploma' | 'custom';
+
+export interface CertificateCredential {
+  id: string; // e.g. SIGNAI-2026-A89F-ISL
+  recipientName: string;
+  recipientEmail?: string;
+  trackId: string;
+  trackTitle: string;
+  description: string;
+  signLanguage: 'ISL' | 'ASL' | 'BOTH';
+  issueDate: string; // e.g. "August 22, 2026"
+  issueTimestamp: number;
+  completionScore: number; // 0 - 100 accuracy
+  masteredSignsCount: number;
+  practiceMinutes: number;
+  levelTitle: string;
+  honorsLevel: CertificateHonors;
+  theme: CertificateTheme;
+  verificationHash: string; // cryptographic simulation hash
+  verificationUrl: string;
+  qrCodeDataUrl: string; // generated base64 QR code image
+  certificateType: CertificateType;
+  instructorName: string;
+  instructorTitle: string;
+  organizationName: string;
+  skillsAcquired: string[];
+  notes?: string;
+  status: 'valid' | 'revoked';
+}
+
+export interface CertificateCreationParams {
+  recipientName: string;
+  recipientEmail?: string;
+  trackId: string;
+  trackTitle: string;
+  description?: string;
+  signLanguage: 'ISL' | 'ASL' | 'BOTH';
+  completionScore?: number;
+  masteredSignsCount?: number;
+  practiceMinutes?: number;
+  levelTitle?: string;
+  honorsLevel?: CertificateHonors;
+  theme?: CertificateTheme;
+  certificateType?: CertificateType;
+  skillsAcquired?: string[];
+  customDate?: string;
+}
+
+export interface CertificateTrackPreset {
+  id: string;
+  title: string;
+  description: string;
+  signLanguage: 'ISL' | 'ASL' | 'BOTH';
+  defaultLevel: string;
+  defaultHonors: CertificateHonors;
+  defaultSignsCount: number;
+  defaultMinutes: number;
+  skills: string[];
+  theme: CertificateTheme;
+  type: CertificateType;
+  badgeEmoji: string;
+}
+
+export interface CertificateVerificationResult {
+  isValid: boolean;
+  certificate?: CertificateCredential;
+  verifiedAt: string;
+  tamperCheckPassed: boolean;
+  message: string;
+}
+

@@ -63,6 +63,7 @@ interface LearningDashboardProps {
   onNavigateToMultiplayer?: () => void;
   onNavigateToRecommendations?: () => void;
   onNavigateToLeaderboard?: () => void;
+  onNavigateToCertificates?: () => void;
 }
 
 export default function LearningDashboard({
@@ -73,7 +74,8 @@ export default function LearningDashboard({
   onOpenEvaluator,
   onNavigateToMultiplayer,
   onNavigateToRecommendations,
-  onNavigateToLeaderboard
+  onNavigateToLeaderboard,
+  onNavigateToCertificates
 }: LearningDashboardProps) {
   // Navigation & Sub-views: 'all' | 'lessons' | 'progress' | 'goals' | 'badges'
   const [activeSection, setActiveSection] = useState<'overview' | 'lessons' | 'progress' | 'goals' | 'badges'>('overview');
@@ -556,6 +558,33 @@ export default function LearningDashboard({
           >
             <Sparkles className="w-4 h-4 text-white" />
             <span>Open Practice Recommendations</span>
+          </button>
+        </div>
+      )}
+
+      {/* Official Practice Completion Certificates Callout Banner */}
+      {activeSection === 'overview' && onNavigateToCertificates && (
+        <div className="bg-gradient-to-r from-amber-900 via-stone-900 to-amber-950 text-white rounded-3xl p-6 shadow-md relative overflow-hidden flex flex-col sm:flex-row sm:items-center justify-between gap-5 border border-amber-500/30" id="certificates-promo-banner">
+          <div className="space-y-1.5 z-10">
+            <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-lg bg-amber-500/20 border border-amber-400/30 text-[10px] font-mono font-bold uppercase tracking-wider text-amber-300">
+              <Award className="w-3.5 h-3.5 text-amber-300" />
+              <span>Official Accreditation & Verified Credentials</span>
+            </div>
+            <h3 className="text-lg sm:text-xl font-black">
+              Practice Completion Certificates & QR Verification
+            </h3>
+            <p className="text-xs text-amber-200/80 max-w-xl font-sans leading-relaxed">
+              Earn and download tamper-proof vector PDF certificates with QR code verification stamps for your completed ISL & ASL modules and evaluator milestones.
+            </p>
+          </div>
+          <button
+            onClick={onNavigateToCertificates}
+            type="button"
+            className="px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-extrabold text-xs uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-2 shrink-0 cursor-pointer self-start sm:self-auto active:scale-95"
+            id="btn-claim-certificates-dashboard"
+          >
+            <Award className="w-4 h-4 text-stone-950" />
+            <span>Claim & View Certificates</span>
           </button>
         </div>
       )}
