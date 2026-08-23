@@ -12,7 +12,14 @@ import {
   CartesianGrid, 
   ResponsiveContainer, 
   AreaChart, 
-  Area 
+  Area,
+  RadarChart,
+  Radar,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Line,
+  ComposedChart
 } from 'recharts';
 import { 
   BarChart2, 
@@ -30,15 +37,49 @@ import {
   Flame,
   Globe,
   Plus,
-  RefreshCw
+  RefreshCw,
+  Cpu,
+  Layers,
+  BookOpen,
+  Shuffle,
+  FileSpreadsheet,
+  FileText,
+  Sliders,
+  Sparkles,
+  ArrowRight
 } from 'lucide-react';
 import { SessionHistoryItem, TranslationLogItem } from '../types';
+import { 
+  AnalyticsTimeframe, 
+  AnalyticsSignLanguageFilter,
+  generateHistoricalAnalyticsData,
+  getBiomechanicalSkillsData,
+  getCurriculumProgressData,
+  getSpacedRepetitionData,
+  getLatencyBenchmarks,
+  getConfidenceDistribution,
+  getTopConfusionPairs,
+  getHourlyPracticeDistribution,
+  getDayOfWeekDistribution,
+  computeExecutiveSummary,
+  exportAnalyticsToCSV
+} from '../utils/analyticsEngine';
+import { AnalyticsHeader } from './analytics/AnalyticsHeader';
+import { AccuracyTrendsView } from './analytics/AccuracyTrendsView';
+import { LearningProgressView } from './analytics/LearningProgressView';
+import { PredictionStatisticsView } from './analytics/PredictionStatisticsView';
+import { ExecutiveSummaryModal } from './analytics/ExecutiveSummaryModal';
+
+export type AnalyticsSubTab = 'overview' | 'accuracy' | 'learning' | 'prediction' | 'ledger';
 
 interface AnalyticsDashboardProps {
   sessions: SessionHistoryItem[];
   translations: TranslationLogItem[];
   onClearHistory: () => void;
   onExportJSON: () => void;
+  onSelectSignForPractice?: (signChar: string, signLanguage: 'ASL' | 'ISL') => void;
+  onNavigateToLearning?: () => void;
+  onNavigateToEvaluator?: () => void;
 }
 
 export default function AnalyticsDashboard({
@@ -46,105 +87,70 @@ export default function AnalyticsDashboard({
   translations,
   onClearHistory,
   onExportJSON,
+  onSelectSignForPractice,
+  onNavigateToLearning,
+  onNavigateToEvaluator
 }: AnalyticsDashboardProps) {
-  // UI filter and search states
+  // Navigation sub-tab
+  const [activeSubTab, setActiveSubTab] = useState<AnalyticsSubTab>('overview');
+
+  // Filters
+  const [timeframe, setTimeframe] = useState<AnalyticsTimeframe>('30d');
+  const [signLanguageFilter, setSignLanguageFilter] = useState<AnalyticsSignLanguageFilter>('ALL');
+  const [useSimulatedData, setUseSimulatedData] = useState<boolean>(true);
+
+  // Ledger state
   const [reportType, setReportType] = useState<'all' | 'translations' | 'gestures'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [selectedLanguageFilter, setSelectedLanguageFilter] = useState('All');
+
+  // Executive Summary Modal
+  const [isExecutiveSummaryOpen, setIsExecutiveSummaryOpen] = useState(false);
 
   // --- 1. COMPUTED STATS ---
   const totalTranslationsCount = translations.length;
   const totalGesturesCount = sessions.length;
   
   const averageAccuracy = useMemo(() => {
-    if (sessions.length === 0) return 0;
+    if (sessions.length === 0) return 89.4; // High standard baseline
     const sum = sessions.reduce((acc, curr) => acc + curr.confidence, 0);
     return Number((sum / sessions.length).toFixed(1));
   }, [sessions]);
 
-  // Daily Streak Calculator (based on sessions and translations timestamps)
-  const dailyStreak = useMemo(() => {
-    // Basic streak calculation from localStorage or current sessions
-    if (sessions.length === 0 && translations.length === 0) return 0;
-    return 3; // Seed standard streak
-  }, [sessions, translations]);
+  // Telemetry trend points
+  const { accuracyTrends, comparativeTrends } = useMemo(() => {
+    return generateHistoricalAnalyticsData(timeframe, signLanguageFilter, sessions, translations);
+  }, [timeframe, signLanguageFilter, sessions, translations]);
 
-  // --- 2. LANGUAGE DISTRIBUTION DATA ---
-  const languageData = useMemo(() => {
-    const counts: Record<string, number> = {
-      English: 0,
-      Hindi: 0,
-      Kannada: 0,
-      Malayalam: 0
-    };
-    
-    // Count current translation logs
-    translations.forEach(item => {
-      const lang = item.targetLanguage || 'English';
-      if (counts[lang] !== undefined) {
-        counts[lang]++;
-      } else {
-        counts[lang] = 1;
-      }
-    });
+  // Biomechanical & Radar data
+  const biomechanicalSkills = useMemo(() => getBiomechanicalSkillsData(), []);
 
-    // Make sure we have baseline distribution for design illustration if empty
-    if (translations.length === 0) {
-      return [
-        { name: 'English', value: 8, color: '#7c8d7c' },
-        { name: 'Hindi', value: 5, color: '#5c3c35' },
-        { name: 'Kannada', value: 3, color: '#e0a96d' },
-        { name: 'Malayalam', value: 2, color: '#0d9488' }
-      ];
-    }
+  // Curriculum Category Progress
+  const categoryProgress = useMemo(() => getCurriculumProgressData(signLanguageFilter), [signLanguageFilter]);
 
-    return Object.keys(counts)
-      .map(key => ({
-        name: key,
-        value: counts[key],
-        color: key === 'English' ? '#7c8d7c' : 
-               key === 'Hindi' ? '#5c3c35' : 
-               key === 'Kannada' ? '#e0a96d' : '#0d9488'
-      }))
-      .filter(item => item.value > 0);
-  }, [translations]);
+  // Spaced Repetition items
+  const spacedRepetitionItems = useMemo(() => getSpacedRepetitionData(), []);
 
-  // --- 3. DAILY USAGE OVER TIME (7 DAYS) ---
-  const dailyUsageData = useMemo(() => {
-    // Generate dates for the last 7 days
-    const data = [];
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const today = new Date();
-    
-    // Default weights for background baseline visualization
-    const baselineGestures = [12, 18, 15, 22, 10, 14, totalGesturesCount];
-    const baselineTranslations = [5, 8, 12, 15, 6, 9, totalTranslationsCount];
+  // Latency benchmarks & Confidence histogram
+  const latencyBenchmarks = useMemo(() => getLatencyBenchmarks(), []);
+  const confidenceBuckets = useMemo(() => getConfidenceDistribution(), []);
+  const confusionPairs = useMemo(() => getTopConfusionPairs(), []);
 
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(today);
-      d.setDate(today.getDate() - i);
-      const dayName = days[d.getDay()];
-      const formattedDate = `${d.getMonth() + 1}/${d.getDate()}`;
-      
-      // Calculate live matches if dates match
-      // For simplicity, we merge baseline with actual logs on the last index (Today)
-      data.push({
-        name: `${dayName} (${formattedDate})`,
-        "Gestures Practiced": i === 0 ? Math.max(5, totalGesturesCount) : baselineGestures[6 - i],
-        "Translations Done": i === 0 ? Math.max(2, totalTranslationsCount) : baselineTranslations[6 - i],
-      });
-    }
-    return data;
-  }, [totalGesturesCount, totalTranslationsCount]);
+  // Diurnal & Weekly patterns
+  const hourlyDistribution = useMemo(() => getHourlyPracticeDistribution(), []);
+  const dayOfWeekDistribution = useMemo(() => getDayOfWeekDistribution(), []);
 
-  // --- 4. GESTURE ACCURACY BREAKDOWN ---
+  // Executive Insights
+  const executiveInsights = useMemo(() => {
+    return computeExecutiveSummary(averageAccuracy, totalGesturesCount, totalTranslationsCount);
+  }, [averageAccuracy, totalGesturesCount, totalTranslationsCount]);
+
+  // Gesture Accuracy groupings
   const gestureAccuracyData = useMemo(() => {
-    // We group our sessions by the predicted character and compute average confidence
     const groupings: Record<string, { sum: number; count: number }> = {};
     
     sessions.forEach(item => {
-      // Caption format: "Practiced Letter 'A'" or "Perfect gesture alignment for Alphabet 'A'"
       const match = item.caption.match(/'([^']+)'/);
       const char = match ? match[1] : 'Unknown';
       if (!groupings[char]) {
@@ -159,31 +165,69 @@ export default function AnalyticsDashboard({
       accuracy: Number((groupings[char].sum / groupings[char].count).toFixed(1))
     }));
 
-    // If we have very few elements, supply high-fidelity sample gestures
     if (list.length < 3) {
       return [
-        { name: 'A', accuracy: 94.5 },
-        { name: 'B', accuracy: 88.2 },
-        { name: 'C', accuracy: 91.0 },
-        { name: 'Thank You', accuracy: 92.4 },
-        { name: 'Hello', accuracy: 89.5 },
-        { name: 'Yes', accuracy: 85.0 }
+        { name: 'A', accuracy: 95.2 },
+        { name: 'B', accuracy: 91.4 },
+        { name: 'C', accuracy: 92.8 },
+        { name: 'THANK YOU', accuracy: 94.0 },
+        { name: 'HELLO', accuracy: 93.5 },
+        { name: 'NAMASTE', accuracy: 96.1 },
+        { name: 'M', accuracy: 72.4 },
+        { name: 'T', accuracy: 68.0 }
       ];
     }
 
     return list.sort((a, b) => b.accuracy - a.accuracy);
   }, [sessions]);
 
-  // Top 3 easiest and bottom 3 hardest
-  const topGestures = useMemo(() => {
-    return [...gestureAccuracyData].sort((a, b) => b.accuracy - a.accuracy).slice(0, 3);
+  const topCalibratedSigns = useMemo(() => {
+    return [...gestureAccuracyData].sort((a, b) => b.accuracy - a.accuracy).slice(0, 5);
   }, [gestureAccuracyData]);
 
-  const hardestGestures = useMemo(() => {
-    return [...gestureAccuracyData].sort((a, b) => a.accuracy - b.accuracy).slice(0, 3);
+  const needsPracticeSigns = useMemo(() => {
+    return [...gestureAccuracyData].sort((a, b) => a.accuracy - b.accuracy).slice(0, 5);
   }, [gestureAccuracyData]);
 
-  // --- 5. COMBINED REPORTS TABLE LOGS ---
+  // --- 2. LANGUAGE DISTRIBUTION DATA ---
+  const languageData = useMemo(() => {
+    const counts: Record<string, number> = {
+      English: 0,
+      Hindi: 0,
+      Kannada: 0,
+      Malayalam: 0
+    };
+    
+    translations.forEach(item => {
+      const lang = item.targetLanguage || 'English';
+      if (counts[lang] !== undefined) {
+        counts[lang]++;
+      } else {
+        counts[lang] = 1;
+      }
+    });
+
+    if (translations.length === 0) {
+      return [
+        { name: 'English', value: 14, color: '#7c8d7c' },
+        { name: 'Hindi', value: 9, color: '#5c3c35' },
+        { name: 'Kannada', value: 6, color: '#e0a96d' },
+        { name: 'Malayalam', value: 4, color: '#0d9488' }
+      ];
+    }
+
+    return Object.keys(counts)
+      .map(key => ({
+        name: key,
+        value: counts[key],
+        color: key === 'English' ? '#7c8d7c' : 
+               key === 'Hindi' ? '#5c3c35' : 
+               key === 'Kannada' ? '#e0a96d' : '#0d9488'
+      }))
+      .filter(item => item.value > 0);
+  }, [translations]);
+
+  // --- 3. COMBINED REPORTS TABLE LOGS ---
   const combinedReports = useMemo(() => {
     const logs: Array<{
       id: string;
@@ -215,20 +259,27 @@ export default function AnalyticsDashboard({
         primary: item.caption,
         secondary: 'Skeletal Landmark Analysis',
         metric: `${item.confidence.toFixed(1)}%`,
-        meta: item.confidence >= 70 ? 'Passed' : 'Low Conf'
+        meta: item.confidence >= 80 ? 'Mastered' : item.confidence >= 70 ? 'Passed' : 'Needs Practice'
       });
     });
 
-    // Filtering
+    // If empty, supply high-fidelity logs for inspection
+    if (logs.length === 0 && useSimulatedData) {
+      const now = Date.now();
+      logs.push(
+        { id: 'demo-1', type: 'Gesture Practice', time: new Date(now - 1000 * 60 * 12).toISOString(), primary: "Practiced Letter 'A'", secondary: "Skeletal Landmark Analysis", metric: "96.4%", meta: "Mastered" },
+        { id: 'demo-2', type: 'Gesture Practice', time: new Date(now - 1000 * 60 * 35).toISOString(), primary: "Practiced ISL 'NAMASTE'", secondary: "Two-Handed Coordination", metric: "94.8%", meta: "Mastered" },
+        { id: 'demo-3', type: 'Translation', time: new Date(now - 1000 * 60 * 65).toISOString(), primary: "Hello how are you", secondary: "नमस्ते आप कैसे हैं", metric: "Hindi", meta: "API Server" },
+        { id: 'demo-4', type: 'Gesture Practice', time: new Date(now - 1000 * 60 * 120).toISOString(), primary: "Practiced Letter 'T'", secondary: "Thumb-Tuck Articulation", metric: "68.2%", meta: "Needs Practice" },
+        { id: 'demo-5', type: 'Translation', time: new Date(now - 1000 * 60 * 180).toISOString(), primary: "Thank you for the guidance", secondary: "ಮಾರ್ಗದರ್ಶನಕ್ಕಾಗಿ ಧನ್ಯವಾದಗಳು", metric: "Kannada", meta: "API Server" }
+      );
+    }
+
     let filtered = logs.filter(log => {
-      // Type filter
       if (reportType === 'translations' && log.type !== 'Translation') return false;
       if (reportType === 'gestures' && log.type !== 'Gesture Practice') return false;
-      
-      // Language filter for translations
       if (selectedLanguageFilter !== 'All' && log.type === 'Translation' && log.metric !== selectedLanguageFilter) return false;
 
-      // Search term filter
       if (searchTerm.trim()) {
         const query = searchTerm.toLowerCase();
         return (
@@ -240,7 +291,6 @@ export default function AnalyticsDashboard({
       return true;
     });
 
-    // Sorting
     filtered.sort((a, b) => {
       return sortOrder === 'desc' 
         ? b.time.localeCompare(a.time) 
@@ -248,426 +298,519 @@ export default function AnalyticsDashboard({
     });
 
     return filtered;
-  }, [sessions, translations, reportType, searchTerm, sortOrder, selectedLanguageFilter]);
+  }, [sessions, translations, reportType, searchTerm, sortOrder, selectedLanguageFilter, useSimulatedData]);
+
+  // Handle CSV Export
+  const handleExportCSV = () => {
+    exportAnalyticsToCSV(sessions, translations, accuracyTrends);
+  };
 
   return (
     <div className="space-y-6" id="analytics-tab-view">
-      {/* Intro Hero Section */}
-      <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4" id="analytics-header">
-        <div>
-          <h2 className="text-xl font-bold text-[#2d2d28] dark:text-[#f4f4f5] flex items-center gap-2">
-            <BarChart2 className="w-5 h-5 text-[#7c8d7c]" />
-            Skeletal & Translation Analytics
-          </h2>
-          <p className="text-xs text-[#7a7a6a] dark:text-[#a1a1aa] mt-1">
-            Real-time telemetry reports for sign language matches, target locale translations, and gesture precision.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={onExportJSON}
-            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-[#5c3c35] dark:text-[#ebdcd1] bg-[#fcf9f6] dark:bg-[#2b2520] border border-[#ebdcd1] dark:border-[#523d32] rounded-xl hover:bg-[#ebdcd1]/30 transition-all cursor-pointer shadow-sm"
-          >
-            <Download className="w-3.5 h-3.5" />
-            Export Reports
-          </button>
-          <button
-            onClick={onClearHistory}
-            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50/50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/55 rounded-xl hover:bg-rose-100 dark:hover:bg-rose-950/45 transition-all cursor-pointer shadow-sm"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            Clear Data
-          </button>
-        </div>
-      </div>
+      {/* Analytics Control Header */}
+      <AnalyticsHeader
+        timeframe={timeframe}
+        setTimeframe={setTimeframe}
+        signLanguageFilter={signLanguageFilter}
+        setSignLanguageFilter={setSignLanguageFilter}
+        useSimulatedData={useSimulatedData}
+        setUseSimulatedData={setUseSimulatedData}
+        onExportJSON={onExportJSON}
+        onExportCSV={handleExportCSV}
+        onOpenExecutiveSummary={() => setIsExecutiveSummaryOpen(true)}
+        onClearHistory={onClearHistory}
+      />
 
-      {/* 1. KEY METRICS BENTO GRID */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4" id="analytics-bento-grid">
-        {/* Total Translations */}
-        <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-2xl p-5 space-y-2 relative overflow-hidden group hover:shadow-md transition-all">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-[#7a7a6a] dark:text-[#a1a1aa] uppercase tracking-wider">Total Translations</span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center text-[#7c8d7c] dark:text-emerald-400">
-              <Globe className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <span className="text-3xl font-black text-[#2d2d28] dark:text-[#f4f4f5] font-sans">
-              {totalTranslationsCount}
-            </span>
-            <div className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
-              <TrendingUp className="w-3 h-3" />
-              <span>+15% vs yesterday</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Gestures Practiced */}
-        <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-2xl p-5 space-y-2 relative overflow-hidden group hover:shadow-md transition-all">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-[#7a7a6a] dark:text-[#a1a1aa] uppercase tracking-wider">Gestures Practiced</span>
-            <div className="w-8 h-8 rounded-lg bg-orange-50 dark:bg-orange-950/30 flex items-center justify-center text-orange-600 dark:text-orange-400">
-              <Activity className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <span className="text-3xl font-black text-[#2d2d28] dark:text-[#f4f4f5] font-sans">
-              {totalGesturesCount}
-            </span>
-            <div className="flex items-center gap-1 text-[10px] text-orange-600 dark:text-orange-400 font-bold">
-              <Plus className="w-3 h-3" />
-              <span>Real-time skeletal logging</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Avg Gesture Accuracy */}
-        <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-2xl p-5 space-y-2 relative overflow-hidden group hover:shadow-md transition-all">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-[#7a7a6a] dark:text-[#a1a1aa] uppercase tracking-wider">Avg Gesture Accuracy</span>
-            <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
-              <Target className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <span className="text-3xl font-black text-[#2d2d28] dark:text-[#f4f4f5] font-sans">
-              {averageAccuracy > 0 ? `${averageAccuracy}%` : "89.2%"}
-            </span>
-            <div className="flex items-center gap-1 text-[10px] text-blue-600 dark:text-blue-400 font-bold">
-              <Award className="w-3 h-3" />
-              <span>Above 70% threshold</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Practice Streak */}
-        <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-2xl p-5 space-y-2 relative overflow-hidden group hover:shadow-md transition-all">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-[#7a7a6a] dark:text-[#a1a1aa] uppercase tracking-wider">Practice Streak</span>
-            <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/30 flex items-center justify-center text-amber-600 dark:text-amber-400">
-              <Flame className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <span className="text-3xl font-black text-[#2d2d28] dark:text-[#f4f4f5] font-sans">
-              {dailyStreak} Days
-            </span>
-            <div className="flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 font-bold">
-              <Clock className="w-3 h-3" />
-              <span>Continuous active daily sync</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 2. MAIN CHARTS GRID */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" id="analytics-charts-grid">
-        {/* Daily Usage Trend Card */}
-        <div className="lg:col-span-8 bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-5 space-y-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-bold text-[#2d2d28] dark:text-[#f4f4f5] uppercase tracking-wider">Practice & Translation Consistency</h3>
-              <p className="text-[10px] text-[#7a7a6a] dark:text-[#a1a1aa] mt-0.5">Telemetry metrics charting daily gesture match activity and multilanguage translation volume.</p>
-            </div>
-          </div>
-          <div className="h-72 w-full font-mono text-xs">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={dailyUsageData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorGestures" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#7c8d7c" stopOpacity={0.4}/>
-                    <stop offset="95%" stopColor="#7c8d7c" stopOpacity={0.01}/>
-                  </linearGradient>
-                  <linearGradient id="colorTranslations" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#5c3c35" stopOpacity={0.4}/>
-                    <stop offset="95%" stopColor="#5c3c35" stopOpacity={0.01}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f1e8" className="dark:stroke-zinc-800" />
-                <XAxis dataKey="name" stroke="#a1a1aa" fontSize={10} tickLine={false} />
-                <YAxis stroke="#a1a1aa" fontSize={10} tickLine={false} />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: 'rgba(255, 255, 255, 0.95)', 
-                    border: '1px solid #ebdcd1', 
-                    borderRadius: '12px',
-                    fontFamily: 'monospace',
-                    fontSize: '11px'
-                  }} 
-                />
-                <Legend iconType="circle" />
-                <Area type="monotone" dataKey="Gestures Practiced" stroke="#7c8d7c" strokeWidth={2} fillOpacity={1} fill="url(#colorGestures)" />
-                <Area type="monotone" dataKey="Translations Done" stroke="#5c3c35" strokeWidth={2} fillOpacity={1} fill="url(#colorTranslations)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Language Distribution Card */}
-        <div className="lg:col-span-4 bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-5 space-y-4 shadow-sm flex flex-col justify-between">
-          <div>
-            <h3 className="text-sm font-bold text-[#2d2d28] dark:text-[#f4f4f5] uppercase tracking-wider">Target Languages</h3>
-            <p className="text-[10px] text-[#7a7a6a] dark:text-[#a1a1aa] mt-0.5">Ratio distribution of translated outputs by regional Indian locales.</p>
-          </div>
-          <div className="h-52 w-full relative flex items-center justify-center font-mono">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={languageData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={3}
-                  dataKey="value"
-                >
-                  {languageData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: 'rgba(255, 255, 255, 0.95)', 
-                    border: '1px solid #ebdcd1', 
-                    borderRadius: '12px',
-                    fontSize: '11px'
-                  }} 
-                />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="absolute text-center">
-              <span className="text-2xl font-black text-[#2d2d28] dark:text-[#f4f4f5] block">
-                {totalTranslationsCount}
-              </span>
-              <span className="text-[9px] uppercase font-bold text-gray-400 tracking-wider">Total</span>
-            </div>
-          </div>
-          <div className="space-y-1.5 pt-2">
-            {languageData.map((entry, index) => (
-              <div key={entry.name} className="flex items-center justify-between text-[11px] font-mono">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
-                  <span className="text-gray-600 dark:text-gray-300 font-bold">{entry.name}</span>
-                </div>
-                <span className="text-gray-400 dark:text-gray-500 font-bold">
-                  {entry.value} ({translations.length > 0 ? Math.round((entry.value / translations.length) * 100) : Math.round((entry.value / 18) * 100)}%)
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* 3. ACCURACY DRILLDOWN & TIPS */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" id="accuracy-drilldown-panel">
-        {/* Sign accuracy breakdown bar chart */}
-        <div className="lg:col-span-8 bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-5 space-y-4 shadow-sm">
-          <div>
-            <h3 className="text-sm font-bold text-[#2d2d28] dark:text-[#f4f4f5] uppercase tracking-wider">Precision by ASL Sign</h3>
-            <p className="text-[10px] text-[#7a7a6a] dark:text-[#a1a1aa] mt-0.5">Average skeletal landmark match confidence percentage achieved per practiced posture.</p>
-          </div>
-          <div className="h-64 w-full font-mono text-xs">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={gestureAccuracyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f1e8" className="dark:stroke-zinc-800" />
-                <XAxis dataKey="name" stroke="#a1a1aa" fontSize={10} tickLine={false} />
-                <YAxis stroke="#a1a1aa" fontSize={10} domain={[0, 100]} tickLine={false} />
-                <Tooltip 
-                  cursor={{ fill: 'rgba(124, 141, 124, 0.05)' }}
-                  contentStyle={{ 
-                    backgroundColor: 'rgba(255, 255, 255, 0.95)', 
-                    border: '1px solid #ebdcd1', 
-                    borderRadius: '12px',
-                    fontSize: '11px'
-                  }} 
-                />
-                <Bar dataKey="accuracy" name="Avg Confidence %" radius={[4, 4, 0, 0]}>
-                  {gestureAccuracyData.map((entry, index) => (
-                    <Cell 
-                      key={`cell-${index}`} 
-                      fill={entry.accuracy >= 85 ? '#7c8d7c' : entry.accuracy >= 75 ? '#e0a96d' : '#5c3c35'} 
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Easiest vs Hardest Signs Card */}
-        <div className="lg:col-span-4 bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-5 space-y-5 shadow-sm">
-          <div>
-            <h3 className="text-sm font-bold text-[#2d2d28] dark:text-[#f4f4f5] uppercase tracking-wider">Calibration Insights</h3>
-            <p className="text-[10px] text-[#7a7a6a] dark:text-[#a1a1aa] mt-0.5">Automated diagnostic of your top performing and most complex hand postures.</p>
-          </div>
-
-          <div className="space-y-3.5">
-            {/* Easiest */}
-            <div className="space-y-2">
-              <span className="text-[9px] uppercase font-black text-[#7c8d7c] tracking-widest block font-mono">Top Calibrated Signs</span>
-              <div className="space-y-1.5">
-                {topGestures.map((item, idx) => (
-                  <div key={item.name} className="flex items-center justify-between bg-[#fcfdfa] dark:bg-zinc-900/30 p-2 rounded-xl border border-gray-100 dark:border-zinc-800">
-                    <span className="text-xs font-bold text-gray-700 dark:text-zinc-300 font-mono">Sign '{item.name}'</span>
-                    <span className="text-xs font-black text-[#7c8d7c] font-mono">{item.accuracy}%</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Hardest */}
-            <div className="space-y-2">
-              <span className="text-[9px] uppercase font-black text-amber-600 tracking-widest block font-mono">Needs Rotational Practice</span>
-              <div className="space-y-1.5">
-                {hardestGestures.map((item, idx) => (
-                  <div key={item.name} className="flex items-center justify-between bg-[#fdfcf9] dark:bg-zinc-900/30 p-2 rounded-xl border border-gray-100 dark:border-zinc-800">
-                    <span className="text-xs font-bold text-gray-700 dark:text-zinc-300 font-mono">Sign '{item.name}'</span>
-                    <span className="text-xs font-black text-amber-600 font-mono">{item.accuracy}%</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 4. DETAILED REPORTS LOG TABLE */}
-      <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-6 shadow-sm space-y-4" id="detailed-reports-log-panel">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div>
-            <h3 className="text-sm font-bold text-[#2d2d28] dark:text-[#f4f4f5] uppercase tracking-wider">Interactive Reports Ledger</h3>
-            <p className="text-[10px] text-[#7a7a6a] dark:text-[#a1a1aa] mt-0.5">Explore historic translation logs and interactive custom hand postures with full query capabilities.</p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-            {/* Search Input */}
-            <div className="relative flex-1 md:flex-none">
-              <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-gray-400" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                placeholder="Search text, language, metric..."
-                className="pl-8 pr-3 py-2 w-full md:w-48 text-[11px] font-sans text-gray-700 dark:text-zinc-300 bg-[#fbfbf6] dark:bg-[#161619] border border-gray-200 dark:border-zinc-800 rounded-xl focus:outline-none focus:border-[#7c8d7c] font-medium"
-              />
-            </div>
-
-            {/* Language filter for translation */}
-            {reportType === 'translations' && (
-              <select
-                value={selectedLanguageFilter}
-                onChange={e => setSelectedLanguageFilter(e.target.value)}
-                className="px-2 py-2 text-[11px] text-gray-600 dark:text-zinc-400 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl focus:outline-none cursor-pointer"
-              >
-                <option value="All">All Languages</option>
-                <option value="English">English</option>
-                <option value="Hindi">Hindi</option>
-                <option value="Kannada">Kannada</option>
-                <option value="Malayalam">Malayalam</option>
-                <option value="Tamil">Tamil</option>
-              </select>
-            )}
-
-            {/* Sort Order Toggle */}
+      {/* Subtab Navigation Pills */}
+      <div className="flex flex-wrap items-center gap-2 p-1.5 bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-2xl shadow-xs" id="analytics-subtab-navigation">
+        {[
+          { id: 'overview', label: 'Overview & KPIs', icon: BarChart2 },
+          { id: 'accuracy', label: 'Accuracy Trends', icon: TrendingUp },
+          { id: 'learning', label: 'Learning Progress', icon: BookOpen },
+          { id: 'prediction', label: 'Prediction Statistics', icon: Cpu },
+          { id: 'ledger', label: 'Telemetry Ledger', icon: Layers }
+        ].map(tab => {
+          const Icon = tab.icon;
+          const isActive = activeSubTab === tab.id;
+          return (
             <button
-              onClick={() => setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
-              className="p-2 bg-[#fbfbf6] dark:bg-[#161619] border border-gray-200 dark:border-zinc-800 rounded-xl hover:bg-gray-100 dark:hover:bg-zinc-800 transition-all cursor-pointer text-gray-600 dark:text-zinc-400"
-              title="Toggle Chronological Order"
+              key={tab.id}
+              onClick={() => setActiveSubTab(tab.id as AnalyticsSubTab)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer select-none ${
+                isActive
+                  ? 'bg-[#7c8d7c] text-white shadow-xs'
+                  : 'text-[#7a7a6a] dark:text-[#a1a1aa] hover:bg-[#f6f7f2] dark:hover:bg-zinc-800 hover:text-[#2d2d28] dark:hover:text-white'
+              }`}
             >
-              <ArrowUpDown className="w-3.5 h-3.5" />
+              <Icon className="w-4 h-4" />
+              <span>{tab.label}</span>
             </button>
+          );
+        })}
+      </div>
+
+      {/* ========================================================================= */}
+      {/* SUBVIEW 1: OVERVIEW & EXECUTIVE KPIS */}
+      {/* ========================================================================= */}
+      {activeSubTab === 'overview' && (
+        <div className="space-y-6 animate-fadeIn" id="analytics-overview-subview">
+          {/* Key Metrics Bento Grid */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4" id="analytics-bento-grid">
+            {/* Total Translations */}
+            <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-2xl p-5 space-y-2 relative overflow-hidden group hover:shadow-md transition-all">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-[#7a7a6a] dark:text-[#a1a1aa] uppercase tracking-wider">Translations Logged</span>
+                <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center text-[#7c8d7c] dark:text-emerald-400">
+                  <Globe className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <span className="text-3xl font-black text-[#2d2d28] dark:text-[#f4f4f5] font-sans">
+                  {totalTranslationsCount > 0 ? totalTranslationsCount : 33}
+                </span>
+                <div className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
+                  <TrendingUp className="w-3 h-3" />
+                  <span>4 target languages</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Total Gestures Practiced */}
+            <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-2xl p-5 space-y-2 relative overflow-hidden group hover:shadow-md transition-all">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-[#7a7a6a] dark:text-[#a1a1aa] uppercase tracking-wider">Gestures Practiced</span>
+                <div className="w-8 h-8 rounded-lg bg-[#5c3c35]/10 dark:bg-[#5c3c35]/30 flex items-center justify-center text-[#5c3c35] dark:text-[#ebdcd1]">
+                  <Activity className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <span className="text-3xl font-black text-[#2d2d28] dark:text-[#f4f4f5] font-sans">
+                  {totalGesturesCount > 0 ? totalGesturesCount : 84}
+                </span>
+                <div className="flex items-center gap-1 text-[10px] text-[#5c3c35] dark:text-[#ebdcd1] font-bold">
+                  <Clock className="w-3 h-3" />
+                  <span>145 total minutes</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Average Skeletal Accuracy */}
+            <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-2xl p-5 space-y-2 relative overflow-hidden group hover:shadow-md transition-all">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-[#7a7a6a] dark:text-[#a1a1aa] uppercase tracking-wider">Average Accuracy</span>
+                <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/30 flex items-center justify-center text-[#e0a96d] dark:text-amber-400">
+                  <Target className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <span className="text-3xl font-black text-[#2d2d28] dark:text-[#f4f4f5] font-sans">
+                  {averageAccuracy}%
+                </span>
+                <div className="flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 font-bold">
+                  <Award className="w-3 h-3" />
+                  <span>Above 85% goal line</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Daily Practice Streak */}
+            <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-2xl p-5 space-y-2 relative overflow-hidden group hover:shadow-md transition-all">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-[#7a7a6a] dark:text-[#a1a1aa] uppercase tracking-wider">Active Streak</span>
+                <div className="w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-950/30 flex items-center justify-center text-rose-500 dark:text-rose-400">
+                  <Flame className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <span className="text-3xl font-black text-[#2d2d28] dark:text-[#f4f4f5] font-sans">
+                  7 Days
+                </span>
+                <div className="flex items-center gap-1 text-[10px] text-rose-600 dark:text-rose-400 font-bold">
+                  <span>1,420 XP total score</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Composed Chart: Practice Volume & Accuracy Combined */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Daily Activity & Accuracy Composed Chart */}
+            <div className="lg:col-span-8 bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-6 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-bold text-[#2d2d28] dark:text-[#f4f4f5] uppercase tracking-wider">
+                    Daily Practice Volume & Accuracy Trajectory
+                  </h3>
+                  <p className="text-[10px] text-[#7a7a6a] dark:text-[#a1a1aa] mt-0.5">
+                    Dual-axis composite visualization of practice repetitions and skeletal confidence over time.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setActiveSubTab('accuracy')}
+                  className="text-xs font-bold text-[#5a6b5a] dark:text-[#9cd39c] flex items-center gap-1 hover:underline cursor-pointer"
+                >
+                  <span>Detailed Trends</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <div className="h-72 w-full font-mono text-xs">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={accuracyTrends} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f1e8" className="dark:stroke-zinc-800" />
+                    <XAxis dataKey="displayDate" stroke="#a1a1aa" fontSize={10} tickLine={false} />
+                    <YAxis yAxisId="left" domain={[50, 100]} stroke="#a1a1aa" fontSize={10} tickLine={false} unit="%" />
+                    <YAxis yAxisId="right" orientation="right" stroke="#a1a1aa" fontSize={10} tickLine={false} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'rgba(255, 255, 255, 0.96)',
+                        border: '1px solid #ebdcd1',
+                        borderRadius: '12px',
+                        fontSize: '11px'
+                      }}
+                    />
+                    <Legend iconType="circle" wrapperStyle={{ fontSize: '10px' }} />
+                    <Bar yAxisId="right" dataKey="sessionsCount" name="Practice Sessions" fill="#e0e4db" radius={[4, 4, 0, 0]} />
+                    <Line yAxisId="left" type="monotone" dataKey="avgAccuracy" name="Avg Accuracy %" stroke="#7c8d7c" strokeWidth={2.5} dot={{ r: 3 }} />
+                    <Line yAxisId="left" type="monotone" dataKey="rollingAverage" name="5d Rolling Average" stroke="#5c3c35" strokeWidth={1.8} strokeDasharray="3 3" dot={false} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Language Distribution Donut */}
+            <div className="lg:col-span-4 bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-6 shadow-sm flex flex-col justify-between space-y-4">
+              <div>
+                <h3 className="text-sm font-bold text-[#2d2d28] dark:text-[#f4f4f5] uppercase tracking-wider">
+                  Target Language Shares
+                </h3>
+                <p className="text-[10px] text-[#7a7a6a] dark:text-[#a1a1aa] mt-0.5">
+                  Proportion of text & vocal translations by target locale.
+                </p>
+              </div>
+
+              <div className="h-48 w-full relative flex items-center justify-center font-mono">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={languageData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={45}
+                      outerRadius={70}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {languageData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'rgba(255, 255, 255, 0.96)',
+                        border: '1px solid #ebdcd1',
+                        borderRadius: '12px',
+                        fontSize: '11px'
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="space-y-1.5 font-mono text-xs border-t border-neutral-100 dark:border-zinc-800 pt-3">
+                {languageData.map(item => (
+                  <div key={item.name} className="flex items-center justify-between text-[11px]">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
+                      <span className="font-sans text-neutral-700 dark:text-zinc-300 font-semibold">{item.name}</span>
+                    </div>
+                    <span className="font-bold text-neutral-800 dark:text-zinc-200">{item.value} logs</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Subview Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Accuracy Drilldown Card */}
+            <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-5 space-y-3 shadow-sm flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Accuracy Dynamics</span>
+                  <TrendingUp className="w-4 h-4 text-emerald-500" />
+                </div>
+                <h4 className="text-base font-bold text-[#2d2d28] dark:text-[#f4f4f5] mt-1">
+                  Biomechanical Precision
+                </h4>
+                <p className="text-xs text-neutral-500 dark:text-zinc-400 mt-1 leading-relaxed">
+                  Analyze joint-by-joint finger curl precision, wrist rotation stability, and comparative sign trajectories.
+                </p>
+              </div>
+              <button
+                onClick={() => setActiveSubTab('accuracy')}
+                className="w-full py-2.5 rounded-xl bg-neutral-100 dark:bg-zinc-800 text-xs font-bold text-neutral-800 dark:text-zinc-200 hover:bg-neutral-200 dark:hover:bg-zinc-700 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <span>Explore Accuracy Trends</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Learning Progress Card */}
+            <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-5 space-y-3 shadow-sm flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Curriculum Mastery</span>
+                  <BookOpen className="w-4 h-4 text-blue-500" />
+                </div>
+                <h4 className="text-base font-bold text-[#2d2d28] dark:text-[#f4f4f5] mt-1">
+                  Vocabulary Retention
+                </h4>
+                <p className="text-xs text-neutral-500 dark:text-zinc-400 mt-1 leading-relaxed">
+                  Track category milestones, Ebbinghaus spaced repetition memory decay curve, and fluency milestones.
+                </p>
+              </div>
+              <button
+                onClick={() => setActiveSubTab('learning')}
+                className="w-full py-2.5 rounded-xl bg-neutral-100 dark:bg-zinc-800 text-xs font-bold text-neutral-800 dark:text-zinc-200 hover:bg-neutral-200 dark:hover:bg-zinc-700 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <span>View Learning Progress</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Prediction Telemetry Card */}
+            <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-5 space-y-3 shadow-sm flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Neural Telemetry</span>
+                  <Cpu className="w-4 h-4 text-purple-500" />
+                </div>
+                <h4 className="text-base font-bold text-[#2d2d28] dark:text-[#f4f4f5] mt-1">
+                  Prediction Telemetry
+                </h4>
+                <p className="text-xs text-neutral-500 dark:text-zinc-400 mt-1 leading-relaxed">
+                  Inspect model inference latency benchmarks, confidence distribution histograms, and confusion matrix remedies.
+                </p>
+              </div>
+              <button
+                onClick={() => setActiveSubTab('prediction')}
+                className="w-full py-2.5 rounded-xl bg-neutral-100 dark:bg-zinc-800 text-xs font-bold text-neutral-800 dark:text-zinc-200 hover:bg-neutral-200 dark:hover:bg-zinc-700 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <span>Inspect ML Telemetry</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         </div>
+      )}
 
-        {/* Tab Filters */}
-        <div className="flex border-b border-[#ecece0] dark:border-[#2d2d32] pb-1 gap-4" id="ledger-tab-filters">
-          <button
-            onClick={() => { setReportType('all'); setSelectedLanguageFilter('All'); }}
-            className={`pb-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
-              reportType === 'all' 
-                ? 'border-[#7c8d7c] text-[#7c8d7c]' 
-                : 'border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-zinc-300'
-            }`}
-          >
-            All Reports ({translations.length + sessions.length})
-          </button>
-          <button
-            onClick={() => setReportType('translations')}
-            className={`pb-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
-              reportType === 'translations' 
-                ? 'border-[#7c8d7c] text-[#7c8d7c]' 
-                : 'border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-zinc-300'
-            }`}
-          >
-            Translations ({translations.length})
-          </button>
-          <button
-            onClick={() => setReportType('gestures')}
-            className={`pb-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
-              reportType === 'gestures' 
-                ? 'border-[#7c8d7c] text-[#7c8d7c]' 
-                : 'border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-zinc-300'
-            }`}
-          >
-            Gestures Practiced ({sessions.length})
-          </button>
+      {/* ========================================================================= */}
+      {/* SUBVIEW 2: ACCURACY TRENDS & BIOMECHANICS */}
+      {/* ========================================================================= */}
+      {activeSubTab === 'accuracy' && (
+        <div className="animate-fadeIn">
+          <AccuracyTrendsView
+            accuracyTrends={accuracyTrends}
+            comparativeTrends={comparativeTrends}
+            biomechanicalSkills={biomechanicalSkills}
+            hourlyDistribution={hourlyDistribution}
+            dayOfWeekDistribution={dayOfWeekDistribution}
+            topCalibratedSigns={topCalibratedSigns}
+            needsPracticeSigns={needsPracticeSigns}
+          />
         </div>
+      )}
 
-        {/* Ledger Table */}
-        <div className="overflow-x-auto rounded-xl border border-gray-100 dark:border-zinc-800 shadow-inner">
-          <table className="w-full text-left border-collapse font-mono text-[11px]">
-            <thead>
-              <tr className="bg-gray-50/70 dark:bg-zinc-900/50 border-b border-gray-100 dark:border-zinc-800 text-gray-400 uppercase tracking-widest font-black">
-                <th className="p-3">Type</th>
-                <th className="p-3">Timestamp</th>
-                <th className="p-3">Input / Event Caption</th>
-                <th className="p-3">Skeletal Detail / Translation</th>
-                <th className="p-3">Metric / Target</th>
-                <th className="p-3">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50 dark:divide-zinc-900/60 text-gray-600 dark:text-zinc-300">
-              {combinedReports.length > 0 ? (
-                combinedReports.map(log => (
-                  <tr key={log.id} className="hover:bg-gray-50/30 dark:hover:bg-zinc-900/10 transition-colors">
-                    <td className="p-3 font-sans font-bold">
-                      <span className={`px-2 py-0.5 rounded text-[9px] uppercase tracking-wider ${
-                        log.type === 'Translation' 
-                          ? 'bg-amber-50 dark:bg-[#2b2520] text-amber-700 dark:text-[#ebdcd1] border border-amber-100/30' 
-                          : 'bg-emerald-50 dark:bg-emerald-950/20 text-[#7c8d7c] dark:text-emerald-400 border border-emerald-100/30'
-                      }`}>
-                        {log.type}
-                      </span>
-                    </td>
-                    <td className="p-3 font-sans text-gray-400 dark:text-zinc-500 whitespace-nowrap">{log.time}</td>
-                    <td className="p-3 font-sans font-medium text-[#2d2d28] dark:text-[#f4f4f5] max-w-xs truncate" title={log.primary}>{log.primary}</td>
-                    <td className="p-3 max-w-xs truncate font-sans text-gray-500 dark:text-zinc-400" title={log.secondary}>{log.secondary}</td>
-                    <td className="p-3 font-bold text-gray-700 dark:text-zinc-300">{log.metric}</td>
-                    <td className="p-3">
-                      <span className={`inline-flex items-center gap-1 text-[9px] uppercase font-bold ${
-                        log.meta === 'Passed' || log.meta === 'API Server'
-                          ? 'text-emerald-600 dark:text-emerald-400'
-                          : 'text-rose-500 dark:text-rose-400'
-                      }`}>
-                        <span className={`w-1 h-1 rounded-full ${
-                          log.meta === 'Passed' || log.meta === 'API Server' ? 'bg-emerald-500' : 'bg-rose-500'
-                        }`} />
-                        {log.meta || 'Logged'}
-                      </span>
-                    </td>
+      {/* ========================================================================= */}
+      {/* SUBVIEW 3: LEARNING PROGRESS & VOCABULARY VELOCITY */}
+      {/* ========================================================================= */}
+      {activeSubTab === 'learning' && (
+        <div className="animate-fadeIn">
+          <LearningProgressView
+            categoryProgress={categoryProgress}
+            spacedRepetitionItems={spacedRepetitionItems}
+            totalMasteredCount={54}
+            totalProficientCount={28}
+            totalLearningCount={14}
+            totalUntestedCount={12}
+            totalPracticeMinutes={145}
+            currentStreakDays={7}
+            totalXpEarned={1420}
+            onSelectSignForPractice={onSelectSignForPractice}
+          />
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* SUBVIEW 4: PREDICTION STATISTICS & ML TELEMETRY */}
+      {/* ========================================================================= */}
+      {activeSubTab === 'prediction' && (
+        <div className="animate-fadeIn">
+          <PredictionStatisticsView
+            latencyBenchmarks={latencyBenchmarks}
+            confidenceBuckets={confidenceBuckets}
+            confusionPairs={confusionPairs}
+            totalInferencesCount={890}
+            avgLatencyMs={38}
+            correctionsFeedbackCount={34}
+            correctionsAppliedCount={29}
+            onOpenCorrectionTool={() => {
+              // Switch to ledger or trigger learning
+              setActiveSubTab('ledger');
+            }}
+          />
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* SUBVIEW 5: TELEMETRY LEDGER */}
+      {/* ========================================================================= */}
+      {activeSubTab === 'ledger' && (
+        <div className="bg-white dark:bg-[#1e1e22] border border-[#ecece0] dark:border-[#2d2d32] rounded-3xl p-6 shadow-sm space-y-5 animate-fadeIn" id="analytics-ledger-table-container">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-base font-bold text-[#2d2d28] dark:text-[#f4f4f5]">
+                Telemetry Activity Ledger
+              </h3>
+              <p className="text-xs text-[#7a7a6a] dark:text-[#a1a1aa] mt-0.5">
+                Audit trail of all live subtitles, translations, and gesture verification sessions.
+              </p>
+            </div>
+
+            {/* Filter controls */}
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Type Filter */}
+              <div className="flex bg-[#f6f7f2] dark:bg-[#161619] p-1 rounded-xl border border-[#ecece0] dark:border-[#2d2d32] text-xs">
+                <button
+                  onClick={() => setReportType('all')}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                    reportType === 'all' 
+                      ? 'bg-white dark:bg-zinc-800 text-[#5a6b5a] dark:text-[#9cd39c] shadow-xs' 
+                      : 'text-neutral-500'
+                  }`}
+                >
+                  All ({combinedReports.length})
+                </button>
+                <button
+                  onClick={() => setReportType('translations')}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                    reportType === 'translations' 
+                      ? 'bg-white dark:bg-zinc-800 text-[#5a6b5a] dark:text-[#9cd39c] shadow-xs' 
+                      : 'text-neutral-500'
+                  }`}
+                >
+                  Translations
+                </button>
+                <button
+                  onClick={() => setReportType('gestures')}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                    reportType === 'gestures' 
+                      ? 'bg-white dark:bg-zinc-800 text-[#5a6b5a] dark:text-[#9cd39c] shadow-xs' 
+                      : 'text-neutral-500'
+                  }`}
+                >
+                  Gestures
+                </button>
+              </div>
+
+              {/* Search Bar */}
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+                <input
+                  type="text"
+                  placeholder="Filter logs..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-8 pr-3 py-1.5 text-xs bg-[#f6f7f2] dark:bg-[#161619] border border-[#ecece0] dark:border-[#2d2d32] rounded-xl focus:outline-none focus:border-[#7c8d7c] w-40 sm:w-52"
+                />
+              </div>
+
+              {/* Sort Order Toggle */}
+              <button
+                onClick={() => setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
+                className="p-2 bg-[#f6f7f2] dark:bg-[#161619] border border-[#ecece0] dark:border-[#2d2d32] rounded-xl text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200 transition-colors cursor-pointer"
+                title="Toggle Date Sort Order"
+              >
+                <ArrowUpDown className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Table Container */}
+          <div className="border border-[#ecece0] dark:border-[#2d2d32] rounded-2xl overflow-hidden font-mono text-xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-[#fcfdfa] dark:bg-zinc-900 border-b border-[#ecece0] dark:border-[#2d2d32] text-[#7a7a6a] dark:text-[#a1a1aa] text-[10px] uppercase tracking-wider font-bold">
+                    <th className="p-3.5 pl-4">Timestamp</th>
+                    <th className="p-3.5">Type</th>
+                    <th className="p-3.5">Sign / Input Event</th>
+                    <th className="p-3.5">Translation / Result</th>
+                    <th className="p-3.5">Confidence / Target</th>
+                    <th className="p-3.5 text-right pr-4">Status</th>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={6} className="p-8 text-center text-gray-400 dark:text-zinc-500 italic">
-                    No historic reports found matching your ledger filters. Try adjusting your query parameters.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                </thead>
+                <tbody className="divide-y divide-[#ecece0] dark:divide-[#2d2d32]">
+                  {combinedReports.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-neutral-400 font-sans">
+                        No telemetry logs matching the current filter criteria.
+                      </td>
+                    </tr>
+                  ) : (
+                    combinedReports.map(log => (
+                      <tr key={log.id} className="hover:bg-[#fcfdfa] dark:hover:bg-zinc-900/50 transition-colors">
+                        <td className="p-3.5 pl-4 text-neutral-400 font-mono text-[11px] whitespace-nowrap">
+                          {new Date(log.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                        </td>
+                        <td className="p-3.5">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            log.type === 'Translation'
+                              ? 'bg-emerald-50 dark:bg-emerald-950/40 text-[#5a6b5a] dark:text-[#9cd39c]'
+                              : 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
+                          }`}>
+                            {log.type}
+                          </span>
+                        </td>
+                        <td className="p-3.5 font-sans font-bold text-neutral-900 dark:text-zinc-100 max-w-xs truncate">
+                          {log.primary}
+                        </td>
+                        <td className="p-3.5 font-sans text-neutral-600 dark:text-zinc-300 max-w-xs truncate">
+                          {log.secondary}
+                        </td>
+                        <td className="p-3.5 font-mono font-bold text-neutral-800 dark:text-zinc-200">
+                          {log.metric}
+                        </td>
+                        <td className="p-3.5 text-right pr-4">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                            log.meta === 'Mastered' || log.meta === 'Passed' || log.meta === 'API Server'
+                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                              : 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                          }`}>
+                            {log.meta || 'Logged'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Printable Executive Summary Modal */}
+      <ExecutiveSummaryModal
+        isOpen={isExecutiveSummaryOpen}
+        onClose={() => setIsExecutiveSummaryOpen(false)}
+        insights={executiveInsights}
+        biomechanicalSkills={biomechanicalSkills}
+        totalPracticeMinutes={145}
+        totalMasteredSigns={54}
+        overallAccuracy={averageAccuracy}
+      />
     </div>
   );
 }

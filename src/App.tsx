@@ -6801,6 +6801,15 @@ export default function App() {
               document.body.removeChild(link);
               URL.revokeObjectURL(url);
             }}
+            onSelectSignForPractice={(signChar, signLang) => {
+              setActiveTab('evaluator');
+            }}
+            onNavigateToLearning={() => {
+              setActiveTab('learning');
+            }}
+            onNavigateToEvaluator={() => {
+              setActiveTab('evaluator');
+            }}
           />
         )}
 
