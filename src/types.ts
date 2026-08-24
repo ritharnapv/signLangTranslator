@@ -147,6 +147,73 @@ export interface UserStreakInfo {
   history: Record<string, { completedCount: number; dailyScore: number; xpEarned: number }>; // YYYY-MM-DD -> stats
 }
 
+export interface CloudModelVersion {
+  id: string;
+  modelId: string;
+  versionNumber: string; // e.g. "v1.0.0", "v1.1.0"
+  commitMessage: string;
+  releaseTag?: 'stable' | 'candidate' | 'experimental' | 'deprecated';
+  accuracy: number;
+  loss: number;
+  valAccuracy?: number;
+  valLoss?: number;
+  epochs: number;
+  sampleCount?: number;
+  classes: string[];
+  architecture: string;
+  weightData?: string; // base64 encoded weights string or tensor array json
+  modelTopology?: any; // tf.io.ModelTopology
+  changeLog?: string;
+  createdAt: string;
+  authorUid?: string;
+  authorEmail?: string;
+}
+
+export interface CloudAIModel {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  releaseTag?: 'stable' | 'candidate' | 'experimental' | 'deprecated';
+  architecture: string;
+  framework?: string;
+  classes: string[];
+  epochs: number;
+  accuracy: number;
+  loss: number;
+  valAccuracy?: number;
+  valLoss?: number;
+  sampleCount: number;
+  modelTopology?: any;
+  weightSpecs?: any[];
+  weightData?: string; // base64 serialized weights
+  storageKey?: string;
+  tags?: string[];
+  createdAt: string;
+  updatedAt?: string;
+  authorUid?: string;
+  authorEmail?: string;
+  isPublic?: boolean;
+  isCloudSynced?: boolean;
+  versionCount?: number;
+  latestVersionId?: string;
+  versions?: CloudModelVersion[];
+  sizeBytes?: number;
+}
+
+export interface CloudModelBackup {
+  id: string;
+  name: string;
+  description: string;
+  createdAt: string;
+  totalModels: number;
+  modelsSnapshot: CloudAIModel[];
+  backupType: 'manual' | 'automated_pre_train' | 'scheduled';
+  checksum?: string;
+  sizeBytes?: number;
+  authorUid?: string;
+}
+
 export interface SavedPersonalModel {
   id: string;
   name: string;
@@ -166,6 +233,12 @@ export interface SavedPersonalModel {
   tags?: string[];
   authorUid?: string;
   authorEmail?: string;
+  isCloudSynced?: boolean;
+  cloudModelId?: string;
+  cloudVersion?: string;
+  releaseTag?: 'stable' | 'candidate' | 'experimental' | 'deprecated';
+  modelTopology?: any;
+  weightData?: string;
 }
 
 export interface LessonSignDetail {

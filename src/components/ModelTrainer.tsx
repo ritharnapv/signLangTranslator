@@ -5,13 +5,14 @@ import {
   AlertTriangle, BookOpen, Award, Check, RefreshCw, BarChart2, Info,
   Upload, FileJson, FileCode, Zap, Gauge, TrendingUp, SlidersHorizontal, Activity, Clock,
   Layers, History, Sparkles, RotateCcw, CheckCircle2, Target, Shield,
-  Plus, Trash2, FolderPlus, Tag, Star, Radio, Video, Camera, Share2, CheckCircle, ArrowRight, Eye
+  Plus, Trash2, FolderPlus, Tag, Star, Radio, Video, Camera, Share2, CheckCircle, ArrowRight, Eye, Cloud
 } from 'lucide-react';
 import * as tf from '@tensorflow/tfjs';
 import { collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { CollectedSample, PredictionFeedback, SavedPersonalModel, ASLGesture } from '../types';
 import { triggerModelUpdateNotification } from '../utils/notificationEngine';
+import CloudModelHub from './CloudModelHub';
 
 interface DatasetItem {
   id: string;
@@ -64,8 +65,8 @@ export default function ModelTrainer({
   onAddCollectedSample,
   currentUser
 }: ModelTrainerProps) {
-  // Sub-navigation: Personal Models Hub vs Collect Custom Gestures vs Neural Workspace vs Benchmarking vs Continual Learning
-  const [activeSubTab, setActiveSubTab] = useState<'personal_models' | 'custom_gestures' | 'workspace' | 'performance' | 'continual_learning'>('personal_models');
+  // Sub-navigation: Personal Models Hub vs Collect Custom Gestures vs Neural Workspace vs Benchmarking vs Continual Learning vs Cloud Models
+  const [activeSubTab, setActiveSubTab] = useState<'personal_models' | 'custom_gestures' | 'workspace' | 'performance' | 'continual_learning' | 'cloud_models'>('personal_models');
 
   // Saved Personal Models Registry & Switcher States
   const [savedPersonalModels, setSavedPersonalModels] = useState<SavedPersonalModel[]>(() => {
@@ -1401,6 +1402,20 @@ export default function ModelTrainer({
           <Zap className="w-4 h-4 text-purple-500" />
           Benchmarking & Quantization
         </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('cloud_models')}
+          className={`pb-3 text-xs font-bold uppercase tracking-wider flex items-center gap-2 border-b-2 transition-all ${
+            activeSubTab === 'cloud_models'
+              ? 'border-sky-500 text-sky-700 dark:text-sky-300'
+              : 'border-transparent text-sky-600 dark:text-sky-400 hover:text-sky-800 dark:hover:text-sky-200'
+          }`}
+          id="trainer-cloud-subtab-btn"
+        >
+          <Cloud className="w-4 h-4 text-sky-500" />
+          Cloud Models & Version Control
+        </button>
       </div>
 
       {/* SUBTAB 1: PERSONAL MODELS HUB & SWITCHER */}
@@ -1455,6 +1470,14 @@ export default function ModelTrainer({
                     >
                       <Plus className="w-4 h-4" />
                       Train New Model
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveSubTab('cloud_models')}
+                      className="flex items-center justify-center gap-2 text-xs font-bold px-5 py-3 text-sky-200 bg-sky-900/50 hover:bg-sky-800/60 rounded-2xl border border-sky-500/30 transition uppercase tracking-wider"
+                    >
+                      <Cloud className="w-4 h-4 text-sky-400" />
+                      Cloud Hub & Versions
                     </button>
                     {activeModel && (
                       <button
@@ -3163,6 +3186,28 @@ export default function ModelTrainer({
 
           </div>
 
+        </div>
+      )}
+
+      {/* SUBTAB: CLOUD MODEL HUB & VERSION CONTROL */}
+      {activeSubTab === 'cloud_models' && (
+        <div className="space-y-6 animate-fade-in" id="cloud-models-subtab-view">
+          <CloudModelHub
+            currentUser={currentUser}
+            activeModel={activeModel}
+            activeModelClasses={trainedClasses}
+            activeModelId={activeModelId}
+            onActivateModel={(model, classes, modelId) => {
+              setActiveModel(model);
+              setTrainedClasses(classes);
+              setActiveModelId(modelId);
+              if (onRegisterTrainedModel) {
+                onRegisterTrainedModel(model, classes, modelId);
+              }
+              setSuccessMsg(`Activated cloud model "${modelId}"! Ready for real-time inference.`);
+            }}
+            onNavigateToTrainer={() => setActiveSubTab('workspace')}
+          />
         </div>
       )}
 

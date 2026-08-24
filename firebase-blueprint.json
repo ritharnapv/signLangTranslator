@@ -192,9 +192,198 @@
         }
       },
       "required": ["id", "predictedChar", "correctLabel", "createdAt"]
+    },
+    "aiModel": {
+      "title": "AIModel",
+      "description": "Cloud-stored neural network AI model with topology, serialized weights, classes, and metadata",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "releaseTag": {
+          "type": "string",
+          "enum": ["stable", "candidate", "experimental", "deprecated"]
+        },
+        "architecture": {
+          "type": "string"
+        },
+        "framework": {
+          "type": "string"
+        },
+        "classes": {
+          "type": "array"
+        },
+        "epochs": {
+          "type": "integer"
+        },
+        "accuracy": {
+          "type": "number"
+        },
+        "loss": {
+          "type": "number"
+        },
+        "valAccuracy": {
+          "type": "number"
+        },
+        "valLoss": {
+          "type": "number"
+        },
+        "sampleCount": {
+          "type": "integer"
+        },
+        "modelTopology": {
+          "type": "object"
+        },
+        "weightSpecs": {
+          "type": "array"
+        },
+        "weightData": {
+          "type": "string",
+          "description": "Base64-encoded binary weight buffers or manifest"
+        },
+        "tags": {
+          "type": "array"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "authorUid": {
+          "type": "string"
+        },
+        "authorEmail": {
+          "type": "string"
+        },
+        "isPublic": {
+          "type": "boolean"
+        },
+        "versionCount": {
+          "type": "integer"
+        },
+        "latestVersionId": {
+          "type": "string"
+        }
+      },
+      "required": ["id", "name", "classes", "createdAt"]
+    },
+    "modelVersion": {
+      "title": "ModelVersion",
+      "description": "Version control record representing a specific commit or snapshot of an AI model",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "modelId": {
+          "type": "string"
+        },
+        "versionNumber": {
+          "type": "string"
+        },
+        "commitMessage": {
+          "type": "string"
+        },
+        "releaseTag": {
+          "type": "string",
+          "enum": ["stable", "candidate", "experimental", "deprecated"]
+        },
+        "accuracy": {
+          "type": "number"
+        },
+        "loss": {
+          "type": "number"
+        },
+        "valAccuracy": {
+          "type": "number"
+        },
+        "valLoss": {
+          "type": "number"
+        },
+        "epochs": {
+          "type": "integer"
+        },
+        "classes": {
+          "type": "array"
+        },
+        "architecture": {
+          "type": "string"
+        },
+        "weightData": {
+          "type": "string"
+        },
+        "modelTopology": {
+          "type": "object"
+        },
+        "changeLog": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "authorUid": {
+          "type": "string"
+        }
+      },
+      "required": ["id", "modelId", "versionNumber", "createdAt"]
+    },
+    "modelBackup": {
+      "title": "ModelBackup",
+      "description": "Comprehensive point-in-time cloud backup snapshot containing all models, version trees, and weights",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "totalModels": {
+          "type": "integer"
+        },
+        "modelsSnapshot": {
+          "type": "array"
+        },
+        "backupType": {
+          "type": "string",
+          "enum": ["manual", "automated_pre_train", "scheduled"]
+        },
+        "checksum": {
+          "type": "string"
+        },
+        "sizeBytes": {
+          "type": "integer"
+        }
+      },
+      "required": ["id", "createdAt", "modelsSnapshot"]
     }
   },
   "firestore": {
+    "cloud_models/{modelId}": {
+      "schema": "aiModel",
+      "description": "Community and verified cloud repository of sign language AI models"
+    },
     "prediction_feedback/{feedbackId}": {
       "schema": "predictionFeedback",
       "description": "Global collection for user-submitted gesture prediction feedback and corrections"
@@ -210,6 +399,18 @@
     "users/{userId}/backups/{backupId}": {
       "schema": "backup",
       "description": "Backup logs stored under uid"
+    },
+    "users/{userId}/model_backups/{backupId}": {
+      "schema": "modelBackup",
+      "description": "Full cloud backup snapshots of AI models and weights"
+    },
+    "users/{userId}/models/{modelId}": {
+      "schema": "aiModel",
+      "description": "User stored cloud AI models with weights and topologies"
+    },
+    "users/{userId}/models/{modelId}/versions/{versionId}": {
+      "schema": "modelVersion",
+      "description": "Version control history commits for user AI models"
     },
     "users/{userId}/datasets/{datasetId}": {
       "schema": "dataset",

@@ -30,6 +30,7 @@ import GestureSearch from './components/GestureSearch';
 import PracticeRecommendations from './components/PracticeRecommendations';
 import NotificationToastBanner from './components/NotificationToastBanner';
 import NotificationCenterModal from './components/NotificationCenterModal';
+import CloudModelHub from './components/CloudModelHub';
 import { getUnreadNotificationCount, checkAndTriggerAutomatedPracticeReminder } from './utils/notificationEngine';
 import { ensureBaselineModelCached } from './lib/offlineModelCache';
 import { getOfflineSyncQueue, syncOfflineDataToCloud } from './lib/offlineSync';
@@ -106,7 +107,8 @@ import {
   Swords,
   Users,
   Search,
-  Bell
+  Bell,
+  Cloud
 } from 'lucide-react';
 
 // Production environment configuration helpers
@@ -338,7 +340,7 @@ export default function App() {
     handleUpdateThemeSettings({ themeMode: nextMode });
   };
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'learning_dashboard' | 'leaderboard' | 'certificates' | 'practice_recommendations' | 'learning' | 'dictionary' | 'gesture_search' | 'evaluator' | 'multiplayer' | 'roadmap' | 'collector' | 'datasets' | 'labeler' | 'replay' | 'corrections' | 'trainer' | 'files' | 'profile' | 'analytics' | 'conversation' | 'offline' | 'admin' | 'api-docs' | 'video_translator' | 'live_meeting'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'learning_dashboard' | 'leaderboard' | 'certificates' | 'practice_recommendations' | 'learning' | 'dictionary' | 'gesture_search' | 'evaluator' | 'multiplayer' | 'roadmap' | 'collector' | 'datasets' | 'labeler' | 'replay' | 'corrections' | 'trainer' | 'cloud_models' | 'files' | 'profile' | 'analytics' | 'conversation' | 'offline' | 'admin' | 'api-docs' | 'video_translator' | 'live_meeting'>('dashboard');
   const [evaluatorInitialSign, setEvaluatorInitialSign] = useState<string>('A');
   const [gestureSearchInitialQuery, setGestureSearchInitialQuery] = useState<string>('');
 
@@ -3481,6 +3483,18 @@ export default function App() {
             {t('gestureTrainer')}
           </button>
           <button
+            onClick={() => { setActiveTab('cloud_models'); setMobileMenuOpen(false); }}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold tracking-wide transition-all flex items-center gap-1.5 ${
+              activeTab === 'cloud_models'
+                ? "bg-gradient-to-r from-sky-600 to-indigo-600 text-white shadow-sm ring-1 ring-sky-400"
+                : "text-sky-700 dark:text-sky-300 hover:text-sky-900 dark:hover:text-white bg-sky-500/10 dark:bg-sky-500/20"
+            }`}
+            id="tab-cloud-models-btn"
+          >
+            <Cloud className="w-3.5 h-3.5 text-sky-500 dark:text-sky-300" />
+            <span>Cloud AI Models</span>
+          </button>
+          <button
             onClick={() => { setActiveTab('files'); setMobileMenuOpen(false); }}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
               activeTab === 'files'
@@ -3804,6 +3818,7 @@ export default function App() {
               { id: 'replay', label: t('gestureReplay'), icon: Film },
               { id: 'corrections', label: t('modelCorrections'), icon: AlertTriangle },
               { id: 'trainer', label: t('gestureTrainer'), icon: Cpu },
+              { id: 'cloud_models', label: 'Cloud AI Models', icon: Cloud },
               { id: 'files', label: 'Sandbox Files', icon: FileCode },
               { id: 'offline', label: t('offlineMode'), icon: WifiOff },
               { id: 'profile', label: t('profile'), icon: Settings },
@@ -6693,6 +6708,25 @@ export default function App() {
               setCollectedSamples(prev => [sample, ...prev]);
             }}
           />
+        )}
+
+        {/* Cloud AI Models Repository, Version Control & Backups Tab View */}
+        {activeTab === 'cloud_models' && (
+          <div className="space-y-6 animate-fadeIn" id="cloud-models-tab">
+            <CloudModelHub 
+              currentUser={currentUser}
+              activeModel={trainedClientModel}
+              activeModelClasses={trainedClasses}
+              activeModelId={localStorage.getItem('asl_active_model_id') || 'default-asl-baseline'}
+              onActivateModel={(model, classes, modelId) => {
+                setTrainedClientModel(model);
+                setTrainedClasses(classes);
+                setPredictionSource('tensorflow');
+                localStorage.setItem('asl_active_model_id', modelId);
+              }}
+              onNavigateToTrainer={() => setActiveTab('trainer')}
+            />
+          </div>
         )}
 
         {/* Sandbox Architecture & Files Explained Tab view separately */}

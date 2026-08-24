@@ -29,6 +29,15 @@ service cloud.firestore {
       allow update, delete: if isSignedIn();
     }
 
+    // Public community / verified Cloud Models registry
+    match /cloud_models/{modelId} {
+      allow read: if true;
+      allow create, update: if isSignedIn()
+        && request.resource.data.name is string
+        && request.resource.data.classes is list;
+      allow delete: if isSignedIn();
+    }
+
     // User profiles path
     match /users/{userId} {
       allow read: if isOwner(userId);
@@ -47,6 +56,24 @@ service cloud.firestore {
       match /backups/{backupId} {
         allow read: if isOwner(userId);
         allow write: if isOwner(userId);
+      }
+
+      // AI Model Backups sub-collection
+      match /model_backups/{backupId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId);
+      }
+
+      // Cloud AI Models sub-collection
+      match /models/{modelId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId);
+
+        // Model Versions sub-collection
+        match /versions/{versionId} {
+          allow read: if isOwner(userId);
+          allow write: if isOwner(userId);
+        }
       }
 
       // Devices sub-collection for multi-device heartbeat sync
