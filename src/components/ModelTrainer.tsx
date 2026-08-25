@@ -13,6 +13,7 @@ import { db } from '../firebase';
 import { CollectedSample, PredictionFeedback, SavedPersonalModel, ASLGesture } from '../types';
 import { triggerModelUpdateNotification } from '../utils/notificationEngine';
 import CloudModelHub from './CloudModelHub';
+import EdgeOptimizerHub from './EdgeOptimizerHub';
 
 interface DatasetItem {
   id: string;
@@ -65,8 +66,8 @@ export default function ModelTrainer({
   onAddCollectedSample,
   currentUser
 }: ModelTrainerProps) {
-  // Sub-navigation: Personal Models Hub vs Collect Custom Gestures vs Neural Workspace vs Benchmarking vs Continual Learning vs Cloud Models
-  const [activeSubTab, setActiveSubTab] = useState<'personal_models' | 'custom_gestures' | 'workspace' | 'performance' | 'continual_learning' | 'cloud_models'>('personal_models');
+  // Sub-navigation: Personal Models Hub vs Collect Custom Gestures vs Neural Workspace vs Benchmarking vs Continual Learning vs Cloud Models vs Edge Optimizer
+  const [activeSubTab, setActiveSubTab] = useState<'personal_models' | 'custom_gestures' | 'workspace' | 'performance' | 'continual_learning' | 'cloud_models' | 'edge_optimizer'>('personal_models');
 
   // Saved Personal Models Registry & Switcher States
   const [savedPersonalModels, setSavedPersonalModels] = useState<SavedPersonalModel[]>(() => {
@@ -1401,6 +1402,20 @@ export default function ModelTrainer({
         >
           <Zap className="w-4 h-4 text-purple-500" />
           Benchmarking & Quantization
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('edge_optimizer')}
+          className={`pb-3 text-xs font-bold uppercase tracking-wider flex items-center gap-2 border-b-2 transition-all ${
+            activeSubTab === 'edge_optimizer'
+              ? 'border-indigo-500 text-indigo-700 dark:text-indigo-300'
+              : 'border-transparent text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-200'
+          }`}
+          id="trainer-edge-subtab-btn"
+        >
+          <Cpu className="w-4 h-4 text-indigo-500" />
+          Edge & TFLite Accelerator
         </button>
 
         <button
@@ -3207,6 +3222,19 @@ export default function ModelTrainer({
               setSuccessMsg(`Activated cloud model "${modelId}"! Ready for real-time inference.`);
             }}
             onNavigateToTrainer={() => setActiveSubTab('workspace')}
+          />
+        </div>
+      )}
+
+      {/* SUBTAB: EDGE DEVICE & TFLITE OPTIMIZER SUITE */}
+      {activeSubTab === 'edge_optimizer' && (
+        <div className="space-y-6 animate-fade-in" id="edge-optimizer-subtab-view">
+          <EdgeOptimizerHub
+            activeModel={activeModel}
+            activeModelClasses={trainedClasses}
+            onConfigChange={(newConfig) => {
+              setSuccessMsg("Edge device optimization settings saved!");
+            }}
           />
         </div>
       )}

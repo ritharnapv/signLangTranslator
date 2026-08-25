@@ -31,6 +31,16 @@ import PracticeRecommendations from './components/PracticeRecommendations';
 import NotificationToastBanner from './components/NotificationToastBanner';
 import NotificationCenterModal from './components/NotificationCenterModal';
 import CloudModelHub from './components/CloudModelHub';
+import EdgeOptimizerHub from './components/EdgeOptimizerHub';
+import {
+  getStoredEdgeConfig,
+  saveStoredEdgeConfig,
+  executeTFLiteFastInference,
+  extractQuantizedModel,
+  isLandmarkMotionSignificant,
+  EdgeOptimizationConfig,
+  QuantizedModelStructure
+} from './utils/tfliteEdgeEngine';
 import { getUnreadNotificationCount, checkAndTriggerAutomatedPracticeReminder } from './utils/notificationEngine';
 import { ensureBaselineModelCached } from './lib/offlineModelCache';
 import { getOfflineSyncQueue, syncOfflineDataToCloud } from './lib/offlineSync';
@@ -340,7 +350,7 @@ export default function App() {
     handleUpdateThemeSettings({ themeMode: nextMode });
   };
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'learning_dashboard' | 'leaderboard' | 'certificates' | 'practice_recommendations' | 'learning' | 'dictionary' | 'gesture_search' | 'evaluator' | 'multiplayer' | 'roadmap' | 'collector' | 'datasets' | 'labeler' | 'replay' | 'corrections' | 'trainer' | 'cloud_models' | 'files' | 'profile' | 'analytics' | 'conversation' | 'offline' | 'admin' | 'api-docs' | 'video_translator' | 'live_meeting'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'learning_dashboard' | 'leaderboard' | 'certificates' | 'practice_recommendations' | 'learning' | 'dictionary' | 'gesture_search' | 'evaluator' | 'multiplayer' | 'roadmap' | 'collector' | 'datasets' | 'labeler' | 'replay' | 'corrections' | 'trainer' | 'cloud_models' | 'edge_optimizer' | 'files' | 'profile' | 'analytics' | 'conversation' | 'offline' | 'admin' | 'api-docs' | 'video_translator' | 'live_meeting'>('dashboard');
   const [evaluatorInitialSign, setEvaluatorInitialSign] = useState<string>('A');
   const [gestureSearchInitialQuery, setGestureSearchInitialQuery] = useState<string>('');
 
@@ -738,6 +748,41 @@ export default function App() {
   const predictionSourceRef = useRef<'simulated' | 'tensorflow' | 'heuristics' | 'heuristics-numbers'>('heuristics');
   const confidenceThresholdRef = useRef<number>(70);
   const lastPredictionTimeRef = useRef<number>(0);
+
+  // Edge AI Optimization and TensorFlow Lite State & Refs
+  const [edgeConfig, setEdgeConfig] = useState<EdgeOptimizationConfig>(() => getStoredEdgeConfig());
+  const edgeConfigRef = useRef<EdgeOptimizationConfig>(getStoredEdgeConfig());
+  const quantizedModelRef = useRef<QuantizedModelStructure | null>(null);
+  const prevLandmarksRef = useRef<Array<{ x: number; y: number; z: number }> | null>(null);
+  const [edgeTelemetry, setEdgeTelemetry] = useState<{
+    latencyMs: number;
+    fps: number;
+    gatedSkips: number;
+    mode: string;
+  }>({
+    latencyMs: 0,
+    fps: 0,
+    gatedSkips: 0,
+    mode: 'TFLite INT8 Engine'
+  });
+
+  useEffect(() => {
+    edgeConfigRef.current = edgeConfig;
+  }, [edgeConfig]);
+
+  // Extract or compile the Quantized Model Structure for Zero-Allocation TFLite inference
+  useEffect(() => {
+    if (trainedClientModel && trainedClasses.length > 0) {
+      extractQuantizedModel(trainedClientModel, trainedClasses, edgeConfig.quantization)
+        .then(qModel => {
+          quantizedModelRef.current = qModel;
+          console.log(`[EdgeOptimizer] Quantized edge model compiled (${qModel.quantizationType.toUpperCase()}) with ${qModel.classes.length} classes.`);
+        })
+        .catch(err => {
+          console.warn("[EdgeOptimizer] Quantized extraction note:", err);
+        });
+    }
+  }, [trainedClientModel, trainedClasses, edgeConfig.quantization]);
 
   // Prediction smoothing and stabilization engine state/refs
   const [smoothingWindow, setSmoothingWindow] = useState<number>(8);
@@ -2143,9 +2188,10 @@ export default function App() {
         }
       }
 
-      // REAL-TIME LOCAL TENSORFLOW INFERENCE
-      if (predictionSourceRef.current === 'tensorflow' && trainedClientModelRef.current) {
-        const throttleVal = Number(localStorage.getItem('asl_prediction_throttle_ms') || '40');
+      // REAL-TIME LOCAL TENSORFLOW & EDGE TFLITE ACCELERATED INFERENCE
+      if (predictionSourceRef.current === 'tensorflow' && (trainedClientModelRef.current || quantizedModelRef.current)) {
+        const edgeCfg = edgeConfigRef.current;
+        const throttleVal = edgeCfg.enabled ? Math.round(1000 / (edgeCfg.targetFps || 30)) : Number(localStorage.getItem('asl_prediction_throttle_ms') || '40');
         const nowMs = performance.now();
         if (nowMs - lastPredictionTimeRef.current >= throttleVal) {
           lastPredictionTimeRef.current = nowMs;
@@ -2153,6 +2199,15 @@ export default function App() {
             const leftFeatures = preprocessSingleHand(leftLandmarks);
             const rightFeatures = preprocessSingleHand(rightLandmarks);
             const features = [...leftFeatures, ...rightFeatures]; // Shape: [126] coordinates
+
+            // Motion gating for Edge Optimization: skip heavy inference if hand is stationary
+            if (edgeCfg.enabled && edgeCfg.motionGating) {
+              const isMotion = isLandmarkMotionSignificant(features, edgeCfg.motionGatingThreshold);
+              if (!isMotion) {
+                setEdgeTelemetry(prev => ({ ...prev, gatedSkips: prev.gatedSkips + 1 }));
+                return;
+              }
+            }
 
             // Save preprocessed feature sequence history (last 10 frames)
             let history = [...landmarksHistoryRef.current];
@@ -2164,71 +2219,95 @@ export default function App() {
 
             const model = trainedClientModelRef.current;
             const classes = trainedClassesRef.current;
+            const qModel = quantizedModelRef.current;
 
-            // Check if model expects 3D sequence-based input shape
-            const firstLayerShape = (model.layers[0] as any).inputSpec?.[0]?.shape || [];
-            const isLstm = firstLayerShape.length === 3;
-            const inputDim = firstLayerShape[firstLayerShape.length - 1] || 126;
+            let charResult = "?";
+            let rawConf = 0;
+            let inferenceEngineName = "TF.js Browser Engine";
+            let topologyInfo = "";
 
-            const result = tf.tidy(() => {
-              let inputTensor;
-              if (isLstm) {
-                // Pad/fill sequence to exactly 10 frames
-                const sequence: number[][] = [];
-                for (let i = 0; i < 10; i++) {
-                  if (i < 10 - history.length) {
-                    sequence.push(history[0] || features);
-                  } else {
-                    const idx = i - (10 - history.length);
-                    sequence.push(history[idx]);
+            // FAST-PATH: INT8 / FP16 TFLite Edge Inference Engine
+            if (edgeCfg.enabled && qModel) {
+              const edgeResult = executeTFLiteFastInference(features, qModel);
+              charResult = edgeResult.classLabel;
+              rawConf = Number(edgeResult.confidence.toFixed(1));
+              const currentFps = edgeResult.latencyMs > 0 ? Math.round(1000 / edgeResult.latencyMs) : 60;
+              inferenceEngineName = `TFLite Edge Fast Engine (${qModel.quantizationType.toUpperCase()})`;
+              topologyInfo = `Zero-Allocation Static Buffers • Latency: ${edgeResult.latencyMs.toFixed(2)}ms (${currentFps} FPS)`;
+
+              setEdgeTelemetry(prev => ({
+                latencyMs: edgeResult.latencyMs,
+                fps: currentFps,
+                gatedSkips: prev.gatedSkips,
+                mode: `${qModel.quantizationType.toUpperCase()} TFLite Fast Engine`
+              }));
+            } else if (model) {
+              // STANDARD TF.JS INFERENCE
+              const firstLayerShape = (model.layers[0] as any).inputSpec?.[0]?.shape || [];
+              const isLstm = firstLayerShape.length === 3;
+              const inputDim = firstLayerShape[firstLayerShape.length - 1] || 126;
+
+              const result = tf.tidy(() => {
+                let inputTensor;
+                if (isLstm) {
+                  const sequence: number[][] = [];
+                  for (let i = 0; i < 10; i++) {
+                    if (i < 10 - history.length) {
+                      sequence.push(history[0] || features);
+                    } else {
+                      const idx = i - (10 - history.length);
+                      sequence.push(history[idx]);
+                    }
                   }
-                }
-                const adjustedSequence = sequence.map(seqFrame => {
-                  if (seqFrame.length === inputDim) return seqFrame;
-                  if (seqFrame.length > inputDim) return seqFrame.slice(0, inputDim);
-                  return [...seqFrame, ...new Array(inputDim - seqFrame.length).fill(0)];
-                });
-                inputTensor = tf.tensor3d([adjustedSequence], [1, 10, inputDim]);
-              } else {
-                let adjustedFeatures = features;
-                if (features.length !== inputDim) {
-                  if (features.length > inputDim) {
-                    adjustedFeatures = features.slice(0, inputDim);
-                  } else {
-                    adjustedFeatures = [...features, ...new Array(inputDim - features.length).fill(0)];
+                  const adjustedSequence = sequence.map(seqFrame => {
+                    if (seqFrame.length === inputDim) return seqFrame;
+                    if (seqFrame.length > inputDim) return seqFrame.slice(0, inputDim);
+                    return [...seqFrame, ...new Array(inputDim - seqFrame.length).fill(0)];
+                  });
+                  inputTensor = tf.tensor3d([adjustedSequence], [1, 10, inputDim]);
+                } else {
+                  let adjustedFeatures = features;
+                  if (features.length !== inputDim) {
+                    if (features.length > inputDim) {
+                      adjustedFeatures = features.slice(0, inputDim);
+                    } else {
+                      adjustedFeatures = [...features, ...new Array(inputDim - features.length).fill(0)];
+                    }
                   }
+                  inputTensor = tf.tensor2d([adjustedFeatures], [1, inputDim]);
                 }
-                inputTensor = tf.tensor2d([adjustedFeatures], [1, inputDim]);
-              }
-              const prediction = model.predict(inputTensor) as tf.Tensor;
-              const probs = Array.from(prediction.dataSync());
-              const maxProb = Math.max(...probs);
-              const maxIndex = probs.indexOf(maxProb);
-              
-              const layer1Units = (model.layers[0] as any).units || (isLstm ? 'LSTM' : 64);
-              const layer2Units = (model.layers[2] as any).units || 32;
+                const prediction = model.predict(inputTensor) as tf.Tensor;
+                const probs = Array.from(prediction.dataSync());
+                const maxProb = Math.max(...probs);
+                const maxIndex = probs.indexOf(maxProb);
+                
+                const layer1Units = (model.layers[0] as any).units || (isLstm ? 'LSTM' : 64);
+                const layer2Units = (model.layers[2] as any).units || 32;
 
-              return { maxIndex, confidence: maxProb * 100, layer1Units, layer2Units, isLstm, inputDim };
-            });
+                return { maxIndex, confidence: maxProb * 100, layer1Units, layer2Units, isLstm, inputDim };
+              });
 
-            const charResult = classes[result.maxIndex] || "?";
-            const rawConf = Number(result.confidence.toFixed(1));
+              charResult = classes[result.maxIndex] || "?";
+              rawConf = Number(result.confidence.toFixed(1));
+              inferenceEngineName = result.isLstm ? 'TF.js LSTM Recurrent Net' : 'TF.js MLP Neural Net';
+              topologyInfo = `${result.isLstm ? `[10, ${result.inputDim}] -> LSTM (${result.layer1Units}) -> Dense (${result.layer2Units})` : `[${result.inputDim}] -> Dense (${result.layer1Units}) -> Dense (${result.layer2Units})`} -> Softmax (${classes.length})`;
+            }
 
             const matchingCustom = customGestures.find(cg => cg.char.toUpperCase() === charResult.toUpperCase());
             const explanation = matchingCustom 
               ? `Successfully recognized your custom-trained gesture "${matchingCustom.char}"! Posture description: ${matchingCustom.description}`
-              : `Inferred live in real time using your browser-compiled ${result.isLstm ? 'Long Short-Term Memory (LSTM) Recurrent Neural Network' : 'Multi-Layer Perceptron (MLP) Artificial Neural Network'}. Your 3D landmarks coordinates sequence offset relative to wrist joint 0 and fed forward inside TF.js.`;
+              : `Inferred live in real time using your ${inferenceEngineName}. Your 3D landmarks coordinates sequence offset relative to wrist joint 0 and evaluated with zero-allocation buffers.`;
             
             const tips = matchingCustom
               ? [
                   `Visual Practice Cue: ${matchingCustom.visualTip}`,
                   `Model classes catalogued: ${classes.join(', ')}`,
-                  `Model topology: ${result.isLstm ? `[10, ${result.inputDim}] -> LSTM (${result.layer1Units}) -> Dense (${result.layer2Units})` : `[${result.inputDim}] -> Dense (${result.layer1Units}) -> Dense (${result.layer2Units})`} -> Softmax (${classes.length})`
+                  `Engine Architecture: ${topologyInfo}`
                 ]
               : [
                   `Model classes catalogued: ${classes.join(', ')}`,
                   `Categorical cross-entropy probability: ${rawConf}%`,
-                  `Model topology: ${result.isLstm ? `[10, ${result.inputDim}] -> LSTM (${result.layer1Units}) -> Dense (${result.layer2Units})` : `[${result.inputDim}] -> Dense (${result.layer1Units}) -> Dense (${result.layer2Units})`} -> Softmax (${classes.length})`
+                  `Engine Architecture: ${topologyInfo}`
                 ];
 
             setLatestResult({
@@ -2236,7 +2315,7 @@ export default function App() {
               confidence: rawConf,
               explanation,
               tips,
-              grammarMatches: [`TF.js live local prediction`, ...(matchingCustom ? [`Custom Gesture: ${matchingCustom.char}`] : [])]
+              grammarMatches: [`${inferenceEngineName} live prediction`, ...(matchingCustom ? [`Custom Gesture: ${matchingCustom.char}`] : [])]
             });
 
             // Process and output smoothed prediction values
@@ -3495,6 +3574,18 @@ export default function App() {
             <span>Cloud AI Models</span>
           </button>
           <button
+            onClick={() => { setActiveTab('edge_optimizer'); setMobileMenuOpen(false); }}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold tracking-wide transition-all flex items-center gap-1.5 ${
+              activeTab === 'edge_optimizer'
+                ? "bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-sm ring-1 ring-teal-400"
+                : "text-teal-700 dark:text-teal-300 hover:text-teal-900 dark:hover:text-white bg-teal-500/10 dark:bg-teal-500/20"
+            }`}
+            id="tab-edge-optimizer-btn"
+          >
+            <Cpu className="w-3.5 h-3.5 text-teal-500 dark:text-teal-300" />
+            <span>Edge AI (TFLite)</span>
+          </button>
+          <button
             onClick={() => { setActiveTab('files'); setMobileMenuOpen(false); }}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
               activeTab === 'files'
@@ -3819,6 +3910,7 @@ export default function App() {
               { id: 'corrections', label: t('modelCorrections'), icon: AlertTriangle },
               { id: 'trainer', label: t('gestureTrainer'), icon: Cpu },
               { id: 'cloud_models', label: 'Cloud AI Models', icon: Cloud },
+              { id: 'edge_optimizer', label: 'Edge AI (TFLite)', icon: Cpu },
               { id: 'files', label: 'Sandbox Files', icon: FileCode },
               { id: 'offline', label: t('offlineMode'), icon: WifiOff },
               { id: 'profile', label: t('profile'), icon: Settings },
@@ -6725,6 +6817,19 @@ export default function App() {
                 localStorage.setItem('asl_active_model_id', modelId);
               }}
               onNavigateToTrainer={() => setActiveTab('trainer')}
+            />
+          </div>
+        )}
+
+        {/* Edge AI & TensorFlow Lite Hardware Optimization Suite Tab View */}
+        {activeTab === 'edge_optimizer' && (
+          <div className="space-y-6 animate-fadeIn" id="edge-optimizer-tab">
+            <EdgeOptimizerHub
+              activeModel={trainedClientModel}
+              activeModelClasses={trainedClasses}
+              onConfigChange={(newCfg) => {
+                setEdgeConfig(newCfg);
+              }}
             />
           </div>
         )}
